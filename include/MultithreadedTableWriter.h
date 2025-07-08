@@ -4,22 +4,21 @@
 
 #include "Exports.h"
 #include "Concurrent.h"
-#include "Util.h"
-#include "Types.h"
-#include "Exceptions.h"
-#include "ScalarImp.h"
 #include "Dictionary.h"
 #include "DolphinDB.h"
-#include <unordered_map>
-#include <string>
-#include <vector>
-#include <list>
-#include <functional>
-#include <tuple>
+#include "Exceptions.h"
+#include "ScalarImp.h"
+#include "Types.h"
+#include "Util.h"
 #include <cassert>
-#include <unordered_map>
-#include <mutex>
 #include <chrono>
+#include <functional>
+#include <list>
+#include <mutex>
+#include <string>
+#include <tuple>
+#include <unordered_map>
+#include <vector>
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -28,7 +27,7 @@
 
 namespace dolphindb{
 
-inline const std::string TableScript(const std::string& dbName, const std::string& tableName)
+inline std::string TableScript(const std::string& dbName, const std::string& tableName)
 {
     return "loadTable(\"" + dbName + "\",\"" + tableName + "\")";
 }
@@ -50,7 +49,7 @@ enum class MTWState {
 class EXPORT_DECL MTWConfig {
     friend class MultithreadedTableWriter;
 public:
-    MTWConfig(const std::shared_ptr<DBConnection> conn, const std::string &tableName);
+    MTWConfig(const std::shared_ptr<DBConnection>& conn, const std::string &tableName);
     template<typename Rep, typename Period>
     MTWConfig& setBatching(const size_t batchSize, const std::chrono::duration<Rep,Period> throttle)
     {
@@ -139,10 +138,10 @@ public:
         }
     };
 
-    MultithreadedTableWriter(const MTWConfig &config);
+    explicit MultithreadedTableWriter(const MTWConfig &config);
     MultithreadedTableWriter(const std::string& host, int port, const std::string& userId, const std::string& password,
         const std::string& dbPath, const std::string& tableName, bool useSSL, bool enableHighAvailability = false, const std::vector<std::string> *pHighAvailabilitySites = nullptr,
-        int batchSize = 1, float throttle = 0.01f,int threadCount = 1, const std::string& partitionCol ="",
+        int batchSize = 1, float throttle = 0.01F,int threadCount = 1, const std::string& partitionCol ="",
         const std::vector<COMPRESS_METHOD> *pCompressMethods = nullptr, Mode mode = M_Append,
         std::vector<std::string> *pModeOption = nullptr, const std::function<void(ConstantSP)> &callbackFunc = nullptr, bool enableStreamTableTimestamp = false);
     MultithreadedTableWriter(const MultithreadedTableWriter &) = delete;
@@ -171,9 +170,9 @@ public:
                 int size = colTypes_.size();
                 for(int i = 0; i < size; ++i){
                     if(colTypes_[i] >= ARRAY_TYPE_BASE){
-                        oneRowData_.push_back(Util::createVector(colTypes_[i], 0, 0, true, colExtras_[i]));
+                        oneRowData_.emplace_back(Util::createVector(colTypes_[i], 0, 0, true, colExtras_[i]));
                     }else{
-                        oneRowData_.push_back(Util::createConstant(colTypes_[i], colExtras_[i]));
+                        oneRowData_.emplace_back(Util::createConstant(colTypes_[i], colExtras_[i]));
                     }
                 }
             }
@@ -209,7 +208,7 @@ private:
         return dataType;
     }
     void insertThreadWrite(int threadhashkey, std::vector<ConstantSP> *prow);
-    static void callBack(std::function<void(ConstantSP)> callbackFunc, bool result, std::vector<ConstantSP>* block);
+    static void callBack(const std::function<void(ConstantSP)>& callbackFunc, bool result, std::vector<ConstantSP>* block);
     std::vector<ConstantSP>* createColumnBlock();
     struct WriterThread {
         WriterThread() : nonemptySignal(false,true){}
@@ -230,7 +229,7 @@ private:
         SendExecutor(MultithreadedTableWriter &tableWriter,WriterThread &writeThread):
                         tableWriter_(tableWriter),
                         writeThread_(writeThread){};
-        virtual void run();
+        void run() override;
     private:
         void callBack();
         bool isExit() { return tableWriter_.hasError_.load() || writeThread_.exit; }
@@ -240,7 +239,7 @@ private:
         WriterThread &writeThread_;
     };
 
-private:
+
     friend class SendExecutor;
     friend class InsertExecutor;
     std::string dbName_;
@@ -293,7 +292,7 @@ private:
     size_t readyThreadCnt_{0};
 };
 
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

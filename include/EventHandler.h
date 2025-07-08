@@ -3,10 +3,10 @@
 #pragma once
 
 #include "SmartPointer.h"
+#include "DolphinDB.h"
 #include "ErrorCodeInfo.h"
 #include "SysIO.h"
 #include "Types.h"
-#include "DolphinDB.h"
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -20,7 +20,7 @@
 namespace dolphindb {
 
 struct EXPORT_DECL EventSchema{
-    std::string                 eventType_;
+    std::string                eventType_;
     std::vector<std::string>    fieldNames_;
     std::vector<DATA_TYPE>      fieldTypes_;
     std::vector<DATA_FORM>      fieldForms_;
@@ -37,7 +37,7 @@ class AttributeSerializer{
 public:
     AttributeSerializer(int unitLen, DATA_FORM form): unitLen_(unitLen), form_(form) {}
     virtual ~AttributeSerializer() = default;
-    virtual IO_ERR serialize(const ConstantSP& attribute, DataOutputStreamSP outStream);
+    virtual IO_ERR serialize(const ConstantSP& attribute, const DataOutputStreamSP &outStream);
 
 protected:
     int unitLen_;
@@ -46,16 +46,16 @@ protected:
 
 class FastArrayAttributeSerializer : public AttributeSerializer{
 public:
-    FastArrayAttributeSerializer(int unitLen) : AttributeSerializer(unitLen, DF_VECTOR) {}
-    ~FastArrayAttributeSerializer() = default;
-    virtual IO_ERR serialize(const ConstantSP& attribute, DataOutputStreamSP outStream) override;
+    explicit FastArrayAttributeSerializer(int unitLen) : AttributeSerializer(unitLen, DF_VECTOR) {}
+    ~FastArrayAttributeSerializer() override = default;
+    IO_ERR serialize(const ConstantSP& attribute, const DataOutputStreamSP &outStream) override;
 };
 
 class ScalarAttributeSerializer : public AttributeSerializer {
 public:
-    ScalarAttributeSerializer(int unitLen) : AttributeSerializer(unitLen, DF_SCALAR) {buf_.resize(unitLen_);}
-    ~ScalarAttributeSerializer() = default;
-    virtual IO_ERR serialize(const ConstantSP& attribute, DataOutputStreamSP outStream) override;
+    explicit ScalarAttributeSerializer(int unitLen) : AttributeSerializer(unitLen, DF_SCALAR) {buf_.resize(unitLen_);}
+    ~ScalarAttributeSerializer() override = default;
+    IO_ERR serialize(const ConstantSP& attribute, const DataOutputStreamSP &outStream) override;
 
 private:
     std::string buf_;
@@ -63,9 +63,9 @@ private:
 
 class StringScalarAttributeSerializer : public AttributeSerializer {
 public:
-    StringScalarAttributeSerializer(bool isBlob) : AttributeSerializer(-1, DF_SCALAR), isBlob_(isBlob) {}
-    ~StringScalarAttributeSerializer() = default;
-    virtual IO_ERR serialize(const ConstantSP& attribute, DataOutputStreamSP outStream) override;
+    explicit StringScalarAttributeSerializer(bool isBlob) : AttributeSerializer(-1, DF_SCALAR), isBlob_(isBlob) {}
+    ~StringScalarAttributeSerializer() override = default;
+    IO_ERR serialize(const ConstantSP& attribute, const DataOutputStreamSP &outStream) override;
 
 private:
     bool isBlob_;
@@ -82,15 +82,15 @@ struct EventInfo{
 class EventHandler{
 public:
     EventHandler(const std::vector<EventSchema>& eventSchemas, const std::vector<std::string>& eventTimeFields, const std::vector<std::string>& commonFields);
-    bool checkOutputTable(TableSP outputTable, std::string& errMsg);
+    bool checkOutputTable(const TableSP& outputTable, std::string& errMsg);
     bool serializeEvent(const std::string& eventType, const std::vector<ConstantSP>& attributes, std::vector<ConstantSP>& serializedEvent, std::string& errMsg);
-    bool deserializeEvent(ConstantSP obj, std::vector<std::string>& eventTypes, std::vector<std::vector<ConstantSP>>& attributes, ErrorCodeInfo& errorInfo);
+    bool deserializeEvent(const ConstantSP& obj, std::vector<std::string>& eventTypes, std::vector<std::vector<ConstantSP>>& attributes, ErrorCodeInfo& errorInfo);
 private:
     bool checkSchema(const std::vector<EventSchema>& eventSchemas, const std::vector<std::string> &expandTimeKeys, const std::vector<std::string>& commonFields, std::string& errMsg);
-    ConstantSP deserializeScalar(DATA_TYPE type, int extraParam, DataInputStreamSP input, IO_ERR& ret);
-    ConstantSP deserializeFastArray(DATA_TYPE type, int extraParam, DataInputStreamSP input, IO_ERR& ret);
-    ConstantSP deserializeAny(DATA_TYPE type, DATA_FORM form, DataInputStreamSP input, IO_ERR& ret);
-private:
+    ConstantSP deserializeScalar(DATA_TYPE type, int extraParam, const DataInputStreamSP& input, IO_ERR& ret);
+    ConstantSP deserializeFastArray(DATA_TYPE type, int extraParam, const DataInputStreamSP& input, IO_ERR& ret);
+    ConstantSP deserializeAny(DATA_TYPE type, DATA_FORM form, const DataInputStreamSP& input, IO_ERR& ret);
+
     std::unordered_map<std::string, EventInfo> eventInfos_;
     bool isNeedEventTime_;
 
@@ -100,16 +100,16 @@ private:
 
 class EXPORT_DECL EventSender{
 public:
-    EventSender(DBConnectionSP conn, const std::string& tableName, const std::vector<EventSchema>& eventSchema, const std::vector<std::string>& eventTimeFields = std::vector<std::string>(), const std::vector<std::string>& commonFields = std::vector<std::string>());
+    EventSender(const DBConnectionSP& conn, const std::string& tableName, const std::vector<EventSchema>& eventSchema, const std::vector<std::string>& eventTimeFields = std::vector<std::string>(), const std::vector<std::string>& commonFields = std::vector<std::string>());
     void sendEvent(const std::string& eventType, const std::vector<ConstantSP>& attributes);
 
 private:
-    std::string             insertScript_;
+    std::string            insertScript_;
     EventHandler            eventHandler_;
     DBConnectionSP          conn_;
 };
 
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

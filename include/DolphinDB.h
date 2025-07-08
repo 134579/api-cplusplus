@@ -2,31 +2,33 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
+#include "Concurrent.h"
+#include "Constant.h"
+#include "Dictionary.h"
+#include "Domain.h"
+#include "Exceptions.h"
+#include "Exports.h"
+#include "SmartPointer.h"
+#include "SysIO.h"
+#include "Table.h"
+#include "Types.h"
+#include "Util.h"
+#include "Version.h"
+#include "internal/WideInteger.h"
+
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <cstring>
+#include <deque>
+#include <functional>
+#include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <set>
+#include <utility>
 #include <vector>
-#include <deque>
-#include <algorithm>
-#include <memory>
-#include <chrono>
-#include <cstring>
-#include <functional>
-
-#include "Exports.h"
-#include "Types.h"
-#include "SmartPointer.h"
-#include "Exceptions.h"
-#include "internal/WideInteger.h"
-#include "Constant.h"
-#include "Dictionary.h"
-#include "Table.h"
-// MSVC warning C4150: destructor of Domain is required during instantiation of SmartPointer<Domain>
-#include "Domain.h"
-#include "Util.h"
-#include "Concurrent.h"
-#include "Version.h"
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -48,11 +50,11 @@ class PartitionedTableAppender;
 class DBConnection;
 class DBConnectionPool;
 
-typedef SmartPointer<BlockReader> BlockReaderSP;
-typedef SmartPointer<Domain> DomainSP;
-typedef SmartPointer<DBConnection> DBConnectionSP;
-typedef SmartPointer<DBConnectionPool> DBConnectionPoolSP;
-typedef SmartPointer<PartitionedTableAppender> PartitionedTableAppenderSP;
+using BlockReaderSP = SmartPointer<BlockReader>;
+using DomainSP = SmartPointer<Domain>;
+using DBConnectionSP = SmartPointer<DBConnection>;
+using DBConnectionPoolSP = SmartPointer<DBConnectionPool>;
+using PartitionedTableAppenderSP = SmartPointer<PartitionedTableAppender>;
 
 enum class TransportationProtocol {
     TCP, UDP,
@@ -69,9 +71,11 @@ struct SubscribeInfo {
     {
         if (hostName != info.hostName) {
             return hostName < info.hostName;
-        } else if (port != info.port) {
+        }
+        if (port != info.port) {
             return port < info.port;
-        } else if (tableName != info.tableName) {
+        }
+        if (tableName != info.tableName) {
             return tableName < info.tableName;
         }
         return actionName < info.actionName;
@@ -104,9 +108,13 @@ public:
             login(userName, password, HAS_OPENSSL);
         }
     }
-    DBConnection(bool enableSSL = false, bool asyncTask = false, int keepAliveTime = 7200, bool compress = false, bool python = false, bool isReverseStreaming = false, bool enableSCRAM = false);
+    explicit DBConnection(bool enableSSL = false, bool asyncTask = false, int keepAliveTime = 7200, bool compress = false, bool python = false, bool isReverseStreaming = false, bool enableSCRAM = false);
+    DBConnection(DBConnection&& oth) noexcept;
+    DBConnection& operator=(DBConnection&& oth) noexcept;
+    virtual ~DBConnection();
+
     using stateCallbackT = std::function<bool(const ConnectionState state, const std::string &host, const int port)>;
-    void onConnectionStateChange(const stateCallbackT callback) { callback_ = callback; }
+    void onConnectionStateChange(const stateCallbackT &callback) { callback_ = callback; }
     std::shared_ptr<DBConnection> copy()
     {
         if (state_ != ConnectionState::Connected) {
@@ -136,9 +144,6 @@ public:
     void setCompress(bool compress) { compress_ = compress; }
     void setAsync(bool async) { asynTask_ = async; }
     bool connect();
-	virtual ~DBConnection();
-	DBConnection(DBConnection&& oth);
-	DBConnection& operator=(DBConnection&& oth);
 
 	/**
 	 * Connect to the specified DolphinDB server. If userId and password are specified, authentication
@@ -244,7 +249,7 @@ private:
     DBConnection(DBConnection& oth); // = delete
     DBConnection& operator=(DBConnection& oth); // = delete
 
-private:
+
 	enum ExceptionType {
 		ET_UNKNOWN = 1,
 		ET_NEWLEADER = 2,
@@ -259,18 +264,18 @@ private:
 	//3 - this data node not avail
 	ExceptionType parseException(const std::string &msg, std::string &host, int &port);
 
-private:
+
 	struct Node{
 		std::string hostName_;
 		int port_;
 		double load_;//DBL_MAX : unknow
 
 		bool isEqual(const Node &node) {
-			return hostName_.compare(node.hostName_) == 0 && port_ == node.port_;
+			return hostName_ == node.hostName_ && port_ == node.port_;
 		}
-		Node(){}
-		Node(const std::string &hostName, int port, double load = DBL_MAX): hostName_(hostName), port_(port), load_(load){}
-		Node(const std::string &ipport, double loadValue = DBL_MAX);
+		Node() = default;
+		Node(std::string hostName, int port, double load = DBL_MAX): hostName_(std::move(hostName)), port_(port), load_(load){}
+		explicit Node(const std::string &ipport, double loadValue = DBL_MAX);
 	};
 	static bool parseIpPort(const std::string &ipport, std::string &ip, int &port);
 	long nextSeqNo();
@@ -305,31 +310,48 @@ private:
 
 class EXPORT_DECL BlockReader : public Constant{
 public:
-    BlockReader(const DataInputStreamSP& in );
-	virtual ~BlockReader();
+    explicit BlockReader(const DataInputStreamSP& in );
+	~BlockReader() override = default;
     ConstantSP read();
     void skipAll();
     bool hasNext() const {return currentIndex_ < total_;}
-    virtual DATA_TYPE getType() const {return DT_ANY;}
-    virtual DATA_TYPE getRawType() const {return DT_ANY;}
-    virtual DATA_CATEGORY getCategory() const {return MIXED;}
-    virtual ConstantSP getInstance() const {return nullptr;}
-    virtual ConstantSP getValue() const {return nullptr;}
+    DATA_TYPE getType() const override {return DT_ANY;}
+    DATA_TYPE getRawType() const override {return DT_ANY;}
+    DATA_CATEGORY getCategory() const override {return MIXED;}
+    ConstantSP getInstance() const override {return nullptr;}
+    ConstantSP getValue() const override {return nullptr;}
 private:
     DataInputStreamSP in_;
     int total_;
     int currentIndex_;
 };
 
+#if __cplusplus < 201402L
+struct RpcParam {
+    RpcParam(int priority_ = 4, uint32_t parallelism_ = 64, uint32_t fetchSize_ = 0, bool clearMemory_ = false)
+        :priority(priority_), parallelism(parallelism_), fetchSize(fetchSize_), clearMemory(clearMemory_) {}
+    int priority {4};
+    uint32_t parallelism {64};
+    uint32_t fetchSize {0};
+    bool clearMemory {false};
+};
+#else
+struct RpcParam {
+    int priority {4};
+    uint32_t parallelism {64};
+    uint32_t fetchSize {0};
+    bool clearMemory {false};
+};
+#endif
 
 class EXPORT_DECL DBConnectionPool{
 public:
     DBConnectionPool(const std::string& hostName, int port, int threadNum = 10, const std::string& userId = "", const std::string& password = "",
 		bool loadBalance = false, bool highAvailability = false, bool compress = false, bool reConnect = false, bool python = false);
-	virtual ~DBConnectionPool();
-	void run(const std::string& script, int identity, int priority=4, int parallelism=64, int fetchSize=0, bool clearMemory = false);
+	virtual ~DBConnectionPool() = default;
 
-	void run(const std::string& functionName, const std::vector<ConstantSP>& args, int identity, int priority=4, int parallelism=64, int fetchSize=0, bool clearMemory = false);
+	int run(std::string script, std::shared_ptr<std::condition_variable> finished = nullptr, const RpcParam &param = RpcParam());
+	int run(std::string functionName, const std::vector<ConstantSP>& args, std::shared_ptr<std::condition_variable> finished = nullptr, const RpcParam &param = RpcParam());
 
 	bool isFinished(int identity);
 
@@ -340,26 +362,30 @@ public:
     bool isShutDown();
 
 	int getConnectionCount();
-private:
-	std::shared_ptr<DBConnectionPoolImpl> pool_;
-	friend class PartitionedTableAppender;
 
+	[[deprecated]] void run(const std::string& script, int identity, int priority=4, int parallelism=64, int fetchSize=0, bool clearMemory = false);
+	[[deprecated]] void run(const std::string& functionName, const std::vector<ConstantSP>& args, int identity, int priority=4, int parallelism=64, int fetchSize=0, bool clearMemory = false);
+
+private:
+    std::atomic_int id_{0};
+    std::shared_ptr<DBConnectionPoolImpl> pool_;
+    friend class PartitionedTableAppender;
 };
 
 class EXPORT_DECL PartitionedTableAppender {
 public:
-	PartitionedTableAppender(std::string dbUrl, std::string tableName, std::string partitionColName, DBConnectionPool& pool);
+	PartitionedTableAppender(const std::string& dbUrl, const std::string& tableName, const std::string& partitionColName, DBConnectionPool& pool);
 
-	PartitionedTableAppender(std::string dbUrl, std::string tableName, std::string partitionColName, std::string appendFunction, DBConnectionPool& pool);
-	virtual ~PartitionedTableAppender();
-	int append(TableSP table);
+	PartitionedTableAppender(const std::string& dbUrl, const std::string& tableName, const std::string& partitionColName, const std::string& appendFunction, DBConnectionPool& pool);
+	virtual ~PartitionedTableAppender() = default;
+	int append(const TableSP& table);
 
 private:
- 	void init(std::string dbUrl, std::string tableName, std::string partitionColName, std::string appendFunction);
+ 	void init(const std::string& dbUrl, const std::string& tableName, const std::string& partitionColName, const std::string& appendFunction);
 
 	void checkColumnType(int col, DATA_CATEGORY category, DATA_TYPE type);
 
-private:
+
 	std::shared_ptr<DBConnectionPoolImpl> pool_;
 	std::string appendScript_;
 	int threadCount_;
@@ -376,14 +402,14 @@ private:
 
 class EXPORT_DECL AutoFitTableAppender {
 public:
-	AutoFitTableAppender(std::string dbUrl, std::string tableName, DBConnection& conn);
+	AutoFitTableAppender(const std::string& dbUrl, const std::string& tableName, DBConnection& conn);
 	virtual ~AutoFitTableAppender() = default;
-	int append(TableSP table);
+	int append(const TableSP& table);
 
 private:
 	void checkColumnType(int col, DATA_CATEGORY category, DATA_TYPE type);
 
-private:
+
     DBConnection& conn_;
 	std::string appendScript_;
 	int cols_;
@@ -394,15 +420,15 @@ private:
 
 class EXPORT_DECL AutoFitTableUpsert {
 public:
-	AutoFitTableUpsert(std::string dbUrl, std::string tableName, DBConnection& conn,bool ignoreNull=false,
+	AutoFitTableUpsert(const std::string& dbUrl, const std::string& tableName, DBConnection& conn,bool ignoreNull=false,
                                         std::vector<std::string> *pkeyColNames=nullptr,std::vector<std::string> *psortColumns=nullptr);
 	virtual ~AutoFitTableUpsert() = default;
-	int upsert(TableSP table);
+	int upsert(const TableSP& table);
 
 private:
 	void checkColumnType(int col, DATA_CATEGORY category, DATA_TYPE type);
 
-private:
+
     DBConnection& conn_;
 	std::string upsertScript_;
 	int cols_;
@@ -411,27 +437,7 @@ private:
 	std::vector<std::string> columnNames_;
 };
 
-
-class RecordTime {
-public:
-	RecordTime(const std::string &name);
-	~RecordTime();
-	static std::string printAllTime();
-private:
-	const std::string name_;
-	long recordOrder_;
-	long long startTime_;
-	struct Node {
-		std::string name;
-		long minOrder;
-		std::vector<long long> costTime;//ns
-	};
-	static long lastRecordOrder_;
-	static Mutex mapMutex_;
-	static std::unordered_map<std::string, RecordTime::Node*> codeMap_;
-};
-
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

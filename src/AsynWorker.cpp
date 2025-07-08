@@ -1,7 +1,10 @@
 #include "AsynWorker.h"
+#include "Constant.h"
 #include "DolphinDB.h"
+#include "Exceptions.h"
 #include "ScalarImp.h"
-#include "SysIO.h"
+#include "TaskStatusMgmt.h"
+
 #include <iostream>
 
 namespace dolphindb {
@@ -24,22 +27,31 @@ namespace dolphindb {
         while(true) {
             try {
                 if(task.isFunc){
-                    result = conn_->run(task.script, task.arguments, task.priority, task.parallelism, task.fetchSize, task.clearMemory);
+                    result = conn_->run(task.script, task.arguments, task.param.priority, task.param.parallelism, task.param.fetchSize, task.param.clearMemory);
                 }
                 else{
-                    result = conn_->run(task.script, task.priority, task.parallelism, task.fetchSize, task.clearMemory);
+                    result = conn_->run(task.script, task.param.priority, task.param.parallelism, task.param.fetchSize, task.param.clearMemory);
                 }
                 break;
             }
             catch(IOException & ex){
                 errorFlag = true;
                 std::cerr<<"Async task worker come across exception : "<<ex.what()<<std::endl;
-                taskStatus_.setResult(task.identity, TaskStatusMgmt::Result(TaskStatusMgmt::ERRORED, new Void(), ex.what()));
+                taskStatus_.setResult(task.identity, TaskResult(TaskStatus::ERRORED, new Void(), ex.what()));
+                if (task.finished != nullptr) {
+                    task.finished->notify_all();
+                }
                 break;
             }
         }
-        if(!errorFlag)
-            taskStatus_.setResult(task.identity, TaskStatusMgmt::Result(TaskStatusMgmt::FINISHED,  result));
+        if (errorFlag) {
+            continue;
+        }
+        taskStatus_.setResult(task.identity, TaskResult(TaskStatus::FINISHED,  result));
+        if (task.finished != nullptr) {
+            task.finished->notify_all();
+        }
     }
 }
-}
+
+} // namespace dolphindb

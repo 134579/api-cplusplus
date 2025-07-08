@@ -4,24 +4,24 @@
 
 #ifdef __linux__
 
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <semaphore.h>
-#include <sys/stat.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <vector>
-#include <map>
-#include <iostream>
-#include <errno.h>
+#include <cerrno>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <iostream>
+#include <map>
 #include <memory>
+#include <semaphore.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <vector>
 // #include "CoreConcept.h"
-#include "Types.h"
-#include "TableImp.h"
 #include "ScalarImp.h"
+#include "TableImp.h"
+#include "Types.h"
 
 
 #define META_SIZE       1024000
@@ -84,14 +84,8 @@ struct DataHeader {
 
 class TableMetaData {
   public:
-    TableMetaData(std::string name): name_(name) {}
-    ~TableMetaData() {}
+    explicit TableMetaData(std::string name): name_(std::move(name)) {}
 
-    void debugPrint() { 
-        //
-    }
-
-  public:
     std::string name_;
     std::vector<std::string> colNames_;
     std::vector<DATA_TYPE> colTypes_;
@@ -108,9 +102,9 @@ class IpcMemUtil {
 
    static int calculateMicroCost(int seconds, int microSeconds) {
        auto tp = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
-       int secondsCost = tp.time_since_epoch().count() / 1000000 - seconds;
-       int microCost = tp.time_since_epoch().count() % 1000000 - microSeconds;
-       return secondsCost * 1000000 + microCost;
+       int secondsCost = (tp.time_since_epoch().count() / 1000000) - seconds;
+       int microCost = (tp.time_since_epoch().count() % 1000000) - microSeconds;
+       return (secondsCost * 1000000) + microCost;
    }
 };
 
@@ -130,15 +124,12 @@ class SharedMemStream {
     * @param path  String, the key to point the same shared memory between multi processes.
     * @param size  max data size of shared memory. the actual size is max of 1G and the param.
     */
-   SharedMemStream(bool create, std::string path, int64_t size): path_(path), size_(size), isFirstRead_(true){
+   SharedMemStream(bool create, std::string path, int64_t size): path_(std::move(path)), size_(size) {
       std::ignore = create;
-      shmpHeader_ = NULL;
+      shmpHeader_ = nullptr;
       shmFd_ = 0;
    }
-   ~SharedMemStream() {
-   }
-
-  public:
+  
     /**
      * @brief wait the write process notify by sem and read data from shared memory, return a table.
      * 
@@ -196,16 +187,16 @@ class SharedMemStream {
     std::string path_;
     int64_t size_;
     int shmFd_;
-    bool isFirstRead_;
+    bool isFirstRead_{true};
 };
 
 
 class IPCInMemTable : public BasicTable {
   public:
     IPCInMemTable(bool create, std::string shmPath, std::string tableName, const std::vector<ConstantSP>& cols, const std::vector<std::string>& colNames, size_t bufSize);
-    virtual ~IPCInMemTable();
+    ~IPCInMemTable() override;
   
-    virtual TABLE_TYPE getTableType() const {return IPCTBL;}
+    TABLE_TYPE getTableType() const override {return IPCTBL;}
     TableSP read(TableSP& copy, const bool& overwrite, size_t& readRows, int& timeout);
     
     void closeShm();

@@ -7,30 +7,30 @@
 #pragma warning( disable : 4251 )
 #endif
 
-#include <vector>
-#include <queue>
-#include <cassert>
-#include <algorithm>
-#include <memory>
-#include <functional>
-#include "Platform.h"
 #include "Exports.h"
+#include "Platform.h"
 #include "SmartPointer.h"
+#include <algorithm>
+#include <cassert>
+#include <functional>
+#include <memory>
+#include <queue>
+#include <vector>
 
 namespace dolphindb {
 
 class Thread;
 class Runnable;
 class CountDownLatch;
-typedef SmartPointer<Thread> ThreadSP;
-typedef SmartPointer<Runnable> RunnableSP;
-typedef SmartPointer<CountDownLatch> CountDownLatchSP;
+using ThreadSP = SmartPointer<Thread>;
+using RunnableSP = SmartPointer<Runnable>;
+using CountDownLatchSP = SmartPointer<CountDownLatch>;
 
 class EXPORT_DECL Runnable{
 public:
 	Runnable();
 	void start();
-	virtual ~Runnable();
+	virtual ~Runnable() = default;
 	bool isRunning();
 	bool isStarted();
 	bool isComplete();
@@ -90,18 +90,6 @@ private:
 #endif
 };
 
-class EXPORT_DECL RWSpinLock{
-public:
-	RWSpinLock(){};
-	~RWSpinLock(){};
-	void acquireRead(){}
-	void acquireWrite(){}
-	void releaseRead(){}
-	void releaseWrite(){}
-private:
-
-};
-
 class EXPORT_DECL ConditionalVariable{
 public:
 	ConditionalVariable();
@@ -123,20 +111,20 @@ private:
 template<class T>
 class EXPORT_DECL LockGuard{
 public:
-	LockGuard(T* res, bool acquireLock = true):res_(res){
+	explicit LockGuard(T* res, bool acquireLock = true):res_(res){
 		if(acquireLock)
 			res_->lock();
 	}
 
 	void unlock(){
-		if(res_ != NULL){
+		if(res_ != nullptr){
 			res_->unlock();
-			res_ = NULL;
+			res_ = nullptr;
 		}
 	}
 
 	~LockGuard(){
-		if(res_ != NULL)
+		if(res_ != nullptr)
 			res_->unlock();
 	}
 private:
@@ -146,7 +134,7 @@ private:
 template<class T>
 class TryLockGuard{
 public:
-	TryLockGuard(T* res, bool acquireLock = true):res_(res), locked_(false){
+	explicit TryLockGuard(T* res, bool acquireLock = true):res_(res) {
 		if(acquireLock)
 			locked_ = res_->tryLock();
 	}
@@ -159,14 +147,14 @@ public:
 	}
 private:
 	T* res_;
-	bool locked_;
+	bool locked_{false};
 };
 
 template<class T>
 class EXPORT_DECL RWLockGuard{
 public:
 	RWLockGuard(T* res, bool exclusive, bool acquireLock = true):res_(res), exclusive_(exclusive), acquireLock_(acquireLock){
-		if(res != NULL && acquireLock_){
+		if(res != nullptr && acquireLock_){
 			if(exclusive_)
 				res_->acquireWrite();
 			else
@@ -175,19 +163,17 @@ public:
 	}
 
 	void upgrade(){
-		if(res_ != NULL && acquireLock_){
+		if(res_ != nullptr && acquireLock_){
 			if(exclusive_)
 				return;
-			else{
-				res_->releaseRead();
-				res_->acquireWrite();
-				exclusive_ = true;
-			}
+			res_->releaseRead();
+			res_->acquireWrite();
+			exclusive_ = true;
 		}
 	}
 
 	~RWLockGuard(){
-		if(res_ != NULL && acquireLock_){
+		if(res_ != nullptr && acquireLock_){
 			if(exclusive_)
 				res_->releaseWrite();
 			else
@@ -203,7 +189,7 @@ private:
 template<class T>
 class TryRWLockGuard{
 public:
-	TryRWLockGuard(T* res, bool exclusive, bool acquireLock = true):res_(res), exclusive_(exclusive), locked_(false){
+	TryRWLockGuard(T* res, bool exclusive, bool acquireLock = true):res_(res), exclusive_(exclusive) {
 		if(acquireLock){
 			if(exclusive_)
 				locked_ = res_->tryAcquireWrite();
@@ -222,12 +208,12 @@ public:
 private:
 	T* res_;
 	bool exclusive_;
-	bool locked_;
+	bool locked_{false};
 };
 
 class EXPORT_DECL CountDownLatch{
 public:
-	CountDownLatch(int count) : count_(count){}
+	explicit CountDownLatch(int count) : count_(count){}
 	void wait();
 	bool wait(int milliseconds);
 	void countDown();
@@ -241,33 +227,9 @@ private:
 	int count_;
 };
 
-
-template<class T>
-class Future {
-public:
-	Future(): latch_(1) {}
-	//Wait till the result is ready or the specified milliseconds timeout. Return whether the result is ready.
-	bool wait(int milliseconds) { return latch_.wait(milliseconds); }
-	//Wait till the result is ready.
-	void wait() { latch_.wait(); }
-	//Set the result. This function should be called exactly once.
-	void set(const T & val) {
-		val_ = val;
-		latch_.countDown();
-	}
-	//Get the value as promised. Blocked if the result is not ready.
-	T get() { 
-		latch_.wait();
-		return val_; 
-	}
-private:
-	CountDownLatch latch_;
-	T val_;
-};
-
 class EXPORT_DECL Semaphore{
 public:
-	Semaphore(int resources = 0);
+	explicit Semaphore(int resources = 0);
 	~Semaphore();
 	void acquire();
 	bool tryAcquire(int waitMilliSeconds = 0);
@@ -286,78 +248,10 @@ private:
 #endif
 };
 
-class EXPORT_DECL ConditionalNotifier {
-public:
-	ConditionalNotifier() {}
-	~ConditionalNotifier() {}
-	void wait() {
-		LockGuard<Mutex> guard(&mtx_);
-		cv_.wait(mtx_);
-	}
-	bool wait(int milliSeconds) {
-		LockGuard<Mutex> guard(&mtx_);
-		return cv_.wait(mtx_, milliSeconds);
-	}
-	void notify() { cv_.notify(); }
-	void notifyAll() { cv_.notifyAll(); }
-private:
-	ConditionalVariable cv_;
-	Mutex mtx_;
-};
-
-template<class T>
-class BoundedBlockingQueue{
-public:
-	BoundedBlockingQueue(size_t maxItems) : capacity_(maxItems), size_(0), head_(0), tail_(0){
-		buf_ = new T[maxItems];
-	}
-
-	~BoundedBlockingQueue(){
-		delete[] buf_;
-	}
-
-	void push(const T& item){
-		lock_.lock();
-		while(size_ >= capacity_)
-			full_.wait(lock_);
-		buf_[tail_] = item;
-		tail_ = (tail_+1) % capacity_;
-		++size_;
-
-		if(size_ == 1)
-			empty_.notifyAll();
-		lock_.unlock();
-	}
-
-	void pop(T& item){
-		lock_.lock();
-		while(size_ == 0)
-			empty_.wait(lock_);
-		item = buf_[head_];
-		buf_[head_] = T();
-		head_ = (head_+1) % capacity_;
-		--size_;
-
-		if(size_ == capacity_ -1)
-			full_.notifyAll();
-		lock_.unlock();
-	}
-
-private:
-	T* buf_;
-	size_t capacity_;
-	size_t size_;
-	size_t head_;
-	size_t tail_;
-	Mutex lock_;
-	ConditionalVariable full_;
-	ConditionalVariable empty_;
-};
-
 template<class T>
 class SynchronizedQueue{
 public:
-	SynchronizedQueue(){}
+	SynchronizedQueue() = default;
 	void push(const T& item){
 		LockGuard<Mutex> guard(&mutex_);
 		items_.push(item);
@@ -445,16 +339,13 @@ private:
 
 class EXPORT_DECL Thread{
 public:
-	Thread(const RunnableSP& run);
+	explicit Thread(const RunnableSP& run);
 	~Thread();
 	void start();
 	void join();
 	bool isRunning(){return run_.isNull() ? false : run_->isRunning();}
 	bool isComplete() {return run_.isNull()? false : run_->isComplete();}
 	bool isStarted() {return run_.isNull()? false : run_->isStarted();}
-	void setAffinity(int id);
-	static void sleep(int milliSeconds);
-	static int getID();
 
 private:
 	static void* startFunc(void* data){
@@ -472,40 +363,9 @@ private:
 #endif
 };
 
-class EXPORT_DECL SemLock{
-public:
-	SemLock(Semaphore &sem, bool acquired = false)
-		: sem_(sem)
-		, acquired_(acquired){
-	}
-	~SemLock(){
-		release();
-	}
-	bool tryAcquire(int waitMs){
-		if(!sem_.tryAcquire(waitMs)){
-			return false;
-		}
-		acquired_ = true;
-		return true;
-	}
-	void acquire(){
-		sem_.acquire();
-		acquired_ = true;
-	}
-	void release(){
-		if(acquired_){
-			acquired_=false;
-			sem_.release();
-		}
-	}
-private:
-	Semaphore &sem_;
-	bool acquired_;
-};
-
 class EXPORT_DECL Signal{
 public:
-	Signal(bool signaled = false, bool resetAfterWait = false):signaled_(signaled), resetAfterWait_(resetAfterWait){};
+	explicit Signal(bool signaled = false, bool resetAfterWait = false):signaled_(signaled), resetAfterWait_(resetAfterWait){};
 	void set(){
 		LockGuard<Mutex> lock(&mutex_);
 		if(signaled_)
@@ -636,7 +496,7 @@ private:
     
 };
 
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

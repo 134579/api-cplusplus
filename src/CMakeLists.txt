@@ -10,9 +10,7 @@ elseif (APPLE)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE MAC)
 endif()
 
-target_include_directories(${CMAKE_PROJECT_NAME}
-    PUBLIC ${PROJECT_SOURCE_DIR}/include
-)
+target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     AsynWorker.cpp
@@ -21,7 +19,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Concurrent.cpp
     ConstantImp.cpp
     ConstantMarshall.cpp
-    Crypto.cpp
     DBConnectionPoolImpl.cpp
     DFSChunkMeta.cpp
     DictionaryImp.cpp
@@ -33,12 +30,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Guid.cpp
     int128.cpp
     Logger.cpp
-    lz4.c
     Matrix.cpp
     MultithreadedTableWriter.cpp
     ScalarImp.cpp
     SetImp.cpp
-    SharedMem.cpp
     Streaming.cpp
     StreamingUtil.cpp
     SymbolBase.cpp
@@ -49,3 +44,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Util.cpp
     Vector.cpp
 )
+
+if (USE_OPENSSL AND OPENSSL_FOUND)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE Crypto.cpp)
+endif()
+
+add_subdirectory(lz4)

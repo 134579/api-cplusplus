@@ -4,8 +4,8 @@
 
 #include "ConstantImp.h"
 #include "Version.h"
-#include <string>
 #include <sstream>
+#include <string>
 namespace dolphindb {
 
 class DdbInit {
@@ -22,7 +22,7 @@ public:
 
 class DBConnectionImpl {
 public:
-    DBConnectionImpl(bool sslEnable = false, bool asynTask = false, int keepAliveTime = 7200, bool compress = false, bool python = false, bool isReverseStreaming = false, bool enableSCRAM = false);
+    explicit DBConnectionImpl(bool sslEnable = false, bool asynTask = false, int keepAliveTime = 7200, bool compress = false, bool python = false, bool isReverseStreaming = false, bool enableSCRAM = false);
     ~DBConnectionImpl();
     bool connect(const std::string& hostName, int port, const std::string& userId = "", const std::string& password = "",bool sslEnable = false, bool asynTask = false, int keepAliveTime = -1, bool compress= false, bool python = false);
     void login(const std::string& userId, const std::string& password, bool enableEncryption);
@@ -57,7 +57,7 @@ private:
     void login();
     void scramLogin();
 
-private:
+
     SocketSP conn_;
     std::string sessionId_;
     std::string hostName_;
@@ -79,4 +79,4 @@ private:
     DataInputStreamSP inputStream_;
 };
 
-}
+} // namespace dolphindb

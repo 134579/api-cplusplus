@@ -2,13 +2,13 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
-#include <string>
 #include "SmartPointer.h"
-#include "Types.h"
 #include "Exceptions.h"
-#include "internal/WideInteger.h"
 #include "Guid.h"
 #include "SymbolBase.h"
+#include "Types.h"
+#include "internal/WideInteger.h"
+#include <string>
 
 #if defined(_MSC_VER)
 #pragma warning( push )
@@ -35,8 +35,14 @@
 
 namespace dolphindb {
 
+constexpr uint16_t FLAG_TEMPORARY   {1 << 0U};
+constexpr uint16_t FLAG_INDEPENDENT {1 << 1U};
+constexpr uint16_t FLAG_READONLY    {1 << 2U};
+// constexpr uint16_t UNUSED_FLAG   {1 << 3U};
+constexpr uint16_t FLAG_NOTHING     {1 << 4U};
+
 class Constant;
-typedef SmartPointer<Constant> ConstantSP;
+using ConstantSP = SmartPointer<Constant>;
 
 class EXPORT_DECL Constant {
 public:
@@ -49,35 +55,29 @@ public:
     static ConstantSP one_;
 
     Constant() : flag_(3){}
-    Constant(unsigned short flag) :  flag_(flag){}
-    virtual ~Constant(){}
+    explicit Constant(unsigned short flag) :  flag_(flag){}
+    virtual ~Constant() = default;
     virtual bool isLargeConstant() const {return false;}
-    inline bool isTemporary() const {return flag_ & 1;}
-    inline void setTemporary(bool val){ if(val) flag_ |= 1; else flag_ &= ~1;}
-    inline bool isIndependent() const {return flag_ & 2;}
-    inline void setIndependent(bool val){ if(val) flag_ |= 2; else flag_ &= ~2;}
-    inline bool isReadOnly() const {return flag_ & 4;}
-    inline void setReadOnly(bool val){ if(val) flag_ |= 4; else flag_ &= ~4;}
-    inline bool isReadOnlyArgument() const {return flag_ & 8;}
-    inline void setReadOnlyArgument(bool val){ if(val) flag_ |= 8; else flag_ &= ~8;}
-    inline bool isNothing() const {return flag_ & 16;}
-    inline void setNothing(bool val){ if(val) flag_ |= 16; else flag_ &= ~16;}
-    inline bool isStatic() const {return flag_ & 32;}
-    inline void setStatic(bool val){ if(val) flag_ |= 32; else flag_ &= ~32;}
-    inline bool transferAsString() const {return flag_ & 64;}
-    inline void transferAsString(bool val){ if(val) flag_ |= 64; else flag_ &= ~64;}
-    inline DATA_FORM getForm() const {return DATA_FORM(flag_ >> 8);}
-    inline void setForm(DATA_FORM df){ flag_ = (flag_ & static_cast<unsigned short>(127)) + static_cast<unsigned short>(df << 8);}
-    inline bool isScalar() const { return getForm()==DF_SCALAR;}
-    inline bool isArray() const { return getForm()==DF_VECTOR;}
-    inline bool isPair() const { return getForm()==DF_PAIR;}
-    inline bool isMatrix() const {return getForm()==DF_MATRIX;}
+    bool isTemporary() const {return flag_ & FLAG_TEMPORARY;}
+    void setTemporary(bool val){ if(val) flag_ |= FLAG_TEMPORARY; else flag_ &= (uint16_t)~FLAG_TEMPORARY;}
+    bool isIndependent() const {return flag_ & FLAG_INDEPENDENT;}
+    void setIndependent(bool val){ if(val) flag_ |= FLAG_INDEPENDENT; else flag_ &= (uint16_t)~FLAG_INDEPENDENT;}
+    bool isReadOnly() const {return flag_ & FLAG_READONLY;}
+    void setReadOnly(bool val){ if(val) flag_ |= FLAG_READONLY; else flag_ &= (uint16_t)~FLAG_READONLY;}
+    bool isNothing() const {return flag_ & FLAG_NOTHING;}
+    void setNothing(bool val){ if(val) flag_ |= FLAG_NOTHING; else flag_ &= (uint16_t)~FLAG_NOTHING;}
+    DATA_FORM getForm() const {return DATA_FORM(flag_ >> 8);}
+    void setForm(DATA_FORM df){ flag_ = (flag_ & static_cast<unsigned short>(127)) + static_cast<unsigned short>(df << 8);}
+    bool isScalar() const { return getForm()==DF_SCALAR;}
+    bool isArray() const { return getForm()==DF_VECTOR;}
+    bool isPair() const { return getForm()==DF_PAIR;}
+    bool isMatrix() const {return getForm()==DF_MATRIX;}
     //a vector could be array, pair or matrix.
-    inline bool isVector() const { return getForm()>=DF_VECTOR && getForm()<=DF_MATRIX;}
-    inline bool isTable() const { return getForm()==DF_TABLE;}
-    inline bool isSet() const {return getForm()==DF_SET;}
-    inline bool isDictionary() const {return getForm()==DF_DICTIONARY;}
-    inline bool isChunk() const {return getForm()==DF_CHUNK;}
+    bool isVector() const { return getForm()>=DF_VECTOR && getForm()<=DF_MATRIX;}
+    bool isTable() const { return getForm()==DF_TABLE;}
+    bool isSet() const {return getForm()==DF_SET;}
+    bool isDictionary() const {return getForm()==DF_DICTIONARY;}
+    bool isChunk() const {return getForm()==DF_CHUNK;}
     bool isTuple() const {return getForm()==DF_VECTOR && getType()==DT_ANY;}
     bool isNumber() const { DATA_CATEGORY cat = getCategory(); return cat == INTEGRAL || cat == FLOATING;}
 
@@ -93,8 +93,8 @@ public:
     virtual std::string getString() const {return "";}
     virtual std::string getScript() const { return getString();}
     virtual const std::string& getStringRef() const {return EMPTY;}
-    virtual const Guid getUuid() const {return getInt128();}
-    virtual const Guid getInt128() const {throw RuntimeException("The object can't be converted to uuid scalar.");}
+    virtual Guid getUuid() const {return getInt128();}
+    virtual Guid getInt128() const {throw RuntimeException("The object can't be converted to uuid scalar.");}
     virtual const unsigned char* getBinary() const {throw RuntimeException("The object can't be converted to int128 scalar.");}
     virtual bool isNull() const {return false;}
     virtual int getHash(int buckets) const {return -1;}
@@ -172,7 +172,7 @@ public:
     virtual char* getBoolBuffer(INDEX start, int len, char* buf) const {return buf;}
     virtual char* getCharBuffer(INDEX start, int len,char* buf) const {return buf;}
     virtual short* getShortBuffer(INDEX start, int len, short* buf) const {return buf;}
-    virtual int* getIntBuffer(INDEX start, int len, int* buf) const {return NULL;}
+    virtual int* getIntBuffer(INDEX start, int len, int* buf) const {return nullptr;}
     virtual long long* getLongBuffer(INDEX start, int len, long long* buf) const {return buf;}
     virtual INDEX* getIndexBuffer(INDEX start, int len, INDEX* buf) const {return buf;}
     virtual float* getFloatBuffer(INDEX start, int len, float* buf) const {return buf;}
@@ -253,12 +253,12 @@ public:
     virtual ConstantSP getValue() const =0;
     virtual OBJECT_TYPE getObjectType() const {return CONSTOBJ;}
     virtual bool isFastMode() const {return false;}
-    virtual void* getDataArray() const {return 0;}
-    virtual void** getDataSegment() const {return 0;}
+    virtual void* getDataArray() const {return nullptr;}
+    virtual void** getDataSegment() const {return nullptr;}
     virtual bool isIndexArray() const { return false;}
-    virtual INDEX* getIndexArray() const { return NULL;}
+    virtual INDEX* getIndexArray() const { return nullptr;}
     virtual bool isHugeIndexArray() const { return false;}
-    virtual INDEX** getHugeIndexArray() const { return NULL;}
+    virtual INDEX** getHugeIndexArray() const { return nullptr;}
     virtual int getSegmentSize() const { return 1;}
     virtual int getSegmentSizeInBit() const { return 0;}
     virtual bool containNotMarshallableObject() const {return false;}
@@ -276,7 +276,7 @@ private:
 
 };
 
-}
+} // namespace dolphindb
 
 #if defined(_MSC_VER)
 #pragma warning( pop )

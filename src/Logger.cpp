@@ -1,6 +1,10 @@
 #include "Logger.h"
 #include "Util.h"
+
+// NOLINTBEGIN(misc-include-cleaner)
 #include "spdlog/sinks/stdout_color_sinks.h"
+#include <memory>
+#include <string>
 
 namespace {
 std::shared_ptr<spdlog::logger> initLogger()
@@ -9,7 +13,7 @@ std::shared_ptr<spdlog::logger> initLogger()
     logger->set_level(spdlog::level::debug);
     return logger;
 }
-}
+} // namespace
 
 namespace dolphindb {
 
@@ -42,4 +46,6 @@ bool DLogger::FormatFirst(std::string &text, Level level)
     return true;
 }
 
-}
+} // namespace dolphindb
+
+// NOLINTEND(misc-include-cleaner)

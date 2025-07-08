@@ -1,13 +1,16 @@
-#ifdef USE_OPENSSL
 #include "internal/Crypto.h"
 #include "Exceptions.h"
-#include <openssl/pem.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-#include <string>
-#include <vector>
+#include "openssl/bio.h"
+#include "openssl/err.h"
+#include "openssl/evp.h"
+#include "openssl/pem.h"
+#include "openssl/rand.h"
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <string>
 #include <tuple>
+#include <vector>
 
 namespace dolphindb {
 
@@ -65,13 +68,13 @@ void Crypto::printOpenSSLError() const
 
 std::string Crypto::Base64Encode(const std::vector<unsigned char> &text, int flags)
 {
-    BIO* b64 = BIO_new(BIO_f_base64());
-    BIO* bio = BIO_new(BIO_s_mem());
+    auto *b64 = BIO_new(BIO_f_base64());
+    auto *bio = BIO_new(BIO_s_mem());
     bio = BIO_push(b64, bio);
 	BIO_set_flags(bio, flags);
     BIO_write(bio, text.data(), static_cast<int>(text.size()));
     std::ignore = BIO_flush(bio);
-    BUF_MEM* bufferPtr;
+    BUF_MEM* bufferPtr; // NOLINT(misc-include-cleaner)
     BIO_get_mem_ptr(bio, &bufferPtr);
     std::string encoded(bufferPtr->data, bufferPtr->length);
     BIO_free_all(bio);
@@ -82,8 +85,8 @@ std::vector<unsigned char> Crypto::Base64Decode(const std::string &input, int fl
 {
     std::vector<uint8_t> output(input.length());
 
-    BIO *b64 = BIO_new(BIO_f_base64());
-    BIO *bio = BIO_new_mem_buf(input.data(), static_cast<int>(input.length()));
+    auto *b64 = BIO_new(BIO_f_base64());
+    auto *bio = BIO_new_mem_buf(input.data(), static_cast<int>(input.length()));
     bio = BIO_push(b64, bio);
 
 	BIO_set_flags(bio, flags);
@@ -101,6 +104,4 @@ std::string Crypto::generateNonce(int length) {
     return Crypto::Base64Encode(buffer, BIO_FLAGS_BASE64_NO_NL);
 }
 
-}
-
-#endif
+} // namespace dolphindb

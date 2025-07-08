@@ -1,17 +1,50 @@
 #include "Streaming.h"
 #include "Concurrent.h"
-#include "ConstantMarshall.h"
-#include "Exceptions.h"
-#include "Util.h"
-#include "TableImp.h"
-#include "ScalarImp.h"
-#include "Logger.h"
-#include "DolphinDB.h"
+#include "Constant.h"
 #include "ConstantImp.h"
-#include "Platform.h"
+#include "ConstantMarshall.h"
+#include "DolphinDB.h"
+#include "ErrorCodeInfo.h"
+#include "EventHandler.h"
+#include "Exceptions.h"
+#include "Logger.h"
+#include "ScalarImp.h"
+#include "SharedMem.h"
+#include "SmartPointer.h"
+#include "StreamingUtil.h"
+#include "SymbolBase.h"
+#include "SysIO.h"
+#include "Table.h"
+#include "TableImp.h"
+#include "Types.h"
+#include "Util.h"
+#include "internal/WideInteger.h"
+
+#ifdef __linux__
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#endif
+
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <functional>
+#include <iostream>
+#include <limits>
 #include <list>
 #include <map>
-#include <atomic>
+#include <memory>
+#include <random>
+#include <set>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #ifdef USE_AERON
 
@@ -127,7 +160,7 @@ private:
 namespace dolphindb {
 
 template <typename T>
-ConstantSP arg(SmartPointer<T> v) {
+ConstantSP arg(const SmartPointer<T>& v) {
 	if (UNLIKELY(v.isNull())) {
 		static ConstantSP void_ = Util::createConstant(DT_VOID);
 		return void_;
@@ -135,53 +168,15 @@ ConstantSP arg(SmartPointer<T> v) {
 	return ConstantSP(v);
 }
 
-template <typename T>
-ConstantSP arg(T v);
-
-template <>
-ConstantSP arg(bool v) {
-	return Util::createBool((char)v);
-}
-
-template <>
-ConstantSP arg(char v) {
-	return Util::createChar(v);
-}
-
-template <>
-ConstantSP arg(short v) {
-	return Util::createShort(v);
-}
-
-template <>
-ConstantSP arg(int v) {
-	return Util::createInt(v);
-}
-
-template <>
-ConstantSP arg(long long v) {
-	return Util::createLong(v);
-}
-
-template <>
-ConstantSP arg(float v) {
-	return Util::createFloat(v);
-}
-
-template <>
-ConstantSP arg(double v) {
-	return Util::createDouble(v);
-}
-
-template <>
-ConstantSP arg(string v) {
-	return Util::createString(v);
-}
-
-template <>
-ConstantSP arg(const char *c) {
-	return arg(string(c));
-}
+ConstantSP arg(bool v) { return Util::createBool((char)v); }
+ConstantSP arg(char v) { return Util::createChar(v); }
+ConstantSP arg(short v) { return Util::createShort(v); }
+ConstantSP arg(int v) { return Util::createInt(v); }
+ConstantSP arg(long long v) { return Util::createLong(v); }
+ConstantSP arg(float v) { return Util::createFloat(v); }
+ConstantSP arg(double v) { return Util::createDouble(v); }
+ConstantSP arg(const std::string &v) { return Util::createString(v); }
+ConstantSP arg(const char *c) { return arg(std::string(c)); }
 
 template <typename T>
 vector<ConstantSP> argVec(T &&v) {
@@ -206,7 +201,7 @@ template <typename Key, typename T, typename Hash = std::hash<Key>>
 class Hashmap {
 public:
     Hashmap() = default;
-	Hashmap(unordered_map<Key, T> &src) : mp_(src) {}
+	explicit Hashmap(unordered_map<Key, T> &src) : mp_(src) {}
     size_t count(const Key &key) {
         LockGuard<Mutex> _(&mtx_);
         return mp_.count(key);
@@ -216,25 +211,15 @@ public:
         auto kv = mp_.find(key);
         if (kv == mp_.end()) {
             return false;
-        } else {
-            t = kv->second;
-            return true;
         }
+        t = kv->second;
+        return true;
     }
-    bool findWithExternalLock(const Key &key, T &t) {
-        auto kv = mp_.find(key);
-        if (kv == mp_.end()) {
-            return false;
-        } else {
-            t = kv->second;
-            return true;
-        }
-    }
-    void op(std::function<void(unordered_map<Key, T, Hash> &mp)> func) {
+    void op(const std::function<void(unordered_map<Key, T, Hash> &mp)>& func) {
         LockGuard<Mutex> _(&mtx_);
         func(mp_);
     }
-    void upsert(const Key &key, std::function<void(T &v)> processor, const T &default_value) {
+    void upsert(const Key &key, const std::function<void(T &v)>& processor, const T &default_value) {
         LockGuard<Mutex> _(&mtx_);
         auto kv = mp_.find(key);
         if (kv != mp_.end()) {
@@ -249,29 +234,6 @@ public:
     void erase(const Key &key) {
         LockGuard<Mutex> _(&mtx_);
         mp_.erase(key);
-    }
-    void erase_if_eq(const Key &key, const T &val) {
-        LockGuard<Mutex> _(&mtx_);
-        auto kv = mp_.find(key);
-        if (kv != mp_.end() && kv->second == val) {
-            mp_.erase(key);
-        }
-    }
-    void erase_if_eq(const Key &key, const T &val, std::function<void()> &&extra) {
-        LockGuard<Mutex> _(&mtx_);
-        auto kv = mp_.find(key);
-        if (kv != mp_.end() && kv->second == val) {
-            mp_.erase(key);
-            extra();
-        }
-    }
-    vector<pair<Key, T>> getElements() {
-        LockGuard<Mutex> _(&mtx_);
-        vector<pair<Key, T>> ret;
-        for (auto kv = mp_.begin(); kv != mp_.end(); ++kv) {
-            ret.emplace_back(*kv);
-        }
-        return ret;
     }
     T &operator[](const Key &key) {
         LockGuard<Mutex> _(&mtx_);
@@ -296,15 +258,15 @@ ConstantSP convertTupleToTable(const vector<string>& colLabels, const ConstantSP
 }
 
 bool mergeTable(const Message &dest, const vector<Message> &src) {
-	Table *table = (Table*)dest.get();
+	auto *table = (Table*)dest.get();
 	INDEX colSize = table->columns();
-	for(auto &one : src) {
-		Table *t = (Table*)one.get();
+	for(const auto &one : src) {
+		auto *t = (Table*)one.get();
 		for (INDEX colIndex = 0; colIndex < colSize; colIndex++) {
 			((Vector*)table->getColumn(colIndex).get())->append(t->getColumn(colIndex));
 		}
 	}
-	auto basicTable = dynamic_cast<BasicTable*>(table);
+	auto *basicTable = dynamic_cast<BasicTable*>(table);
 	if(basicTable != nullptr){
 		basicTable->updateSize();
 	}
@@ -335,8 +297,6 @@ class StreamingClientImpl {
               allowExists_(false),
               haSites_(0),
               queue_(nullptr),
-              userName_(""),
-              password_(""),
               streamDeserializer_(nullptr),
               currentSiteIndex_(-1),
               isEvent_(false),
@@ -348,17 +308,16 @@ class StreamingClientImpl {
         {
             subscribeTime_ = std::chrono::steady_clock::now();
         }
-        explicit SubscribeParam(const string& id, const SubscribeInfo &info, long long offset, bool resub,
+        explicit SubscribeParam(std::string id, SubscribeInfo info, long long offset, bool resub,
                                const VectorSP &filter, bool msgAsTable, bool allowExists, int batchSize,
-								const string &userName, const string &password, const StreamDeserializerSP &blobDeserializer, bool isEvent, int resubscribeInterval, bool subOnce, bool convertMsgRowData, int resubscribeTimeout)
+							   std::string userName, std::string password, const StreamDeserializerSP &blobDeserializer, bool isEvent, int resubscribeInterval, bool subOnce, bool convertMsgRowData, int resubscribeTimeout)
             : ID_(std::move(id)),
-              info_(info),
+              info_(std::move(info)),
               offset_(offset),
               resub_(resub),
               filter_(filter),
               msgAsTable_(msgAsTable),
               allowExists_(allowExists),
-              attributes_(),
               haSites_(0),
               queue_(new MessageQueue(std::max(DEFAULT_QUEUE_CAPACITY, batchSize), batchSize)),
 			  userName_(std::move(userName)),
@@ -386,13 +345,13 @@ class StreamingClientImpl {
         bool msgAsTable_;
         bool allowExists_;
         vector<string> attributes_;
-        vector<pair<string, int>> haSites_;
+        vector<std::pair<string, int>> haSites_;
 		MessageQueueSP queue_;
 		string userName_, password_;
 		StreamDeserializerSP streamDeserializer_;
 		SocketSP socket_;
         vector<ThreadSP> handleThread_;
-        vector<pair<string, int>> availableSites_;
+        vector<std::pair<string, int>> availableSites_;
         int currentSiteIndex_;
         bool isEvent_;
         int resubscribeInterval_;
@@ -441,39 +400,25 @@ class StreamingClientImpl {
     };
 	class ActivePublisher {
 	public:
-		ActivePublisher(std::shared_ptr<DBConnection> conn) : conn_(conn) {}
-		~ActivePublisher() {}
+		explicit ActivePublisher(std::shared_ptr<DBConnection> conn) : conn_(std::move(conn)) {}
 		DataInputStreamSP getDataInputStream(){ return conn_->getDataInputStream();}
 	private:
-		enum SubscriberRPCType { RPC_OK, RPC_START, RPC_END };
-		enum SubscriberFromType { FROM_DDB, FROM_API };
 		std::shared_ptr<DBConnection> conn_;
 	};
-	typedef SmartPointer<ActivePublisher> ActivePublisherSP;
+	using ActivePublisherSP = SmartPointer<ActivePublisher>;
 	struct SocketThread {
-		SocketThread() {}
-		SocketThread(const SocketThread &src) {
-			thread = src.thread;
-			socket = src.socket;
-			publisher = src.publisher;
-		}
-		SocketThread(const SocketSP &socket1, const ThreadSP &thread1,const ActivePublisherSP &publisher1) {
-			thread = thread1;
+		SocketThread() = default;
+		SocketThread(const SocketSP &socket1, std::thread &thread1,const ActivePublisherSP &publisher1) {
+			thread = std::move(thread1);
 			socket = socket1;
 			publisher = publisher1;
-		}
-		SocketThread& operator =(const SocketThread& src) {
-			thread = src.thread;
-			socket = src.socket;
-			publisher = src.publisher;
-			return *this;
 		}
 		void stop() {
 			if (socket.isNull() == false) {
 				socket->close();
 			}
 		}
-		ThreadSP thread;
+		std::thread thread;
 		SocketSP socket;
 		ActivePublisherSP publisher;
 	};
@@ -486,7 +431,8 @@ class StreamingClientImpl {
     };
 
 public:
-    explicit StreamingClientImpl(int listeningPort) : listeningPort_(listeningPort), publishers_(5), isInitialized_(false){
+    explicit StreamingClientImpl(int listeningPort) : listeningPort_(listeningPort), publishers_(5)
+    {
 		if (listeningPort_ < 0) {
 			throw RuntimeException("Invalid listening port value " + std::to_string(listeningPort));
 		}
@@ -497,10 +443,15 @@ public:
         WSAStarted = true;
 #endif
     }
+    StreamingClientImpl(const StreamingClientImpl &) = delete;
+    StreamingClientImpl(const StreamingClientImpl &&) = delete;
+    StreamingClientImpl& operator=(const StreamingClientImpl &) = delete;
+    StreamingClientImpl& operator=(const StreamingClientImpl &&) = delete;
     ~StreamingClientImpl() {
 		exit();
     }
-	void exit() {
+
+    void exit() {
 		if (exit_)
 			return;
 		exit_ = true;
@@ -511,14 +462,14 @@ public:
 			listenerSocket_->close();
 		if(reconnectThread_.isNull()==false)
 			reconnectThread_->join();
-		if(daemonThread_.isNull()==false)
-			daemonThread_->join();
+		if(daemonThread_.joinable())
+			daemonThread_.join();
 		{
-			SocketThread socketthread;
-			while (parseSocketThread_.pop(socketthread)) {
-				socketthread.stop();
-				socketthread.thread->join();
-			}
+            for (auto &t: parseSocketThread_) {
+                t.stop();
+                t.thread.join();
+            }
+            parseSocketThread_.clear();
 		}
 		topicSubInfos_.op([&](unordered_map<string, SubscribeParam>& mp) {
 			for (auto &one : mp) {
@@ -527,7 +478,7 @@ public:
 		});
 
 	}
-	inline bool isExit() {
+	bool isExit() {
 		return exit_;
 	}
 	SubscribeQueue subscribeInternal(const SubscribeInfo &subInfo, int64_t offset = -1,
@@ -584,7 +535,7 @@ private:
 	bool isListenMode() {
 		return listeningPort_ > 0;
 	}
-    void parseMessage(DataInputStreamSP in);
+    void parseMessage(const DataInputStreamSP& in);
 	void sendPublishRequest(DBConnection &conn, SubscribeParam &info);
     void reconnect();
 	static bool initSocket(const SocketSP &socket) {
@@ -612,7 +563,6 @@ private:
 		return true;
 	}
 
-private:
     void daemon() {
 		DataInputStreamSP inputStream;
 		ActivePublisherSP publisher;
@@ -636,9 +586,10 @@ private:
                     break;
                 };
 
-                ThreadSP t = new Thread(new Executor(std::bind(&StreamingClientImpl::parseMessage, this, inputStream)));
-                t->start();
-				parseSocketThread_.push(SocketThread(inputStream->getSocket(),t,publisher));
+                std::thread t([this, inputStream](){
+                    parseMessage(inputStream);
+                });
+				parseSocketThread_.emplace_back(inputStream->getSocket(), t, publisher);
             } catch (std::exception &e) {
                 cerr << "Daemon exception: " << e.what() << endl;
                 cerr << "Restart Daemon in 1 second" << endl;
@@ -651,8 +602,8 @@ private:
         }
     }
 
-    inline string stripActionName(string topic) { return topic.substr(0, topic.find_last_of('/')); }
-    inline string getSite(string topic) { return topic.substr(0, topic.find_first_of('/')); }
+    string stripActionName(const std::string & topic) { return topic.substr(0, topic.find_last_of('/')); }
+    string getSite(const std::string & topic) { return topic.substr(0, topic.find_first_of('/')); }
 
     string getLocalIP() {
         if (localIP_.empty()) localIP_ = "localhost";
@@ -671,13 +622,13 @@ private:
         }
     }
 
-    bool getNewLeader(const string& s, string &host, int &port)
+    bool getNewLeader(const std::string & s, string &host, int &port)
     {
         size_t index = s.find("<NotLeader>");
         if (index == string::npos) {
             return false;
         }
-        index = s.find(">");
+        index = s.find('>');
         string ipport = s.substr(index + 1);
 
         auto v = Util::split(ipport, ':');
@@ -689,11 +640,10 @@ private:
         return (port > 0 && port <= 65535);
     }
 
-private:
     SocketSP listenerSocket_;
-    ThreadSP daemonThread_;
+    std::thread daemonThread_;
     ThreadSP reconnectThread_;
-    SynchronizedQueue<SocketThread> parseSocketThread_;
+    std::vector<SocketThread> parseSocketThread_;
 	int listeningPort_;
     string localIP_;
     Hashmap<string, SubscribeParam> topicSubInfos_;
@@ -706,7 +656,7 @@ private:
 	bool exit_;
 	Mutex readyMutex_;
     std::list<HAStreamTableInfo> haStreamTableInfo_;
-    bool isInitialized_;
+    bool isInitialized_{false};
     std::map<std::string, std::string> topics_;     //ID -> current topic
     SubscribeCallbackT callback_{[](const SubscribeState, const SubscribeInfo &){return true;}};
 #ifdef _WIN32
@@ -1004,8 +954,9 @@ void StreamingClientImpl::init(){
     exit_ = false;
     reconnectThread_ = new Thread(new Executor(std::bind(&StreamingClientImpl::reconnect, this)));
     reconnectThread_->start();
-    daemonThread_ = new Thread(new Executor(std::bind(&StreamingClientImpl::daemon, this)));
-    daemonThread_->start();
+    daemonThread_ = std::thread([this](){
+        daemon();
+    });
 }
 
 void StreamingClientImpl::checkServerVersion(std::string host, int port, const std::vector<std::string>& backupSites){
@@ -1040,6 +991,8 @@ void StreamingClientImpl::checkServerVersion(std::string host, int port, const s
 void StreamingClientImpl::reconnect() {
     while (!isExit()) {
         topicReconn_.op([&](unordered_map<string, pair<long long, long long>> &mp) {
+            std::default_random_engine engine;
+            std::uniform_int_distribution<int> distribution(0, std::numeric_limits<int>::max());
             std::vector<std::string> failedResubs;
             for (auto &p : mp) {
                 SubscribeParam info;
@@ -1075,7 +1028,6 @@ void StreamingClientImpl::reconnect() {
                             }
                             break;
                         } catch (std::exception &e) {
-                            string msg = e.what();
                             if (getNewLeader(e.what(), host, port)) {
                                 cerr << "In reconnect: Got NotLeaderException, switch to leader node [" << host << ":" << port << "] for subscription"  << endl;
                                 HAStreamTableInfo haInfo{info.info_.hostName, info.info_.port, info.info_.tableName, info.info_.actionName, host, port};
@@ -1085,7 +1037,7 @@ void StreamingClientImpl::reconnect() {
                             } else {
                                 DLogger::Info("#attempt=", p.second.second++, ", failed to resubscribe, exception:{", e.what(), "}");
                                 if (!info.haSites_.empty()) {
-                                    int k = rand() % info.haSites_.size();
+                                    int k = distribution(engine) % info.haSites_.size();
                                     host = info.haSites_[k].first;
                                     port = info.haSites_[k].second;
                                     cerr << ", will retry site: " << host << ":" << port << endl;
@@ -1135,7 +1087,6 @@ void StreamingClientImpl::reconnect() {
                                 topicSubInfos_.upsert(newTopic, [&](SubscribeParam &_info) { _info = info; }, info);
                                 break;
                             } catch (std::exception &e) {
-                                string msg = e.what();
                                 if(!info.availableSites_.empty()){
                                     cerr << "#attempt=" << p.second.second++ << ", failed to resubscribe, exception:{" << e.what() << "}\n";
                                 }
@@ -1149,7 +1100,7 @@ void StreamingClientImpl::reconnect() {
                                     cerr << "#attempt=" << p.second.second++ << ", failed to resubscribe, exception:{"
                                         << e.what() << "}";
                                     if (!info.haSites_.empty()) {
-                                        int k = rand() % info.haSites_.size();
+                                        int k = distribution(engine) % info.haSites_.size();
                                         host = info.haSites_[k].first;
                                         port = info.haSites_[k].second;
                                         cerr << ", will retry site: " << host << ":" << port << endl;
@@ -1220,7 +1171,8 @@ void StreamingClientImpl::reconnect() {
     }
 }
 
-void StreamingClientImpl::parseMessage(DataInputStreamSP in) {
+void StreamingClientImpl::parseMessage(const DataInputStreamSP &in)
+{
     auto factory = ConstantUnmarshallFactory(in);
     ConstantUnmarshall *unmarshall = nullptr;
 
@@ -1232,11 +1184,11 @@ void StreamingClientImpl::parseMessage(DataInputStreamSP in) {
     string aliasTableName;
     string topicMsg;
     vector<string> topics;
-	vector<string> symbols;
+    vector<string> symbols;
 
     while (isExit() == false) {
-        if (ret != OK) {  // blocking mode, ret won't be NODATA
-            if (!actionCntOnTable_.count(aliasTableName) || actionCntOnTable_[aliasTableName] == 0) {
+        if (ret != OK) { // blocking mode, ret won't be NODATA
+            if ((actionCntOnTable_.count(aliasTableName) == 0U) || actionCntOnTable_[aliasTableName] == 0) {
                 break;
             };
             if (topicMsg.empty()) {
@@ -1246,17 +1198,19 @@ void StreamingClientImpl::parseMessage(DataInputStreamSP in) {
             // close this socket, and do resub
             in->close();
             in->getSocket().clear();
-			if (topics.empty())
-				break;
-			auto site = getSite(topics[0]);
+            if (topics.empty())
+                break;
+            auto site = getSite(topics[0]);
             set<string> ts;
             if (liveSubsOnSite_.find(site, ts)) {
-                for (auto &t : ts) {
+                for (const auto &t : ts) {
                     SubscribeParam info;
                     if (topicSubInfos_.find(t, info)) {
                         callback_(SubscribeState::Disconnected, info.info_);
                     }
-                    topicSubInfos_.op([&t](unordered_map<string, SubscribeParam> &mp) { mp[t].subscribeTime_ = std::chrono::steady_clock::now(); });
+                    topicSubInfos_.op([&t](unordered_map<string, SubscribeParam> &mp) {
+                        mp[t].subscribeTime_ = std::chrono::steady_clock::now();
+                    });
                     topicReconn_.insert(t, {Util::getEpochTime(), 0});
                 }
             }
@@ -1265,30 +1219,36 @@ void StreamingClientImpl::parseMessage(DataInputStreamSP in) {
 
         char littleEndian;
         ret = in->readChar(littleEndian);
-        if (ret != OK) continue;
+        if (ret != OK)
+            continue;
 
         ret = in->bufferBytes(16);
-        if (ret != OK) continue;
+        if (ret != OK)
+            continue;
 
-		ret = in->readLong(sentTime);
-		if (ret != OK) continue;
-		ret = in->readLong(offset);
-		if (ret != OK) continue;
+        ret = in->readLong(sentTime);
+        if (ret != OK)
+            continue;
+        ret = in->readLong(offset);
+        if (ret != OK)
+            continue;
 
         ret = in->readString(topicMsg);
-		if (ret != OK) continue;
+        if (ret != OK)
+            continue;
         topics = Util::split(topicMsg, ',');
-		if (topics.empty()) {
-			break;
-		}
+        if (topics.empty()) {
+            break;
+        }
         aliasTableName = stripActionName(topics[0]);
 
         short flag;
         ret = in->readShort(flag);
-        if (ret != OK) continue;
+        if (ret != OK)
+            continue;
 
         if (UNLIKELY(flag != previousDataFormFlag)) {
-            auto form = static_cast<DATA_FORM>((unsigned short)flag >> 8u);
+            auto form = static_cast<DATA_FORM>((unsigned short)flag >> 8U);
             unmarshall = factory.getConstantUnmarshall(form);
             if (UNLIKELY(unmarshall == nullptr)) {
                 cerr << "[ERROR] Invalid data from: 0x" << std::hex << flag
@@ -1300,7 +1260,8 @@ void StreamingClientImpl::parseMessage(DataInputStreamSP in) {
         }
 
         unmarshall->start(flag, true, ret);
-        if (ret != OK) continue;
+        if (ret != OK)
+            continue;
 
         ConstantSP obj = unmarshall->getConstant();
         if (obj->isTable()) {
@@ -1312,85 +1273,84 @@ void StreamingClientImpl::parseMessage(DataInputStreamSP in) {
                 topicReconn_.erase(t);
             }
         } else if (LIKELY(obj->isVector())) {
-			int colSize = obj->size();
+            int colSize = obj->size();
             int rowSize = obj->get(0)->size();
-//            offset += rowSize;
-			if (isListenMode() && rowSize == 1) {
+            //            offset += rowSize;
+            if (isListenMode() && rowSize == 1) {
                 // 1d array to 2d
                 VectorSP newObj = Util::createVector(DT_ANY, colSize);
                 for (int i = 0; i < colSize; ++i) {
                     ConstantSP val = obj->get(i);
                     VectorSP col = Util::createVector(val->getType(), 1);
-					if(val->getForm() == DF_VECTOR) {
-						col = Util::createArrayVector((DATA_TYPE)((int)val->getType()+ARRAY_TYPE_BASE), 1);
-					}
+                    if (val->getForm() == DF_VECTOR) {
+                        col = Util::createArrayVector((DATA_TYPE)((int)val->getType() + ARRAY_TYPE_BASE), 1);
+                    }
                     col->set(0, val);
-                    newObj->set(i, col);
+                    newObj->set(i, (ConstantSP)col);
                 }
-                obj = newObj;
+                obj = (ConstantSP)newObj;
             }
             vector<VectorSP> cache, rows;
-			ErrorCodeInfo errorInfo;
+            ErrorCodeInfo errorInfo;
 
-            //wait for insertMeta() finish, or there is no topic in topicSubInfos_
+            // wait for insertMeta() finish, or there is no topic in topicSubInfos_
             LockGuard<Mutex> lock(&readyMutex_);
 
             for (auto &t : topics) {
                 SubscribeParam info;
                 if (topicSubInfos_.find(t, info)) {
-                    if (info.queue_.isNull()) continue;
+                    if (info.queue_.isNull())
+                        continue;
                     int startOffset = static_cast<int>(offset - rowSize + 1);
-                    if (info.isEvent_){
+                    if (info.isEvent_) {
                         info.queue_->push(Message(obj));
+                    } else if (info.streamDeserializer_.isNull() == false) {
+                        if (rows.empty()) {
+                            if (!info.streamDeserializer_->parseBlob(obj, rows, symbols, errorInfo)) {
+                                cerr << "[ERROR] parse BLOB field failed: " << errorInfo.errorInfo
+                                     << ", stopping this parse thread." << endl;
+                                return;
+                            }
+                        }
+                        for (int rowIdx = 0; rowIdx < rowSize; ++rowIdx) {
+                            Message m((ConstantSP)rows[rowIdx], symbols[rowIdx], info.streamDeserializer_,
+                                      startOffset++);
+                            rows[rowIdx].clear();
+                            info.queue_->push(m);
+                        }
+                    } else {
+                        if (info.convertMsgRowData_ || info.msgAsTable_) {
+                            if (info.attributes_.empty()) {
+                                std::cerr << "table colName is empty, can not convert to table" << std::endl;
+                                info.queue_->push(Message(obj, startOffset));
+                            } else {
+                                info.queue_->push(Message(convertTupleToTable(info.attributes_, obj), startOffset));
+                            }
+                        } else {
+                            if (UNLIKELY(cache.empty())) { // split once
+                                cache.resize(rowSize);
+                                for (int rowIdx = 0; rowIdx < rowSize; ++rowIdx) {
+                                    VectorSP tmp = Util::createVector(DT_ANY, colSize, colSize);
+                                    for (int colIdx = 0; colIdx < colSize; ++colIdx) {
+                                        tmp->set(colIdx, obj->get(colIdx)->get(rowIdx));
+                                    }
+                                    cache[rowIdx] = tmp;
+                                }
+                            }
+                            for (auto &one : cache) {
+                                info.queue_->push(Message((ConstantSP)one, startOffset++));
+                            }
+                        }
                     }
-					else if (info.streamDeserializer_.isNull()==false) {
-						if (rows.empty()) {
-							if (!info.streamDeserializer_->parseBlob(obj, rows, symbols, errorInfo)) {
-								cerr << "[ERROR] parse BLOB field failed: " << errorInfo.errorInfo << ", stopping this parse thread." << endl;
-								return;
-							}
-						}
-						for (int rowIdx = 0; rowIdx < rowSize; ++rowIdx) {
-							Message m(rows[rowIdx], symbols[rowIdx], info.streamDeserializer_, startOffset++);
-							rows[rowIdx].clear();
-							info.queue_->push(m);
-						}
-					}
-					else {
-						if (info.convertMsgRowData_ || info.msgAsTable_) {
-							if (info.attributes_.empty()) {
-								std::cerr << "table colName is empty, can not convert to table" << std::endl;
-								info.queue_->push(Message(obj, startOffset));
-							}
-							else {
-								info.queue_->push(Message(convertTupleToTable(info.attributes_, obj), startOffset));
-							}
-						}
-						else {
-							if (UNLIKELY(cache.empty())) { // split once
-								cache.resize(rowSize);
-								for (int rowIdx = 0; rowIdx < rowSize; ++rowIdx) {
-									VectorSP tmp = Util::createVector(DT_ANY, colSize, colSize);
-									for (int colIdx = 0; colIdx < colSize; ++colIdx) {
-										tmp->set(colIdx, obj->get(colIdx)->get(rowIdx));
-									}
-									cache[rowIdx] = tmp;
-								}
-							}
-							for (auto &one : cache) {
-								info.queue_->push(Message(one, startOffset++));
-							}
-						}
-					}
-					topicSubInfos_.op([&](unordered_map<string, SubscribeParam>& mp){
-						if(mp.count(t) != 0)
-                        	mp[t].offset_ = offset + 1;
+                    topicSubInfos_.op([&](unordered_map<string, SubscribeParam> &mp) {
+                        if (mp.count(t) != 0)
+                            mp[t].offset_ = offset + 1;
                     });
                 }
             }
         } else {
-			cerr << "Message body has an invalid format. Vector is expected." << endl;
-			break;
+            cerr << "Message body has an invalid format. Vector is expected." << endl;
+            break;
         }
     }
 }
@@ -1419,7 +1379,7 @@ void StreamingClientImpl::sendPublishRequest(DBConnection &conn, SubscribeParam 
 	}
 }
 
-string StreamingClientImpl::subscribeInternal(DBConnection &conn, SubscribeParam &info) {
+std::string StreamingClientImpl::subscribeInternal(DBConnection &conn, SubscribeParam &info) {
 	if (info.userName_.empty() == false)
 		conn.login(info.userName_, info.password_, HAS_OPENSSL);
 	ConstantSP result = run(conn, "getSubscriptionTopic", info.info_.tableName, info.info_.actionName);
@@ -1508,13 +1468,13 @@ SubscribeQueue StreamingClientImpl::subscribeInternal(const SubscribeInfo &subIn
         SubscribeParam info(_id, subInfo, offset, resubscribe, filter, msgAsTable, allowExists,
 			batchSize, userName,password,blobDeserializer, isEvent, resubscribeInterval, subOnce, convertMsgRowData, resubscribeTimeout);
         if(!backupSites.empty()){
-            info.availableSites_.push_back({subInfo.hostName, subInfo.port});
+            info.availableSites_.emplace_back(subInfo.hostName, subInfo.port);
             info.currentSiteIndex_ = 0;
             std::string backupIP;
             int         backupPort;
             for(const auto& backupSite : backupSites){
                 parseIpPort(backupSite, backupIP, backupPort);
-                info.availableSites_.push_back({backupIP, backupPort});
+                info.availableSites_.emplace_back(backupIP, backupPort);
             }
         }
         try {
@@ -1533,7 +1493,7 @@ SubscribeQueue StreamingClientImpl::subscribeInternal(const SubscribeInfo &subIn
                 insertMeta(info, topic);
                 return SubscribeQueue(info.queue_, info.stopped_);
             }
-            else if (attempt <= 10 && getNewLeader(e.what(), _host, _port)) {
+            if (attempt <= 10 && getNewLeader(e.what(), _host, _port)) {
                 DLogger::Warn("Got NotLeaderException, switch to leader node [", _host, ":", _port, "] for subscription");
                 HAStreamTableInfo haInfo{subInfo.hostName, subInfo.port, subInfo.tableName, subInfo.actionName, _host, _port};
                 haStreamTableInfo_.push_back(haInfo);
@@ -1542,9 +1502,8 @@ SubscribeQueue StreamingClientImpl::subscribeInternal(const SubscribeInfo &subIn
                 initResub_.insert(info);
                 insertMeta(info, topic);
                 return SubscribeQueue(info.queue_, info.stopped_);
-            } else {
-                throw;
             }
+            throw;
         }
     }
 	return SubscribeQueue();
@@ -1617,7 +1576,7 @@ StreamingClient::StreamingClient(const StreamingClientConfig &config)
 #ifdef USE_AERON
         udpImpl_ = std::make_shared<UDPStreamingImpl>(config);
 #else
-        throw IllegalArgumentException(__FUNCNAME__, "UDP transportation protocol is unavailable without Aeron.");
+        throw IllegalArgumentException(DDB_FUNCNAME, "UDP transportation protocol is unavailable without Aeron.");
 #endif
     } else {
         if (config.callback) {
@@ -1644,7 +1603,7 @@ bool StreamingClient::isExit() {
 SubscribeQueue StreamingClient::subscribeInternal(const SubscribeInfo &info,
                                                   int64_t offset, bool resubscribe, const dolphindb::VectorSP &filter,
                                                   bool msgAsTable, bool allowExists, int batchSize,
-												  string userName, string password,
+												  const std::string & userName, const std::string & password,
 												  const StreamDeserializerSP &blobDeserializer, const std::vector<std::string>& backupSites, bool isEvent, int resubscribeInterval, bool subOnce, bool convertMsgRowData, int resubscribeTimeout) {
     return impl_->subscribeInternal(info, offset, resubscribe, filter, msgAsTable,
                                     allowExists, batchSize,
@@ -1653,7 +1612,7 @@ SubscribeQueue StreamingClient::subscribeInternal(const SubscribeInfo &info,
 }
 
 bool StreamingClient::unsubscribeInternal(string host, int port, string tableName, string actionName) {
-    SubscribeInfo info { host, port, tableName, actionName };
+    SubscribeInfo info { std::move(host), port, std::move(tableName), std::move(actionName) };
     return impl_->unsubscribeInternal(info);
 }
 
@@ -1667,9 +1626,9 @@ size_t ThreadedClient::getQueueDepth(const ThreadSP &thread) {
 ThreadSP ThreadedClient::subscribe(string host, int port, const MessageBatchHandler &handler, string tableName,
                                    string actionName, int64_t offset, bool resub, const VectorSP &filter,
                                    bool allowExists, int batchSize, double throttle, bool msgAsTable,
-									string userName, string password,
+									const std::string & userName, const std::string & password,
 								   const StreamDeserializerSP &blobDeserializer, const std::vector<std::string>& backupSites, int resubscribeInterval, bool subOnce, int resubscribeTimeout) {
-    SubscribeInfo info { host, port, tableName, actionName };
+    SubscribeInfo info { std::move(host), port, std::move(tableName), std::move(actionName) };
     auto subscribeQueue = subscribeInternal(info, offset,
                               resub, filter, msgAsTable, allowExists, batchSize, userName, password, blobDeserializer,
                               backupSites, false, resubscribeInterval, subOnce, false, resubscribeTimeout);
@@ -1685,7 +1644,7 @@ ThreadSP ThreadedClient::subscribe(string host, int port, const MessageBatchHand
     }else{
         throttleTime = std::max(1, (int)(throttle * 1000));
     }
-	SmartPointer<StreamingClientImpl> impl=impl_;
+	auto impl = impl_;
 	ThreadSP thread = new Thread(new Executor([handler, subscribeQueue, msgAsTable, batchSize, throttleTime, impl]() {
         vector<Message> msgs;
         vector<Message> tableMsg(1);
@@ -1771,7 +1730,7 @@ void handleConvertRowData(Message& msg, const MessageHandler& handler,  Constant
 
     for (int col = 0; col < static_cast<int>(cols); ++col){
         columns.push_back(msg->getColumn(col));
-        VectorSP column = msg->getColumn(col);
+        auto column = (VectorSP)msg->getColumn(col);
         if(types[col] >= ARRAY_TYPE_BASE){
             arrayIndex[col] = ((SmartPointer<FastArrayVector>)column)->getSourceIndex();
             arrayValue[col] = ((SmartPointer<FastArrayVector>)column)->getSourceValue();
@@ -1962,14 +1921,14 @@ void handleConvertRowData(Message& msg, const MessageHandler& handler,  Constant
                 case DT_DECIMAL64:{
                     unsigned char buf[8];
                     columns[col]->getBinary(row, 1, 8, buf);
-                    long long *ptr = reinterpret_cast<long long*>(buf);
+                    auto *ptr = reinterpret_cast<long long*>(buf);
                     static_cast<SmartPointer<Decimal64>>(callBackScalarArgs[col])->setRawData(*ptr);
                     break;
                 }
                 case DT_DECIMAL128:{
                     unsigned char buf[16];
                     columns[col]->getBinary(row, 1, 16, buf);
-                    wide_integer::int128* ptr = reinterpret_cast<wide_integer::int128*>(buf);
+                    auto* ptr = reinterpret_cast<wide_integer::int128*>(buf);
                     static_cast<SmartPointer<Decimal128>>(callBackScalarArgs[col])->setRawData(*ptr);
                     break;
                 }
@@ -1983,7 +1942,7 @@ void handleConvertRowData(Message& msg, const MessageHandler& handler,  Constant
     }
 }
 
-ThreadSP newHandleThread(const MessageHandler handler, SubscribeQueue subscribeQueue, bool msgAsTable, bool isStreamDeserialize, SmartPointer<StreamingClientImpl> impl) {
+ThreadSP newHandleThread(const MessageHandler& handler, const SubscribeQueue& subscribeQueue, bool msgAsTable, bool isStreamDeserialize, const std::shared_ptr<StreamingClientImpl>& impl) {
 	ThreadSP thread = new Thread(new Executor([handler, subscribeQueue, msgAsTable, isStreamDeserialize, impl]() {
 		vector<Message> tables;
         ConstantSP callBackArgs;
@@ -2018,12 +1977,12 @@ ThreadSP newHandleThread(const MessageHandler handler, SubscribeQueue subscribeQ
 ThreadSP ThreadedClient::subscribe(string host, int port, const MessageHandler &handler, string tableName,
                                    string actionName, int64_t offset, bool resub, const VectorSP &filter,
                                    bool msgAsTable, bool allowExists,
-									string userName, string password,
+									const std::string & userName, const std::string & password,
 									const StreamDeserializerSP &blobDeserializer, const std::vector<std::string>& backupSites, int resubscribeInterval, bool subOnce, int resubscribeTimeout) {
-        SubscribeInfo info { host, port, tableName, actionName };
+        SubscribeInfo info { std::move(host), port, std::move(tableName), std::move(actionName) };
 #ifdef USE_AERON
     if (udpImpl_ != nullptr) {
-        auto conn = std::make_shared<DBConnection>(host, port);
+        auto conn = std::make_shared<DBConnection>(info.hostName, info.port);
         if (!conn->checkVersion({{3,0,0}})) {
             throw RuntimeException("UDP connection only supports server version at least 3.00.0");
         }
@@ -2064,9 +2023,9 @@ PollingClient::PollingClient(int listeningPort) : StreamingClient(listeningPort)
 
 MessageQueueSP PollingClient::subscribe(string host, int port, string tableName, string actionName, int64_t offset,
                                         bool resub, const VectorSP &filter, bool msgAsTable, bool allowExists,
-										string userName, string password,
+										const std::string & userName, const std::string & password,
 										const StreamDeserializerSP &blobDeserializer, const std::vector<std::string>& backupSites, int resubscribeInterval, bool subOnce, int resubscribeTimeout) {
-    SubscribeInfo info { host, port, tableName, actionName };
+    SubscribeInfo info { std::move(host), port, std::move(tableName), std::move(actionName) };
     return subscribeInternal(info, offset, resub, filter,
                              msgAsTable, allowExists,1, userName, password, blobDeserializer, backupSites, false, resubscribeInterval, subOnce, false, resubscribeTimeout).queue_;
 }
@@ -2090,9 +2049,9 @@ size_t ThreadPooledClient::getQueueDepth(const ThreadSP &thread){
 vector<ThreadSP> ThreadPooledClient::subscribe(string host, int port, const MessageHandler &handler, string tableName,
                                                string actionName, int64_t offset, bool resub, const VectorSP &filter,
                                                bool msgAsTable, bool allowExists,
-												string userName, string password,
+												const std::string & userName, const std::string & password,
 												const StreamDeserializerSP &blobDeserializer, const std::vector<std::string>& backupSites, int resubscribeInterval, bool subOnce, int resubscribeTimeout) {
-    SubscribeInfo info { host, port, tableName, actionName };
+    SubscribeInfo info { std::move(host), port, std::move(tableName), std::move(actionName) };
     auto queue = subscribeInternal(info, offset, resub,
                                    filter, msgAsTable, allowExists,1, userName,password, blobDeserializer, backupSites, false, resubscribeInterval, subOnce, true, resubscribeTimeout);
     vector<ThreadSP> ret;
@@ -2110,7 +2069,7 @@ EventClient::EventClient(const std::vector<EventSchema>& eventSchemas, const std
 
 }
 
-ThreadSP EventClient::subscribe(const string& host, int port, const EventMessageHandler &handler, const string& tableName, const string& actionName, int64_t offset, bool resub, const string& userName, const string& password, int resubscribeTimeout){
+ThreadSP EventClient::subscribe(const std::string & host, int port, const EventMessageHandler &handler, const std::string & tableName, const std::string & actionName, int64_t offset, bool resub, const std::string & userName, const std::string & password, int resubscribeTimeout){
     if(tableName.empty()){
         throw RuntimeException("tableName must not be empty.");
     }
@@ -2122,7 +2081,7 @@ ThreadSP EventClient::subscribe(const string& host, int port, const EventMessage
     std::string sql = "select top 0 * from " + tableName;
     std::string errMsg;
     ConstantSP outputTable = tempConn.run(sql);
-    if(!eventHandler_.checkOutputTable(outputTable, errMsg)){
+    if(!eventHandler_.checkOutputTable((TableSP)outputTable, errMsg)){
         throw RuntimeException(errMsg);
     }
     tempConn.close();
@@ -2133,7 +2092,7 @@ ThreadSP EventClient::subscribe(const string& host, int port, const EventMessage
         return nullptr;
     }
 
-    SmartPointer<StreamingClientImpl> impl = impl_;
+    auto impl = impl_;
     ThreadSP thread = new Thread(new Executor([this, handler, subscribeQueue, impl]() {
 		auto queue = subscribeQueue.queue_;
 		Message msg;
@@ -2166,7 +2125,7 @@ ThreadSP EventClient::subscribe(const string& host, int port, const EventMessage
     return thread;
 }
 
-bool EventClient::unsubscribe(const string& host, int port, const string& tableName, const string& actionName){
+bool EventClient::unsubscribe(const std::string & host, int port, const std::string & tableName, const std::string & actionName){
     return unsubscribeInternal(host, port, tableName, actionName);
 }
 
@@ -2181,9 +2140,9 @@ IPCInMemoryStreamClient::~IPCInMemoryStreamClient() {
 	}
 }
 
-ThreadSP IPCInMemoryStreamClient::newHandleThread(const string& tableName, const IPCInMemoryTableReadHandler handler,
-	SmartPointer<IPCInMemTable> memTable,
-	TableSP outputTable, bool overwrite) {
+ThreadSP IPCInMemoryStreamClient::newHandleThread(const std::string & tableName, const IPCInMemoryTableReadHandler& handler,
+	const SmartPointer<IPCInMemTable>& memTable,
+	const TableSP& outputTable, bool overwrite) {
 	ThreadSP thread = new Thread(new Executor([tableName, handler, memTable, this, outputTable, overwrite]() {
 		while (this->tableName2thread_[tableName].isExit == false) {
 			TableSP table = outputTable;
@@ -2197,7 +2156,7 @@ ThreadSP IPCInMemoryStreamClient::newHandleThread(const string& tableName, const
 				break;
 			}
 			if (handler != nullptr) {
-				handler(table);
+				handler((ConstantSP)table);
 			}
 		}
 	}));
@@ -2205,7 +2164,7 @@ ThreadSP IPCInMemoryStreamClient::newHandleThread(const string& tableName, const
 	return thread;
 }
 
-bool checkSchema(TableSP table, TableMetaData& tableMetaData) {
+bool checkSchema(const TableSP& table, TableMetaData& tableMetaData) {
 	if ((unsigned int)table->columns() != tableMetaData.colTypes_.size()) {
 		return false;
 	}
@@ -2217,7 +2176,7 @@ bool checkSchema(TableSP table, TableMetaData& tableMetaData) {
 	return true;
 }
 
-SmartPointer<IPCInMemTable> loadIPCInMemoryTableAndCheckSchema(const string& tableName, const TableSP& outputTable, string& errMsg) {
+SmartPointer<IPCInMemTable> loadIPCInMemoryTableAndCheckSchema(const std::string & tableName, const TableSP& outputTable, string& errMsg) {
 	size_t bufSize = MIN_MEM_ROW_SIZE * sizeof(long long);
 	string shmPath = SHM_KEY_HEADER_STR + tableName;
 	SmartPointer<SharedMemStream> sharedMem = new SharedMemStream(false, shmPath, bufSize);
@@ -2242,13 +2201,13 @@ SmartPointer<IPCInMemTable> loadIPCInMemoryTableAndCheckSchema(const string& tab
 	bufSize = sharedMem->getBufSize();
 	bufSize = bufSize * sizeof(long long);
 	SmartPointer<IPCInMemTable> memTable = new IPCInMemTable(
-		false, shmPath, tableName, cols, it->second.colNames_, (size_t)bufSize);
+		false, shmPath, tableName, cols, it->second.colNames_, bufSize);
 
 	return memTable;
 }
 
-ThreadSP IPCInMemoryStreamClient::subscribe(const string& tableName, const IPCInMemoryTableReadHandler& handler, TableSP outputTable, bool overwrite) {
-	if (tableName == "") {
+ThreadSP IPCInMemoryStreamClient::subscribe(const std::string & tableName, const IPCInMemoryTableReadHandler& handler, const TableSP& outputTable, bool overwrite) {
+	if (tableName.empty()) {
 		throw RuntimeException("Cannot pass an empty string");
 	}
 	if (tableName2thread_.find(tableName) != tableName2thread_.end()) {
@@ -2270,25 +2229,15 @@ ThreadSP IPCInMemoryStreamClient::subscribe(const string& tableName, const IPCIn
 	return thread;
 }
 
-// // TODO
-// void IPCInMemoryStreamClient::dropIPCInMemoryTable() {
-//     int bufSize = MIN_MEM_ROW_SIZE * sizeof(long long);
-
-//     std::string shmPath = SHM_KEY_HEADER_STR + tableName_;
-//     SmartPointer<SharedMemStream> sharedMem = new SharedMemStream(true, shmPath, bufSize);
-//     sharedMem->closeShm();
-//     sharedMem->unlinkShm();
-// }
-
-void wakeupIPCInMemoryStreamClient(const string& tableName) {
+void wakeupIPCInMemoryStreamClient(const std::string & tableName) {
 	size_t bufSize = MIN_MEM_ROW_SIZE * sizeof(long long);
 	string shmPath = SHM_KEY_HEADER_STR + tableName;
 	SmartPointer<SharedMemStream> sharedMem = new SharedMemStream(false, shmPath, bufSize);
 	sharedMem->readSemPost();
 }
 
-void IPCInMemoryStreamClient::unsubscribe(const string& tableName) {
-	if (tableName == "") {
+void IPCInMemoryStreamClient::unsubscribe(const std::string & tableName) {
+	if (tableName.empty()) {
 		throw RuntimeException("Cannot pass an empty string");
 	}
 	if (tableName2thread_.find(tableName) == tableName2thread_.end()) {
@@ -2309,4 +2258,4 @@ void IPCInMemoryStreamClient::unsubscribe(const string& tableName) {
 
 #endif //LINUX
 
-}  // namespace dolphindb
+} // namespace dolphindb

@@ -1,24 +1,40 @@
 #include "MultithreadedTableWriter.h"
-#include "ScalarImp.h"
-#include "Domain.h"
-#include "Logger.h"
+#include "Concurrent.h"
+#include "Constant.h"
 #include "DolphinDB.h"
-#include <thread>
+#include "Domain.h"
+#include "ErrorCodeInfo.h"
+#include "Exceptions.h"
+#include "Logger.h"
+#include "SmartPointer.h"
 #include "SysIO.h"
+#include "Types.h"
+#include "Util.h"
+#include "Vector.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <exception>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
 
 using std::string;
 using std::vector;
 namespace dolphindb {
 
-MTWConfig::MTWConfig(const std::shared_ptr<DBConnection> conn, const std::string &tableName)
+MTWConfig::MTWConfig(const std::shared_ptr<DBConnection>& conn, const std::string &tableName)
 {
     // check connection
     if (tableName.empty()) {
-        throw IllegalArgumentException(__FUNCNAME__,  "Empty tableName.");
+        throw IllegalArgumentException(DDB_FUNCNAME,  "Empty tableName.");
     }
     conn_ = conn->copy();
     if (conn_ == nullptr) {
-        throw IllegalArgumentException(__FUNCNAME__,  "Please provide a connected DBConnecton to MTWOption.");
+        throw IllegalArgumentException(DDB_FUNCNAME,  "Please provide a connected DBConnecton to MTWOption.");
     }
     conn_->setAsync(false);
     if (!conn_->connect()) {
@@ -26,9 +42,9 @@ MTWConfig::MTWConfig(const std::shared_ptr<DBConnection> conn, const std::string
     }
     // check table
     try {
-        schema_ = conn_->run("schema(" + tableName + ")");
+        schema_ = (DictionarySP)conn_->run("schema(" + tableName + ")");
     } catch (std::exception &e) {
-        throw IllegalArgumentException(__FUNCNAME__, "invalid table name (failed to execute typestr/schema with " + tableName + "): " + e.what());
+        throw IllegalArgumentException(DDB_FUNCNAME, "invalid table name (failed to execute typestr/schema with " + tableName + "): " + e.what());
     }
     tableName_ = tableName;
     auto columnNames = schema_->getMember("partitionColumnName");
@@ -39,12 +55,12 @@ MTWConfig::MTWConfig(const std::shared_ptr<DBConnection> conn, const std::string
             getStringVector(columnNames, partitionColumnNames_);
         }
     }
-    colDefs_ = schema_->getMember("colDefs");
+    colDefs_ = (TableSP)schema_->getMember("colDefs");
     ConstantSP colNames = colDefs_->getColumn("name");
     ConstantSP colTypes = colDefs_->getColumn("typeInt");
     int columnNum = colDefs_->size();
     for (int i = 0; i < columnNum; i++) {
-        columnInfo_.push_back(std::make_pair(colNames->getString(i), static_cast<DATA_TYPE>(colTypes->getInt(i))));
+        columnInfo_.emplace_back(colNames->getString(i), static_cast<DATA_TYPE>(colTypes->getInt(i)));
     }
     insertScript_ = std::string("tableInsert{") + tableName_ + "}";
 }
@@ -64,7 +80,7 @@ MTWConfig& MTWConfig::setCompression(const std::vector<COMPRESS_METHOD> &compres
 MTWConfig& MTWConfig::setThreads(const size_t threadNum, const std::string& partitionColumnName)
 {
     if (threadNum == 0) {
-        throw IllegalArgumentException(__FUNCNAME__, "Invalid threadNum.");
+        throw IllegalArgumentException(DDB_FUNCNAME, "Invalid threadNum.");
     }
     if (threadNum == 1) {
         return *this;
@@ -83,16 +99,16 @@ MTWConfig& MTWConfig::setThreads(const size_t threadNum, const std::string& part
             return col == partitionColumnName;
         });
         if (partitionColumn == partitionColumnNames_.end()) {
-            throw IllegalArgumentException(__FUNCNAME__, "The partitionColumnName of a partition table must be a partition column of the table");
+            throw IllegalArgumentException(DDB_FUNCNAME, "The partitionColumnName of a partition table must be a partition column of the table");
         }
         auto index = partitionColumn - partitionColumnNames_.begin();
         column = columnInfo_.begin() + schema_->getMember("partitionColumnIndex")->getInt(static_cast<int>(index));
     }
     if (column == columnInfo_.end()) {
-        throw IllegalArgumentException(__FUNCNAME__, "No column named " + partitionColumnName);
+        throw IllegalArgumentException(DDB_FUNCNAME, "No column named " + partitionColumnName);
     }
     if (column->second >= ARRAY_TYPE_BASE) {
-        throw IllegalArgumentException(__FUNCNAME__, "Partition column cannot be array vector.");
+        throw IllegalArgumentException(DDB_FUNCNAME, "Partition column cannot be array vector.");
     }
     partitionColumnIndex_ = column - columnInfo_.begin();
     inited_ = true;
@@ -147,7 +163,7 @@ MultithreadedTableWriter::MultithreadedTableWriter(const MTWConfig &config)
     isPartionedTable_ = !config.partitionColumnNames_.empty();
     callbackFunc_ = config.dataCallback_;
 
-    for (auto &info : config.columnInfo_) {
+    for (const auto &info : config.columnInfo_) {
         colNames_.push_back(info.first);
         colTypes_.push_back(info.second);
     }
@@ -212,17 +228,15 @@ MultithreadedTableWriter::MultithreadedTableWriter(const MTWConfig &config)
 }
 
 MultithreadedTableWriter::MultithreadedTableWriter(const std::string& hostName, int port, const std::string& userId, const std::string& password,
-    const string& dbName, const string& tableName, bool useSSL,
+    const std::string & dbName, const std::string & tableName, bool useSSL,
     bool enableHighAvailability, const vector<string>* pHighAvailabilitySites,
-    int batchSize, float throttle, int threadCount, const string& partitionCol,
+    int batchSize, float throttle, int threadCount, const std::string & partitionCol,
     const vector<COMPRESS_METHOD>* pCompressMethods, MultithreadedTableWriter::Mode mode,
     vector<string>* pModeOption, const std::function<void(ConstantSP)>& callbackFunc, bool enableStreamTableTimestamp) :
     dbName_(dbName),
     tableName_(tableName),
     batchSize_(batchSize),
     throttleMilsecond_(static_cast<int>(throttle * 1000)),
-    exited_(false),
-    hasError_(false),
     partitionColumnIdx_(-1),
     threadByColIndexForNonPartion_(-1),
     mode_(mode),
@@ -243,7 +257,7 @@ MultithreadedTableWriter::MultithreadedTableWriter(const std::string& hostName, 
     }
     bool isCompress = false;
     int keepAliveTime = 7200;
-    if (pCompressMethods != nullptr && pCompressMethods->size() > 0) {
+    if (pCompressMethods != nullptr && !pCompressMethods->empty()) {
         for (auto one : *pCompressMethods) {
             if (one != COMPRESS_DELTA && one != COMPRESS_LZ4) {
                 throw RuntimeException("Unsupported compression method " + std::to_string(one));
@@ -252,7 +266,7 @@ MultithreadedTableWriter::MultithreadedTableWriter(const std::string& hostName, 
         saveCompressMethods_ = *pCompressMethods;
         isCompress = true;
     }
-    SmartPointer<DBConnection> pConn = new DBConnection(useSSL, false, keepAliveTime, isCompress);
+    std::shared_ptr<DBConnection> pConn = std::make_shared<DBConnection>(useSSL, false, keepAliveTime, isCompress);
     vector<string> highAvailabilitySites;
     if (pHighAvailabilitySites != nullptr) {
         highAvailabilitySites.assign(pHighAvailabilitySites->begin(), pHighAvailabilitySites->end());
@@ -264,10 +278,10 @@ MultithreadedTableWriter::MultithreadedTableWriter(const std::string& hostName, 
 
     DictionarySP schema;
     if (dbName.empty()) {
-        schema = pConn->run("schema(" + tableName + ")");
+        schema = (DictionarySP)pConn->run("schema(" + tableName + ")");
     }
     else {
-        schema = pConn->run(std::string("schema(loadTable(\"") + dbName + "\",\"" + tableName + "\"))");
+        schema = (DictionarySP)pConn->run(std::string("schema(loadTable(\"") + dbName + "\",\"" + tableName + "\"))");
     }
     ConstantSP partColNames = schema->getMember("partitionColumnName");
     if (partColNames->isNull() == false) {//partitioned table
@@ -281,11 +295,11 @@ MultithreadedTableWriter::MultithreadedTableWriter(const std::string& hostName, 
         }
         isPartionedTable_ = false;
     }
-    TableSP colDefs = schema->getMember("colDefs");
+    auto colDefs = (TableSP)schema->getMember("colDefs");
 
     ConstantSP colDefsTypeInt = colDefs->getColumn("typeInt");
-    size_t columnSize = colDefs->size() - enableStreamTableTimestamp_;
-    if (saveCompressMethods_.size() > 0 && saveCompressMethods_.size() != columnSize) {
+    size_t columnSize = colDefs->size() - static_cast<int>(enableStreamTableTimestamp_);
+    if (!saveCompressMethods_.empty() && saveCompressMethods_.size() != columnSize) {
         throw RuntimeException("The number of elements in parameter compressMethods does not match the column size " + std::to_string(columnSize));
     }
     colExtras_.resize(columnSize);
@@ -485,7 +499,7 @@ void MultithreadedTableWriter::setError(const ErrorCodeInfo& errorInfo) {
     errorInfo_.set(errorInfo);
 }
 
-void MultithreadedTableWriter::setError(int code, const string& info) {
+void MultithreadedTableWriter::setError(int code, const std::string & info) {
     ErrorCodeInfo errorInfo;
     errorInfo.set(code, info);
     setError(errorInfo);
@@ -526,7 +540,7 @@ bool MultithreadedTableWriter::insert(std::vector<ConstantSP>** records, int rec
             for (int i = 0; i < recordCount; i++) {
                 pvector->set(i, records[i]->at(partitionColumnIdx_));
             }
-            vector<int> threadindexes = partitionDomain_->getPartitionKeys(pvector);
+            vector<int> threadindexes = partitionDomain_->getPartitionKeys((ConstantSP)pvector);
             for (unsigned int row = 0; row < threadindexes.size(); row++) {
                 insertThreadWrite(threadindexes[row], records[row]);
             }
@@ -565,7 +579,7 @@ void MultithreadedTableWriter::getStatus(Status& status) {
         LockGuard<Mutex> _(&writeThread.mutex_);
         threadStatus.threadId = writeThread.threadId;
         threadStatus.sentRows = writeThread.sentRows;
-        threadStatus.unsentRows = static_cast<long>((writeThread.writeQueue_.size() - 1) * perBlockSize_ + writeThread.writeQueue_.back()->front()->size());
+        threadStatus.unsentRows = static_cast<long>(((writeThread.writeQueue_.size() - 1) * perBlockSize_) + writeThread.writeQueue_.back()->front()->size());
         threadStatus.sendFailedRows = static_cast<long>(writeThread.failedQueue_.size());
         status.plus(threadStatus);
     }
@@ -584,7 +598,7 @@ void MultithreadedTableWriter::getUnwrittenData(std::vector<std::vector<Constant
         for(std::vector<ConstantSP>* block : writeThread.writeQueue_){
             int rows = block->front()->size();
             for(int i = 0; i < rows; ++i){
-                std::vector<ConstantSP>* oneUnwrittenRow = new std::vector<ConstantSP>;
+                auto* oneUnwrittenRow = new std::vector<ConstantSP>;
                 for(size_t j = 0; j < colNum; ++j){
                     oneUnwrittenRow->push_back(block->at(j)->get(i));
                 }
@@ -598,9 +612,7 @@ void MultithreadedTableWriter::getUnwrittenData(std::vector<std::vector<Constant
 }
 
 void MultithreadedTableWriter::insertThreadWrite(int threadhashkey, std::vector<ConstantSP>* prow) {
-    if (threadhashkey < 0) {
-        threadhashkey = 0;
-    }
+    threadhashkey = std::max(threadhashkey, 0);
     int threadIndex = threadhashkey % threads_.size();
     WriterThread& writerThread = threads_[threadIndex];
     {
@@ -617,19 +629,19 @@ void MultithreadedTableWriter::insertThreadWrite(int threadhashkey, std::vector<
     writerThread.nonemptySignal.set();
 }
 
-void MultithreadedTableWriter::callBack(std::function<void(ConstantSP)> callbackFunc,bool result,vector<ConstantSP>* block) {
+void MultithreadedTableWriter::callBack(const std::function<void(ConstantSP)>& callbackFunc,bool result,vector<ConstantSP>* block) {
     if (callbackFunc == nullptr)
         return;
     INDEX size = block->front()->size();
     if (size < 1)
         return;
-    VectorSP callbackIds = block->front();
+    auto callbackIds = (VectorSP)block->front();
     DdbVector<char> results(size);
     for (int i = 0; i < size; i++) {
-        results.set(i, result);
+        results.set(i, static_cast<char>(result));
     }
-    TableSP table = Util::createTable({ "callbackId","isSuccess" }, { callbackIds,results.createVector(DT_BOOL) });
-    callbackFunc(table);
+    auto table = (TableSP)Util::createTable(std::vector<std::string>({ "callbackId","isSuccess" }), std::vector<ConstantSP>({ (ConstantSP)callbackIds, (ConstantSP)results.createVector(DT_BOOL) }));
+    callbackFunc((ConstantSP)table);
 }
 
 std::vector<ConstantSP>* MultithreadedTableWriter::createColumnBlock(){
@@ -640,7 +652,7 @@ std::vector<ConstantSP>* MultithreadedTableWriter::createColumnBlock(){
     res = new std::vector<ConstantSP>;
     size_t length = colTypes_.size();
     for(size_t i = 0; i < length; ++i){
-        res->push_back(Util::createVector(colTypes_[i], 0, perBlockSize_, true, colExtras_[i]));
+        res->emplace_back(Util::createVector(colTypes_[i], 0, perBlockSize_, true, colExtras_[i]));
     }
     return res;
 }
@@ -678,7 +690,7 @@ void MultithreadedTableWriter::SendExecutor::run(){
     //call back
     {
         LockGuard<Mutex> _(&writeThread_.writeQueueMutex_);
-        for(auto block : writeThread_.writeQueue_){
+        for(auto *block : writeThread_.writeQueue_){
             MultithreadedTableWriter::callBack(tableWriter_.callbackFunc_, false, block);
         }
     }
@@ -690,7 +702,7 @@ bool MultithreadedTableWriter::SendExecutor::writeAllData(){
     std::vector<ConstantSP>* items = nullptr;
     int size = 0;
     {
-        LockGuard<Mutex> __(&writeThread_.writeQueueMutex_);
+        LockGuard<Mutex> lock(&writeThread_.writeQueueMutex_);
         items = writeThread_.writeQueue_.front();
         size = items->front()->size();
         if (size < 1){
@@ -714,7 +726,7 @@ bool MultithreadedTableWriter::SendExecutor::writeAllData(){
         writeTable->setColumnCompressMethods(tableWriter_.saveCompressMethods_);
 
         std::vector<ConstantSP> args(1);
-        args[0] = writeTable;
+        args[0] = (ConstantSP)writeTable;
         runscript = tableWriter_.scriptTableInsert_;
         ConstantSP constsp = writeThread_.conn->run(runscript, args);
         writeThread_.sentRows += size;
@@ -738,7 +750,7 @@ bool MultithreadedTableWriter::SendExecutor::writeAllData(){
         {
             size_t columnNum = items->size();
             for(int i = 0; i < size; ++i){
-                std::vector<ConstantSP>* oneFailedRow = new std::vector<ConstantSP>;
+                auto* oneFailedRow = new std::vector<ConstantSP>;
                 for(size_t j = 0; j < columnNum; ++j){
                     oneFailedRow->push_back(items->at(j)->get(i));
                 }
@@ -752,4 +764,4 @@ bool MultithreadedTableWriter::SendExecutor::writeAllData(){
     return true;
 }
 
-}
+} // namespace dolphindb

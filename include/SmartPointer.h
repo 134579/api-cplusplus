@@ -2,14 +2,14 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
-#include <atomic>
 #include "Exports.h"
+#include <atomic>
 
 namespace dolphindb {
 
 class Counter {
 public:
-	Counter(void* p): p_(p), count_(0){}
+	explicit Counter(void* p): p_(p), count_(0){}
 	int addRef(){ return atomic_fetch_add(&count_,1)+1;} //atomic operation
 	int release(){return atomic_fetch_sub(&count_,1)-1;} //atomic operation
 	int getCount() const {return count_.load();}
@@ -23,7 +23,7 @@ private:
 template <class T>
 class SmartPointer {
 public:
-	SmartPointer(T* p=0): counterP_(new Counter(p)){
+	SmartPointer(T* p=0): counterP_(new Counter(p)){ // NOLINT(google-explicit-constructor, hicpp-explicit-conversions)
 		counterP_->addRef();
 	}
 
@@ -33,7 +33,7 @@ public:
 	}
 
 	template <class U>
-	SmartPointer(const SmartPointer<U>& sp){
+	SmartPointer(const SmartPointer<U>& sp){ // NOLINT(google-explicit-constructor, hicpp-explicit-conversions)
 		counterP_=sp.counterP_;
 		counterP_->addRef();
 	}
@@ -46,16 +46,14 @@ public:
 		return (T*)counterP_->p_;
 	}
 
-	T& operator =(const SmartPointer<T>& sp){
+	SmartPointer<T>& operator=(const SmartPointer<T>& sp)
+	{
 		if(this==&sp)
-			return *((T*)counterP_->p_);
+			return *this;
 
 		Counter* tmp = sp.counterP_;
-		if(counterP_ == tmp)
-			return *((T*)tmp->p_);
 		tmp->addRef();
 
-		//TODO: the below operation is not thread-safe. But it is safe if there is only one writer and multiple readers.
 		Counter* oldCounter = counterP_;
 		counterP_= tmp;
 
@@ -63,7 +61,7 @@ public:
 			delete (T*)oldCounter->p_;
 			delete oldCounter;
 		}
-		return *((T*)tmp->p_);
+		return *this;
 	}
 
 	bool operator ==(const SmartPointer<T>& sp) const{
@@ -75,10 +73,9 @@ public:
 	}
 
 	void clear(){
-		Counter* tmp = new Counter(0);
+		auto* tmp = new Counter(nullptr);
 		tmp->addRef();
 
-		//TODO: the below operation is not thread-safe. But it is safe if there is only one writer and multiple readers.
 		Counter* oldCounter = counterP_;
 		counterP_= tmp;
 
@@ -89,7 +86,7 @@ public:
 	}
 
 	bool isNull() const{
-		return counterP_->p_ == 0;
+		return counterP_->p_ == nullptr;
 	}
 
 	int count() const{
@@ -104,7 +101,7 @@ public:
 		if(counterP_->release()==0){
 			delete static_cast<T*>(counterP_->p_);
 			delete counterP_;
-			counterP_=0;
+			counterP_=nullptr;
 		}
 	}
 private:
@@ -112,4 +109,4 @@ private:
 	Counter* counterP_;
 };
 
-}
+} // namespace dolphindb

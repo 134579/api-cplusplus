@@ -2,8 +2,8 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
-#include <string>
 #include "Exports.h"
+#include <string>
 
 #define FMT_UNICODE 0
 #include <spdlog/spdlog.h>
@@ -115,7 +115,7 @@ private:
     }
 };
 
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

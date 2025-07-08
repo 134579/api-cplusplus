@@ -1,16 +1,27 @@
 #include "EventHandler.h"
-#include "ConstantMarshall.h"
+#include "Constant.h"
 #include "ConstantImp.h"
+#include "ConstantMarshall.h"
 #include "DolphinDB.h"
 #include "ErrorCodeInfo.h"
 #include "Exceptions.h"
+#include "SysIO.h"
+#include "Table.h"
 #include "Types.h"
 #include "Util.h"
+#include "Vector.h"
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>
 #include <iterator>
+#include <string>
 #include <unordered_map>
+#include <vector>
+
 namespace dolphindb {
 
-IO_ERR AttributeSerializer::serialize(const ConstantSP& attribute, DataOutputStreamSP outStream){
+IO_ERR AttributeSerializer::serialize(const ConstantSP& attribute, const DataOutputStreamSP &outStream){
     ConstantMarshallSP marshal;
     if(form_ == DF_SCALAR || attribute->getForm() == form_){
         marshal = ConstantMarshallFactory::getInstance(attribute->getForm(), outStream);
@@ -23,10 +34,11 @@ IO_ERR AttributeSerializer::serialize(const ConstantSP& attribute, DataOutputStr
     return ret;
 }
 
-IO_ERR FastArrayAttributeSerializer::serialize(const ConstantSP &attribute, DataOutputStreamSP outStream){
+IO_ERR FastArrayAttributeSerializer::serialize(const ConstantSP &attribute, const DataOutputStreamSP &outStream)
+{
     int curCount = attribute->size();
     if (curCount == 0) {
-        short tCnt = static_cast<short>(curCount);
+        auto tCnt = static_cast<short>(curCount);
         outStream->write((char*)&tCnt, sizeof(short));
         return OK;
     }
@@ -35,26 +47,26 @@ IO_ERR FastArrayAttributeSerializer::serialize(const ConstantSP &attribute, Data
     unsigned char curCountBytes = 1;
     char reserved = 0;
     int maxCount = 255;
-    while(curCount > maxCount){
+    while(curCountBytes < 4 && curCount > maxCount){
         curCountBytes *= 2;
-        maxCount = (1ll << (8 * curCountBytes)) - 1;
+        maxCount = (1ULL << (8U * curCountBytes)) - 1;
     }
     outStream->write((char*)&arrayRows, sizeof(unsigned short));
     outStream->write((char*)&curCountBytes, sizeof(unsigned char));
-    outStream->write((char*)&reserved, sizeof(char));
+    outStream->write(&reserved, sizeof(char));
     switch (curCountBytes) {
         case 1 : {
-            unsigned char tCnt = static_cast<unsigned char>(curCount);
+            auto tCnt = static_cast<unsigned char>(curCount);
             outStream->write((char*)&tCnt, sizeof(unsigned char));
             break;
         }
         case 2 : {
-            unsigned short tCnt = static_cast<unsigned short>(curCount);
+            auto tCnt = static_cast<unsigned short>(curCount);
             outStream->write((char*)&tCnt, sizeof(unsigned short));
             break;
         }
         default : {
-            unsigned int tCnt = static_cast<unsigned int>(curCount);
+            auto tCnt = static_cast<unsigned int>(curCount);
             outStream->write((char*)&tCnt, sizeof(unsigned int));
         }
     }
@@ -63,7 +75,8 @@ IO_ERR FastArrayAttributeSerializer::serialize(const ConstantSP &attribute, Data
     return IO_ERR::OK;
 }
 
-IO_ERR ScalarAttributeSerializer::serialize(const ConstantSP &attribute, DataOutputStreamSP outStream){
+IO_ERR ScalarAttributeSerializer::serialize(const ConstantSP &attribute, const DataOutputStreamSP &outStream)
+{
     int numElement, partial;
     attribute->serialize(&buf_[0], unitLen_, 0, 0, numElement, partial);
     if(numElement != 1 ) return INVALIDDATA;
@@ -71,7 +84,8 @@ IO_ERR ScalarAttributeSerializer::serialize(const ConstantSP &attribute, DataOut
     return IO_ERR::OK;
 }
 
-IO_ERR StringScalarAttributeSerializer::serialize(const ConstantSP &attribute, DataOutputStreamSP outStream){
+IO_ERR StringScalarAttributeSerializer::serialize(const ConstantSP &attribute, const DataOutputStreamSP &outStream)
+{
     const std::string& buf = attribute->getStringRef();
     if(isBlob_){
         size_t len = buf.size();
@@ -84,7 +98,7 @@ IO_ERR StringScalarAttributeSerializer::serialize(const ConstantSP &attribute, D
     return IO_ERR::OK;
 }
 
-ConstantSP EventHandler::deserializeScalar(DATA_TYPE type, int extraParam, DataInputStreamSP input, IO_ERR& ret){
+ConstantSP EventHandler::deserializeScalar(DATA_TYPE type, int extraParam, const DataInputStreamSP& input, IO_ERR& ret){
     int numElement = 0;
     ConstantSP data = Util::createConstant(type, extraParam);
     ret = data->deserialize(input.get(), 0, 1, numElement);
@@ -92,7 +106,7 @@ ConstantSP EventHandler::deserializeScalar(DATA_TYPE type, int extraParam, DataI
     return data;
 }
 
-ConstantSP EventHandler::deserializeFastArray(DATA_TYPE type, int extraParam, DataInputStreamSP input, IO_ERR& ret){
+ConstantSP EventHandler::deserializeFastArray(DATA_TYPE type, int extraParam, const DataInputStreamSP& input, IO_ERR& ret){
     int numElement = 0;
     short count = 0;
     ret = input->peekBuffer((char*)&count, sizeof(short));
@@ -107,17 +121,17 @@ ConstantSP EventHandler::deserializeFastArray(DATA_TYPE type, int extraParam, Da
     return ((FastArrayVector*)data.get())->getSourceValue();
 }
 
-ConstantSP EventHandler::deserializeAny(DATA_TYPE type, DATA_FORM form, DataInputStreamSP input, IO_ERR& ret){
-    short flag;
+ConstantSP EventHandler::deserializeAny(DATA_TYPE type, DATA_FORM form, const DataInputStreamSP& input, IO_ERR& ret){
+    uint16_t flag;
     ret = input->readShort(flag);
     if (ret != OK) 
         return nullptr;
-    DATA_FORM readForm = static_cast<DATA_FORM>(flag >> 8);
+    auto readForm = static_cast<DATA_FORM>(flag >> 8U);
     if(type != DT_ANY && form != readForm){
         ret = INVALIDDATA;
         return nullptr;
     }
-    ConstantUnmarshallSP unmarshall = ConstantUnmarshallFactory::getInstance((DATA_FORM)readForm, input);
+    ConstantUnmarshallSP unmarshall = ConstantUnmarshallFactory::getInstance(readForm, input);
     if (UNLIKELY(unmarshall == nullptr)) {
         ret = INVALIDDATA;
         return nullptr;
@@ -259,11 +273,11 @@ EventHandler::EventHandler(const std::vector<EventSchema>& eventSchemas, const s
     commonFieldSize_ = static_cast<int>(commonFields.size());
 }
 
-bool EventHandler::deserializeEvent(ConstantSP obj, std::vector<std::string>& eventTypes, std::vector<std::vector<ConstantSP>>& attributes, ErrorCodeInfo& errorInfo){
+bool EventHandler::deserializeEvent(const ConstantSP& obj, std::vector<std::string>& eventTypes, std::vector<std::vector<ConstantSP>>& attributes, ErrorCodeInfo& errorInfo){
     int eventTypeIndex = isNeedEventTime_ ? 1 : 0;
     int blobIndex = isNeedEventTime_ ? 2 : 1;
-    const VectorSP& eventTypeVec = obj->get(eventTypeIndex);
-    const VectorSP& blobVec = obj->get(blobIndex);
+    const auto eventTypeVec = obj->get(eventTypeIndex);
+    const auto blobVec = obj->get(blobIndex);
     int rowSize = eventTypeVec->size();
     IO_ERR ioError;
     for(int rowIndex = 0; rowIndex < rowSize; ++rowIndex){
@@ -366,17 +380,17 @@ bool EventHandler::serializeEvent(const std::string& eventType, const std::vecto
         if(info.eventSchema_->schema_.fieldForms_[commonIndex] == DF_VECTOR){
             VectorSP any = Util::createVector(DT_ANY, 0, 0);
             any->append(attributes[commonIndex]);
-            oneLineContent->append(any);
+            oneLineContent->append((ConstantSP)any);
         }
         else{
             oneLineContent->append(attributes[commonIndex]);
         }
     }
-    serializedEvent.push_back(oneLineContent);
+    serializedEvent.emplace_back(oneLineContent);
     return true;
 }
 
-bool EventHandler::checkOutputTable(TableSP outputTable, std::string& errMsg){
+bool EventHandler::checkOutputTable(const TableSP& outputTable, std::string& errMsg){
     outputColNums_ = isNeedEventTime_ ? (3 + commonFieldSize_) : (2 + commonFieldSize_);
     if(outputColNums_ != outputTable->columns()){
         errMsg = "Incompatible outputTable columnns, expected: " + std::to_string(outputColNums_) + ", got: " + std::to_string(outputTable->columns());
@@ -406,7 +420,7 @@ bool EventHandler::checkOutputTable(TableSP outputTable, std::string& errMsg){
 }
 
 
-EventSender::EventSender(DBConnectionSP conn, const std::string& tableName, const std::vector<EventSchema>& eventSchema, const std::vector<std::string>& eventTimeFields, const std::vector<std::string>& commonFields)
+EventSender::EventSender(const DBConnectionSP& conn, const std::string& tableName, const std::vector<EventSchema>& eventSchema, const std::vector<std::string>& eventTimeFields, const std::vector<std::string>& commonFields)
     : eventHandler_(eventSchema, eventTimeFields, commonFields), conn_(conn)
 {
     if(tableName.empty()){
@@ -415,7 +429,7 @@ EventSender::EventSender(DBConnectionSP conn, const std::string& tableName, cons
     std::string sql = "select top 0 * from " + tableName;
     std::string errMsg;
     ConstantSP outputTable = conn_->run(sql);
-    if(!eventHandler_.checkOutputTable(outputTable, errMsg)){
+    if(!eventHandler_.checkOutputTable((TableSP)outputTable, errMsg)){
         throw RuntimeException(errMsg);
     }
     insertScript_ = "tableInsert{" + tableName + "}";
@@ -430,4 +444,4 @@ void EventSender::sendEvent(const std::string& eventType, const std::vector<Cons
     conn_->run(insertScript_, args);
 }
 
-}
+} // namespace dolphindb

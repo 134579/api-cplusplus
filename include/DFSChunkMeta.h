@@ -13,36 +13,36 @@ namespace dolphindb {
 
 class EXPORT_DECL DFSChunkMeta : public Constant{
 public:
-    DFSChunkMeta(const std::string& path, const Guid& id, int version, int size, CHUNK_TYPE chunkType, const std::vector<std::string>& sites, long long cid);
-    DFSChunkMeta(const std::string& path, const Guid& id, int version, int size, CHUNK_TYPE chunkType, const std::string* sites, int siteCount, long long cid);
-    DFSChunkMeta(const DataInputStreamSP& in);
-    virtual ~DFSChunkMeta();
-    virtual int size() const {return size_;}
-    virtual std::string getString() const;
-    virtual long long getAllocatedMemory() const;
-    virtual ConstantSP getMember(const ConstantSP& key) const;
-    virtual ConstantSP get(const ConstantSP& index) const {return getMember(index);}
-    virtual ConstantSP keys() const;
-    virtual ConstantSP values() const;
-    virtual DATA_TYPE getType() const {return DT_DICTIONARY;}
-    virtual DATA_TYPE getRawType() const {return DT_DICTIONARY;}
-    virtual DATA_CATEGORY getCategory() const {return MIXED;}
-    virtual ConstantSP getInstance() const {return getValue();}
-    virtual ConstantSP getValue() const {return new DFSChunkMeta(path_, id_, version_, size_, (CHUNK_TYPE)type_, sites_, replicaCount_, cid_);}
-    inline const std::string& getPath() const {return path_;}
-    inline const Guid& getId() const {return id_;}
-    inline long long getCommitId() const {return cid_;}
-    inline void setCommitId(long long cid) { cid_ = cid;}
-    inline int getVersion() const {return version_;}
-    inline void setVersion(int version){version_ = version;}
-    inline void setSize(int sz){size_ = sz;}
-    inline int getCopyCount() const {return replicaCount_;}
-    inline const std::string& getCopySite(int index) const {return sites_[index];}
-    inline bool isTablet() const { return type_ == TABLET_CHUNK;}
-    inline bool isFileBlock() const { return type_ == FILE_CHUNK;}
-    inline bool isSplittable() const { return type_ == SPLIT_TABLET_CHUNK;}
-    inline bool isSmallFileBlock() const {return type_ == SMALLFILE_CHUNK;}
-    inline CHUNK_TYPE getChunkType() const {return (CHUNK_TYPE)type_;}
+    DFSChunkMeta(std::string path, const Guid& id, int version, int size, CHUNK_TYPE chunkType, const std::vector<std::string>& sites, long long cid);
+    DFSChunkMeta(std::string path, const Guid& id, int version, int size, CHUNK_TYPE chunkType, const std::string* sites, int siteCount, long long cid);
+    explicit DFSChunkMeta(const DataInputStreamSP& in);
+    ~DFSChunkMeta() override;
+    int size() const override {return size_;}
+    std::string getString() const override;
+    long long getAllocatedMemory() const override;
+    ConstantSP getMember(const ConstantSP& key) const override;
+    ConstantSP get(const ConstantSP& index) const override {return getMember(index);}
+    ConstantSP keys() const override;
+    ConstantSP values() const override;
+    DATA_TYPE getType() const override {return DT_DICTIONARY;}
+    DATA_TYPE getRawType() const override {return DT_DICTIONARY;}
+    DATA_CATEGORY getCategory() const override {return MIXED;}
+    ConstantSP getInstance() const override {return getValue();}
+    ConstantSP getValue() const override {return new DFSChunkMeta(path_, id_, version_, size_, (CHUNK_TYPE)type_, sites_, replicaCount_, cid_);}
+    const std::string& getPath() const {return path_;}
+    const Guid& getId() const {return id_;}
+    long long getCommitId() const {return cid_;}
+    void setCommitId(long long cid) { cid_ = cid;}
+    int getVersion() const {return version_;}
+    void setVersion(int version){version_ = version;}
+    void setSize(int sz){size_ = sz;}
+    int getCopyCount() const {return replicaCount_;}
+    const std::string& getCopySite(int index) const {return sites_[index];}
+    bool isTablet() const { return type_ == TABLET_CHUNK;}
+    bool isFileBlock() const { return type_ == FILE_CHUNK;}
+    bool isSplittable() const { return type_ == SPLIT_TABLET_CHUNK;}
+    bool isSmallFileBlock() const {return type_ == SMALLFILE_CHUNK;}
+    CHUNK_TYPE getChunkType() const {return (CHUNK_TYPE)type_;}
 
 protected:
     ConstantSP getAttribute(const std::string& attr) const;
@@ -58,8 +58,8 @@ private:
     long long cid_;
     Guid id_;
 };
-typedef SmartPointer<DFSChunkMeta> DFSChunkMetaSP;
-}
+using DFSChunkMetaSP = SmartPointer<DFSChunkMeta>;
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

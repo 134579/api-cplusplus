@@ -5,23 +5,41 @@
  *      Author: dzhou
  */
 
-#include <ctime>
-#include <fstream>
-#include <istream>
-#include <stack>
-#include <algorithm>
-#include <random>
-#include "Concurrent.h"
-#include "Platform.h"
-#include "ConstantImp.h"
-#include "ConstantMarshall.h"
 #include "DolphinDB.h"
-#include "ScalarImp.h"
-#include "DolphinDBImp.h"
-#include "Util.h"
-#include "Logger.h"
-#include "Domain.h"
+#include "Concurrent.h"
+#include "Constant.h"
+#include "ConstantMarshall.h"
 #include "DBConnectionPoolImpl.h"
+#include "DolphinDBImp.h"
+#include "Domain.h"
+#include "ErrorCodeInfo.h"
+#include "Exceptions.h"
+#include "Logger.h"
+#include "ScalarImp.h"
+#include "SymbolBase.h"
+#include "SysIO.h"
+#include "Table.h"
+#include "Types.h"
+#include "Util.h"
+#include "Vector.h"
+
+#include <algorithm>
+#include <cfloat>
+#include <chrono> // NOLINT(misc-include-cleaner): chrono literals
+#include <condition_variable>
+#include <cstdint>
+#include <ctime>
+#include <exception>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <ostream>
+#include <random>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
+
 using std::ifstream;
 using std::string;
 using std::vector;
@@ -39,17 +57,10 @@ int min(INDEX a, int b) {
 
 //#define APIMinVersionRequirement 100
 
-
-
-#define RECORDTIME(name) //RecordTime _recordTime(name)
-
-
-
-
 namespace dolphindb {
 
-string Constant::EMPTY("");
-string Constant::NULL_STR("NULL");
+std::string Constant::EMPTY;
+std::string Constant::NULL_STR("nullptr");
 ConstantSP Constant::void_(new Void());
 ConstantSP Constant::null_(new Void(true));
 ConstantSP Constant::true_(new Bool(true));
@@ -96,7 +107,7 @@ ConstantSP Constant::getColumnLabel() const {
 const std::string DBConnection::udpIP_{"224.1.1.1"};
 
 DBConnection::DBConnection(bool enableSSL, bool asyncTask, int keepAliveTime, bool compress, bool python, bool isReverseStreaming, bool enableSCRAM) :
-	conn_(new DBConnectionImpl(enableSSL, asyncTask, keepAliveTime, compress, python, isReverseStreaming, enableSCRAM)), uid_(""), pwd_(""), ha_(false),
+	conn_(new DBConnectionImpl(enableSSL, asyncTask, keepAliveTime, compress, python, isReverseStreaming, enableSCRAM)), ha_(false),
 		enableSSL_(enableSSL), enableSCRAM_(enableSCRAM), asynTask_(asyncTask), compress_(compress), nodes_({}),
 		lastConnNodeIndex_(0), python_(python), reconnect_(false), closed_(true), runSeqNo_(0){
         if (asyncTask && enableSCRAM) {
@@ -104,16 +115,17 @@ DBConnection::DBConnection(bool enableSSL, bool asyncTask, int keepAliveTime, bo
         }
 }
 
-DBConnection::DBConnection(DBConnection&& oth) :
+DBConnection::DBConnection(DBConnection&& oth) noexcept :
 		conn_(std::move(oth.conn_)), uid_(std::move(oth.uid_)), pwd_(std::move(oth.pwd_)),
 		initialScript_(std::move(oth.initialScript_)), ha_(oth.ha_), enableSSL_(oth.enableSSL_), enableSCRAM_(oth.enableSCRAM_),
-		asynTask_(oth.asynTask_),compress_(oth.compress_),nodes_(oth.nodes_),lastConnNodeIndex_(0),
+		asynTask_(oth.asynTask_),compress_(oth.compress_),nodes_(std::move(oth.nodes_)),lastConnNodeIndex_(0),
 		reconnect_(oth.reconnect_), runSeqNo_(oth.runSeqNo_)
 {
     closed_ = oth.closed_.load();
 }
 
-DBConnection& DBConnection::operator=(DBConnection&& oth) {
+DBConnection& DBConnection::operator=(DBConnection&& oth) noexcept
+{
     if (this == &oth) { return *this; }
     conn_ = std::move(oth.conn_);
     uid_ = std::move(oth.uid_);
@@ -165,7 +177,7 @@ bool DBConnection::connect() {
     return true;
 }
 
-bool DBConnection::connect(const string& hostName, int port, const string& userId, const string& password, const string& startup,
+bool DBConnection::connect(const std::string & hostName, int port, const std::string & userId, const std::string & password, const std::string & startup,
                            bool ha, const vector<string>& highAvailabilitySites, int keepAliveTime, bool reconnect) {
     host_ = hostName;
     port_ = port;
@@ -177,8 +189,8 @@ bool DBConnection::connect(const string& hostName, int port, const string& userI
 	reconnect_ = reconnect;
 	closed_ = false;
     if (ha_) {
-		for (auto &one : highAvailabilitySites)
-			nodes_.push_back(Node(one));
+		for (const auto &one : highAvailabilitySites)
+			nodes_.emplace_back(one);
 		{
 			bool foundfirst = false;
 			Node firstnode(hostName, port);
@@ -203,11 +215,17 @@ bool DBConnection::connect(const string& hostName, int port, const string& userI
 						connectedNode = one;
 						break;
 					}
-					Thread::sleep(100);
+#if __cplusplus < 201402L
+                    using namespace std::chrono;
+                    std::this_thread::sleep_for(milliseconds(100));
+#else
+                    using namespace std::chrono_literals;
+                    std::this_thread::sleep_for(100ms); // NOLINT(misc-include-cleaner): <chrono>
+#endif
 				}
 			}
 			try {
-				table = conn_->run("rpc(getControllerAlias(), getClusterPerf)");
+				table = (TableSP)conn_->run("rpc(getControllerAlias(), getClusterPerf)");
 				break;
 			}
 			catch (std::exception& e) {
@@ -223,29 +241,29 @@ bool DBConnection::connect(const string& hostName, int port, const string& userI
         if(table->getForm() != DF_TABLE){
             throw IOException("Run getClusterPerf() failed.");
         }
-		VectorSP colHost = table->getColumn("host");
-		VectorSP colPort = table->getColumn("port");
-		VectorSP colMode = table->getColumn("mode");
-		VectorSP colmaxConnections = table->getColumn("maxConnections");
-		VectorSP colconnectionNum = table->getColumn("connectionNum");
-		VectorSP colworkerNum = table->getColumn("workerNum");
-		VectorSP colexecutorNum = table->getColumn("executorNum");
+		auto colHost = (VectorSP)table->getColumn("host");
+		auto colPort = (VectorSP)table->getColumn("port");
+		auto colMode = (VectorSP)table->getColumn("mode");
+		auto colmaxConnections = (VectorSP)table->getColumn("maxConnections");
+		auto colconnectionNum = (VectorSP)table->getColumn("connectionNum");
+		auto colworkerNum = (VectorSP)table->getColumn("workerNum");
+		auto colexecutorNum = (VectorSP)table->getColumn("executorNum");
 		double load;
 		for (int i = 0; i < colMode->rows(); i++) {
 			if (colMode->getInt(i) == 0) {
 				string nodeHost = colHost->getString(i);
 				int nodePort = colPort->getInt(i);
-				Node *pexistNode = NULL;
+				Node *pexistNode = nullptr;
 				if (!highAvailabilitySites.empty()) {
 					for (auto &node : nodes_) {
-						if (node.hostName_.compare(nodeHost) == 0 &&
+						if (node.hostName_ == nodeHost &&
 							node.port_ == nodePort) {
 							pexistNode = &node;
 							break;
 						}
 					}
 					//node is out of highAvailabilitySites
-					if (pexistNode == NULL) {
+					if (pexistNode == nullptr) {
 						DLogger::Info("Site", nodeHost, ":", nodePort,"is not in cluster.");
 						continue;
 					}
@@ -257,17 +275,17 @@ bool DBConnection::connect(const string& hostName, int port, const string& userI
 				else {
 					load = DBL_MAX;
 				}
-				if (pexistNode != NULL) {
+				if (pexistNode != nullptr) {
 					pexistNode->load_ = load;
 				}
 				else {
-					nodes_.push_back(Node(colHost->get(i)->getString(), colPort->get(i)->getInt(), load));
+					nodes_.emplace_back(colHost->get(i)->getString(), colPort->get(i)->getInt(), load);
 				}
 			}
 		}
-		Node *pMinNode=NULL;
+		Node *pMinNode=nullptr;
 		for (auto &one : nodes_) {
-			if (pMinNode == NULL ||
+			if (pMinNode == nullptr ||
 				(one.load_ >= 0 && pMinNode->load_ > one.load_)) {
 				pMinNode = &one;
 			}
@@ -277,17 +295,16 @@ bool DBConnection::connect(const string& hostName, int port, const string& userI
 		if (!pMinNode->isEqual(connectedNode)) {
 			conn_->close();
 			state_ = ConnectionState::Terminated;
-			callback_(state_, pMinNode->hostName_, pMinNode->port_);
+			callback_(state_, conn_->getHost(), conn_->getPort());
 			switchDataNode(pMinNode->hostName_, pMinNode->port_);
 			return true;
 		}
 	} else {
 		if (reconnect_) {
-			nodes_.push_back(Node(hostName, port));
+			nodes_.emplace_back(hostName, port);
 			haSitesNum_ = nodes_.size();
 			switchDataNode();
-		}
-		else {
+		} else {
 			if (!connectNode(hostName, port, keepAliveTime))
 				return false;
 		}
@@ -327,7 +344,7 @@ bool DBConnection::connectNode(string hostName, int port, int keepAliveTime) {
             // check whether server support init stage check.
             try {
                 std::vector<ConstantSP> args;
-                inited = conn_->run("isNodeInitialized", args)->getBool();
+                inited = (conn_->run("isNodeInitialized", args)->getBool() != 0);
                 if (inited) {
                     DLogger::Debug("Connection successfully established, and the node has been initialized.");
                 }
@@ -355,7 +372,7 @@ bool DBConnection::connectNode(string hostName, int port, int keepAliveTime) {
 DBConnection::ExceptionType DBConnection::parseException(const string &msg, string &host, int &port) {
     size_t index = msg.find("<NotLeader>");
     if (index != string::npos) {
-        index = msg.find(">");
+        index = msg.find('>');
         auto end = msg.find('\'', index);
         string ipport = msg.substr(index + 1, end - index);
         if (parseIpPort(ipport,host,port)) {
@@ -398,13 +415,19 @@ void DBConnection::switchDataNode(const string &host, int port) {
             }
         }
         if(isConnected) break;
-        Thread::sleep(1000);
+#if __cplusplus < 201402L
+        using namespace std::chrono;
+        std::this_thread::sleep_for(seconds(1));
+#else
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(1s); // NOLINT(misc-include-cleaner): <chrono>
+#endif
     }
     if (isConnected && initialScript_.empty() == false)
         run(initialScript_);
 }
 
-void DBConnection::login(const string& userId, const string& password, bool enableEncryption) {
+void DBConnection::login(const std::string & userId, const std::string & password, bool enableEncryption) {
     conn_->login(userId, password, enableEncryption);
     uid_ = userId;
     pwd_ = password;
@@ -427,7 +450,6 @@ auto DBConnection::getSubscriptionTopic(const SubscribeInfo &info) -> std::pair<
 
 int DBConnection::publishTable(const SubscribeInfo &info, const SubscribeConfig &config, TransportationProtocol protocol)
 {
-    // TODO: support filters
     bool isUDP = bool(protocol == TransportationProtocol::UDP);
     std::string hostName = isUDP ? udpIP_ : info.hostName;
     int port = isUDP ? udpPort_ : info.port;
@@ -448,9 +470,9 @@ void DBConnection::stopPublishTable(const SubscribeInfo &info, TransportationPro
     auto ret = call("stopPublishTable", hostName, port, info.tableName, info.actionName, false, isUDP);
 }
 
-ConstantSP DBConnection::run(const string& script, int priority, int parallelism, int fetchSize, bool clearMemory) {
+ConstantSP DBConnection::run(const std::string & script, int priority, int parallelism, int fetchSize, bool clearMemory) {
     if (parallelism <= 0) {
-        throw IllegalArgumentException(__FUNCNAME__, "Invalid parallelism.");
+        throw IllegalArgumentException(DDB_FUNCNAME, "Invalid parallelism.");
     }
     LockGuard<Mutex> LockGuard(&mutex_);
     if (nodes_.empty()) {
@@ -467,21 +489,24 @@ ConstantSP DBConnection::run(const string& script, int priority, int parallelism
             string host;
             int port = 0;
             ExceptionType type = parseException(e.what(), host, port);
-            if (type == ET_UNKNOWN && connected()) {
-                if (state_ != ConnectionState::Initializing) {
-                    callback_(ConnectionState::Reconnecting, host, port);
+            if (type == ET_UNKNOWN) {
+                if (connected()) {
+                    throw;
                 }
-                throw;
+                if (state_ != ConnectionState::Reconnecting) {
+                    callback_(ConnectionState::Reconnecting, conn_->getHost(), conn_->getPort());
+                    state_ = ConnectionState::Reconnecting;
+                }
             }
             switchDataNode(host, port);
         }
     }
-    return NULL;
+    return nullptr;
 }
 
-ConstantSP DBConnection::run(const string& funcName, vector<dolphindb::ConstantSP>& args, int priority, int parallelism, int fetchSize, bool clearMemory) {
+ConstantSP DBConnection::run(const std::string & funcName, vector<dolphindb::ConstantSP>& args, int priority, int parallelism, int fetchSize, bool clearMemory) {
     if (parallelism <= 0) {
-        throw IllegalArgumentException(__FUNCNAME__, "Invalid parallelism.");
+        throw IllegalArgumentException(DDB_FUNCNAME, "Invalid parallelism.");
     }
     LockGuard<Mutex> LockGuard(&mutex_);
     if (nodes_.empty()) {
@@ -511,10 +536,10 @@ ConstantSP DBConnection::run(const string& funcName, vector<dolphindb::ConstantS
             switchDataNode(host, port);
         }
     }
-    return NULL;
+    return nullptr;
 }
 
-ConstantSP DBConnection::upload(const string& name, const ConstantSP& obj) {
+ConstantSP DBConnection::upload(const std::string & name, const ConstantSP& obj) {
     LockGuard<Mutex> LockGuard(&mutex_);
     if (nodes_.empty()) {
         return conn_->upload(name, obj);
@@ -620,21 +645,18 @@ BlockReader::BlockReader(const DataInputStreamSP& in ) : in_(in), total_(0), cur
     total_ = (long long)rowNum * (long long)colNum;
 }
 
-BlockReader::~BlockReader(){
-}
-
 ConstantSP BlockReader::read(){
     if(currentIndex_>=total_)
-        return NULL;
+        return nullptr;
     IO_ERR ret;
-    short flag;
+    uint16_t flag;
     if ((ret = in_->readShort(flag)) != OK)
         throw IOException("Failed to read object flag from the socket with IO error type " + std::to_string(ret));
 
-    DATA_FORM form = static_cast<DATA_FORM>(flag >> 8);
+    auto form = static_cast<DATA_FORM>(flag >> 8U);
     ConstantUnmarshallFactory factory(in_);
     ConstantUnmarshall* unmarshall = factory.getConstantUnmarshall(form);
-    if(unmarshall==NULL)
+    if(unmarshall==nullptr)
         throw IOException("Failed to parse the incoming object" + std::to_string(form));
     if (!unmarshall->start(flag, true, ret)) {
         unmarshall->reset();
@@ -650,32 +672,43 @@ void BlockReader::skipAll(){
     while(read().isNull()==false);
 }
 
-
-
-
-
-
-DBConnectionPool::DBConnectionPool(const string& hostName, int port, int threadNum, const string& userId, const string& password,
+DBConnectionPool::DBConnectionPool(const std::string & hostName, int port, int threadNum, const std::string & userId, const std::string & password,
                 bool loadBalance, bool highAvailability, bool compress, bool reConnect, bool python)
     : pool_(new DBConnectionPoolImpl(hostName, port, threadNum, userId, password, loadBalance, highAvailability, compress,reConnect,python))
 {}
-DBConnectionPool::~DBConnectionPool(){}
-void DBConnectionPool::run(const string& script, int identity, int priority, int parallelism, int fetchSize, bool clearMemory){
-    if(identity < 0)
-        throw RuntimeException("Invalid identity: " + std::to_string(identity) + ". Identity must be a non-negative integer.");
-    if (parallelism <= 0) {
-        throw IllegalArgumentException(__FUNCNAME__, "Invalid parallelism.");
-    }
-    pool_->run(script, identity, priority, parallelism, fetchSize, clearMemory);
+
+int DBConnectionPool::run(std::string script,
+    std::shared_ptr<std::condition_variable> finished, const RpcParam &param)
+{
+    auto id = id_++;
+    pool_->run(std::move(script), id, std::move(finished), param);
+    return id;
 }
 
-void DBConnectionPool::run(const string& functionName, const vector<ConstantSP>& args, int identity, int priority, int parallelism, int fetchSize, bool clearMemory){
+int DBConnectionPool::run(std::string functionName, const std::vector<ConstantSP>& args,
+    std::shared_ptr<std::condition_variable> finished, const RpcParam &param)
+{
+    auto id = id_++;
+    pool_->run(std::move(functionName), args, id, std::move(finished), param);
+    return id;
+}
+
+void DBConnectionPool::run(const std::string & script, int identity, int priority, int parallelism, int fetchSize, bool clearMemory){
     if(identity < 0)
         throw RuntimeException("Invalid identity: " + std::to_string(identity) + ". Identity must be a non-negative integer.");
     if (parallelism <= 0) {
-        throw IllegalArgumentException(__FUNCNAME__, "Invalid parallelism.");
+        throw IllegalArgumentException(DDB_FUNCNAME, "Invalid parallelism.");
     }
-    pool_->run(functionName, args, identity, priority, parallelism, fetchSize, clearMemory);
+    pool_->run(script, identity, nullptr, RpcParam{priority, (uint32_t)parallelism, (uint32_t)fetchSize, clearMemory});
+}
+
+void DBConnectionPool::run(const std::string & functionName, const vector<ConstantSP>& args, int identity, int priority, int parallelism, int fetchSize, bool clearMemory){
+    if(identity < 0)
+        throw RuntimeException("Invalid identity: " + std::to_string(identity) + ". Identity must be a non-negative integer.");
+    if (parallelism <= 0) {
+        throw IllegalArgumentException(DDB_FUNCNAME, "Invalid parallelism.");
+    }
+    pool_->run(functionName, args, identity, nullptr, RpcParam{priority, (uint32_t)parallelism, (uint32_t)fetchSize, clearMemory});
 }
 
 bool DBConnectionPool::isFinished(int identity){
@@ -698,17 +731,17 @@ int DBConnectionPool::getConnectionCount(){
     return pool_->getConnectionCount();
 }
 
-PartitionedTableAppender::PartitionedTableAppender(string dbUrl, string tableName, string partitionColName, DBConnectionPool& pool) {
+PartitionedTableAppender::PartitionedTableAppender(const std::string & dbUrl, const std::string & tableName, const std::string & partitionColName, DBConnectionPool& pool) {
     pool_ = pool.pool_;
     init(dbUrl, tableName, partitionColName, "");
 }
 
-PartitionedTableAppender::PartitionedTableAppender(string dbUrl, string tableName, string partitionColName, string appendFunction, DBConnectionPool& pool) {
+PartitionedTableAppender::PartitionedTableAppender(const std::string & dbUrl, const std::string & tableName, const std::string & partitionColName, const std::string & appendFunction, DBConnectionPool& pool) {
     pool_ = pool.pool_;
     init(dbUrl, tableName, partitionColName, appendFunction);
 }
-PartitionedTableAppender::~PartitionedTableAppender(){}
-void PartitionedTableAppender::init(string dbUrl, string tableName, string partitionColName, string appendFunction){
+
+void PartitionedTableAppender::init(const std::string & dbUrl, const std::string & tableName, const std::string & partitionColName, const std::string & appendFunction){
     threadCount_ = pool_->getConnectionCount();
     chunkIndices_.resize(threadCount_);
     ConstantSP partitionSchema;
@@ -719,7 +752,7 @@ void PartitionedTableAppender::init(string dbUrl, string tableName, string parti
 
     try {
         string task;
-        if(dbUrl == ""){
+        if(dbUrl.empty()){
             task = "schema(" + tableName+ ")";
             appendScript_ = "tableInsert{" + tableName + "}";
         }
@@ -727,7 +760,7 @@ void PartitionedTableAppender::init(string dbUrl, string tableName, string parti
             task = "schema(loadTable(\"" + dbUrl + "\", \"" + tableName + "\"))";
             appendScript_ = "tableInsert{loadTable('" + dbUrl + "', '" + tableName + "')}";
         }
-        if(appendFunction != ""){
+        if(!appendFunction.empty()){
             appendScript_ = appendFunction;
         }
 
@@ -737,7 +770,7 @@ void PartitionedTableAppender::init(string dbUrl, string tableName, string parti
             Util::sleep(10);
         }
 
-        tableInfo_ = pool_->getData(identity_);
+        tableInfo_ = (DictionarySP)pool_->getData(identity_);
         identity_ --;
         ConstantSP partColNames = tableInfo_->getMember("partitionColumnName");
         if(partColNames->isNull())
@@ -768,9 +801,9 @@ void PartitionedTableAppender::init(string dbUrl, string tableName, string parti
 			partitionColType = (DATA_TYPE)tableInfo_->getMember("partitionColumnType")->getInt(index);
         }
 
-        colDefs = tableInfo_->getMember("colDefs");
+        colDefs = (TableSP)tableInfo_->getMember("colDefs");
         cols_ = colDefs->rows();
-        typeInts = colDefs->getColumn("typeInt");
+        typeInts = (VectorSP)colDefs->getColumn("typeInt");
         columnCategories_.resize(cols_);
         columnTypes_.resize(cols_);
         for (int i = 0; i < cols_; ++i) {
@@ -784,15 +817,15 @@ void PartitionedTableAppender::init(string dbUrl, string tableName, string parti
     }
 }
 
-int PartitionedTableAppender::append(TableSP table){
+int PartitionedTableAppender::append(const TableSP& table){
     if(cols_ != table->columns())
         throw RuntimeException("The input table doesn't match the schema of the target table.");
     for(int i=0; i<cols_; ++i){
-        VectorSP curCol = table->getColumn(i);
+        auto curCol = (VectorSP)table->getColumn(i);
         checkColumnType(i, curCol->getCategory(), curCol->getType());
 		if (columnCategories_[i] == TEMPORAL && curCol->getType() != columnTypes_[i]) {
-			curCol = curCol->castTemporal(columnTypes_[i]);
-			table->setColumn(i, curCol);
+			curCol = (VectorSP)curCol->castTemporal(columnTypes_[i]);
+			table->setColumn(i, (ConstantSP)curCol);
 		}
     }
 
@@ -801,22 +834,21 @@ int PartitionedTableAppender::append(TableSP table){
     vector<int> keys = domain_->getPartitionKeys(table->getColumn(partitionColumnIdx_));
     vector<int> tasks;
     int rows = static_cast<int>(keys.size());
-    for(int i=0; i<rows; ++i){
+    for (int i = 0; i < rows; ++i) {
         int key = keys[i];
-        if(key >= 0)
+        if (key >= 0)
             chunkIndices_[key % threadCount_].emplace_back(i);
-		else {
-			throw RuntimeException("A value-partition column contain null value at row " + std::to_string(i) + ".");
-		}
+        else {
+            throw RuntimeException("A value-partition column contain null value at row " + std::to_string(i) + ".");
+        }
     }
     for(int i=0; i<threadCount_; ++i){
-        if(chunkIndices_[i].size() == 0)
+        if(chunkIndices_[i].empty())
             continue;
-        TableSP subTable = table->getSubTable(chunkIndices_[i]);
+        auto subTable = (TableSP)table->getSubTable(chunkIndices_[i]);
         tasks.push_back(identity_);
-        vector<ConstantSP> args = {subTable};
+        vector<ConstantSP> args = {(ConstantSP)subTable};
         pool_->run(appendScript_, args, identity_--);
-
     }
     int affected = 0;
     for(auto& task : tasks){
@@ -847,14 +879,14 @@ void PartitionedTableAppender::checkColumnType(int col, DATA_CATEGORY category, 
     }
 }
 
-AutoFitTableAppender::AutoFitTableAppender(string dbUrl, string tableName, DBConnection& conn) : conn_(conn){
+AutoFitTableAppender::AutoFitTableAppender(const std::string & dbUrl, const std::string & tableName, DBConnection& conn) : conn_(conn){
     ConstantSP schema;
     TableSP colDefs;
     VectorSP typeInts;
     DictionarySP tableInfo;
     VectorSP colNames;
     string task;
-    if(dbUrl == ""){
+    if(dbUrl.empty()){
         task = "schema(" + tableName+ ")";
         appendScript_ = "tableInsert{" + tableName + "}";
     } else{
@@ -862,11 +894,11 @@ AutoFitTableAppender::AutoFitTableAppender(string dbUrl, string tableName, DBCon
         appendScript_ = "tableInsert{loadTable('" + dbUrl + "', '" + tableName + "')}";
     }
 
-    tableInfo =  conn_.run(task);
-    colDefs = tableInfo->getMember("colDefs");
+    tableInfo =  (DictionarySP)conn_.run(task);
+    colDefs = (TableSP)tableInfo->getMember("colDefs");
     cols_ = colDefs->rows();
-    typeInts = colDefs->getColumn("typeInt");
-    colNames = colDefs->getColumn("name");
+    typeInts = (VectorSP)colDefs->getColumn("typeInt");
+    colNames = (VectorSP)colDefs->getColumn("name");
     columnCategories_.resize(cols_);
     columnTypes_.resize(cols_);
     columnNames_.resize(cols_);
@@ -877,27 +909,26 @@ AutoFitTableAppender::AutoFitTableAppender(string dbUrl, string tableName, DBCon
     }
 }
 
-int AutoFitTableAppender::append(TableSP table){
+int AutoFitTableAppender::append(const TableSP& table){
     if(cols_ != table->columns())
         throw RuntimeException("The input table columns doesn't match the columns of the target table.");
 
     vector<ConstantSP> columns;
     for(int i = 0; i < cols_; i++){
-        VectorSP curCol = table->getColumn(i);
+        auto curCol = (VectorSP)table->getColumn(i);
         checkColumnType(i, curCol->getCategory(), curCol->getType());
         if(columnCategories_[i] == TEMPORAL && curCol->getType() != columnTypes_[i]){
             columns.push_back(curCol->castTemporal(columnTypes_[i]));
         }else{
-            columns.push_back(curCol);
+            columns.emplace_back(curCol);
         }
     }
     TableSP tableInput = Util::createTable(columnNames_, columns);
-    vector<ConstantSP> arg = {tableInput};
+    vector<ConstantSP> arg = {(ConstantSP)tableInput};
     ConstantSP res =  conn_.run(appendScript_, arg);
     if(res->isNull())
         return 0;
-    else
-        return res->getInt();
+    return res->getInt();
 }
 
 void AutoFitTableAppender::checkColumnType(int col, DATA_CATEGORY category, DATA_TYPE type) {
@@ -909,7 +940,7 @@ void AutoFitTableAppender::checkColumnType(int col, DATA_CATEGORY category, DATA
     }
 }
 
-AutoFitTableUpsert::AutoFitTableUpsert(string dbUrl, string tableName, DBConnection& conn,bool ignoreNull,
+AutoFitTableUpsert::AutoFitTableUpsert(const std::string & dbUrl, const std::string & tableName, DBConnection& conn,bool ignoreNull,
                                         vector<string> *pkeyColNames,vector<string> *psortColumns)
                         : conn_(conn){
     ConstantSP schema;
@@ -920,7 +951,7 @@ AutoFitTableUpsert::AutoFitTableUpsert(string dbUrl, string tableName, DBConnect
     try {
         //upsert!(obj, newData, [ignoreNull=false], [keyColNames], [sortColumns])
         string task;
-        if(dbUrl == ""){
+        if(dbUrl.empty()){
             task = "schema(" + tableName+ ")";
             upsertScript_ = "upsert!{" + tableName + "";
         }
@@ -961,11 +992,11 @@ AutoFitTableUpsert::AutoFitTableUpsert(string dbUrl, string tableName, DBConnect
         }
         upsertScript_+="}";
 
-        tableInfo =  conn_.run(task);
-        colDefs = tableInfo->getMember("colDefs");
+        tableInfo = (DictionarySP)conn_.run(task);
+        colDefs = (TableSP)tableInfo->getMember("colDefs");
         cols_ = colDefs->rows();
-        typeInts = colDefs->getColumn("typeInt");
-        colNames = colDefs->getColumn("name");
+        typeInts = (VectorSP)colDefs->getColumn("typeInt");
+        colNames = (VectorSP)colDefs->getColumn("name");
         columnCategories_.resize(cols_);
         columnTypes_.resize(cols_);
         columnNames_.resize(cols_);
@@ -980,27 +1011,26 @@ AutoFitTableUpsert::AutoFitTableUpsert(string dbUrl, string tableName, DBConnect
     }
 }
 
-int AutoFitTableUpsert::upsert(TableSP table){
+int AutoFitTableUpsert::upsert(const TableSP& table){
     if(cols_ != table->columns())
         throw RuntimeException("The input table columns doesn't match the columns of the target table.");
 
     vector<ConstantSP> columns;
     for(int i = 0; i < cols_; i++){
-        VectorSP curCol = table->getColumn(i);
+        auto curCol = (VectorSP)table->getColumn(i);
         checkColumnType(i, curCol->getCategory(), curCol->getType());
         if(columnCategories_[i] == TEMPORAL && curCol->getType() != columnTypes_[i]){
             columns.push_back(curCol->castTemporal(columnTypes_[i]));
         }else{
-            columns.push_back(curCol);
+            columns.emplace_back(curCol);
         }
     }
     TableSP tableInput = Util::createTable(columnNames_, columns);
-    vector<ConstantSP> arg = {tableInput};
+    vector<ConstantSP> arg = {(ConstantSP)tableInput};
     ConstantSP res =  conn_.run(upsertScript_, arg);
     if(res->getType() == DT_INT && res->getForm() == DF_SCALAR)
         return res->getInt();
-    else
-        return 0;
+    return 0;
 }
 
 void AutoFitTableUpsert::checkColumnType(int col, DATA_CATEGORY category, DATA_TYPE type) {
@@ -1010,86 +1040,6 @@ void AutoFitTableUpsert::checkColumnType(int col, DATA_CATEGORY category, DATA_T
             throw  RuntimeException("column " + std::to_string(col) + ", expect category " + Util::getCategoryString(expectCategory) + ", got category " + Util::getCategoryString(category));
         }
     }
-}
-
-std::unordered_map<std::string, RecordTime::Node*> RecordTime::codeMap_;
-Mutex RecordTime::mapMutex_;
-long RecordTime::lastRecordOrder_ = 0;
-RecordTime::RecordTime(const string &name) :
-	name_(name) {
-	startTime_ = Util::getNanoEpochTime();
-	LockGuard<Mutex> LockGuard(&mapMutex_);
-	lastRecordOrder_++;
-	recordOrder_ = lastRecordOrder_;
-	//std::cout<<Util::getEpochTime()<<" "<<name_<<recordOrder_<<" start..."<<std::endl;
-}
-RecordTime::~RecordTime() {
-	long long diff = Util::getNanoEpochTime() - startTime_;
-	LockGuard<Mutex> LockGuard(&mapMutex_);
-	std::unordered_map<std::string, RecordTime::Node*>::iterator iter = codeMap_.find(name_);
-	RecordTime::Node *pnode;
-	if (iter != codeMap_.end()) {
-		pnode = iter->second;
-	}
-	else {
-		pnode = new Node();
-		pnode->minOrder = recordOrder_;
-		pnode->name = name_;
-		codeMap_[name_] = pnode;
-	}
-	if (pnode->minOrder > recordOrder_) {
-		pnode->minOrder = recordOrder_;
-	}
-	pnode->costTime.push_back(diff);
-}
-std::string RecordTime::printAllTime() {
-	std::string output;
-	LockGuard<Mutex> LockGuard(&mapMutex_);
-	std::vector<RecordTime::Node*> nodes;
-	nodes.reserve(codeMap_.size());
-	for (std::unordered_map<std::string, RecordTime::Node*>::iterator iter = codeMap_.begin(); iter != codeMap_.end(); iter++) {
-		nodes.push_back(iter->second);
-	}
-	std::sort(nodes.begin(), nodes.end(), [](RecordTime::Node *a, RecordTime::Node *b) {
-		return a->minOrder < b->minOrder;
-	});
-	static double ns2s = 1000000.0;
-	for (RecordTime::Node *node : nodes) {
-		long sumNsOverflow = 0;
-		long long sumNs = 0;//ns
-		double maxNs = 0, minNs = 0;
-		for (long long one : node->costTime) {
-			sumNs += one;
-			if (sumNs < 0) {
-				sumNsOverflow++;
-				sumNs = -(sumNs + LLONG_MAX);
-			}
-			if (maxNs < one) {
-				maxNs = static_cast<double>(one);
-			}
-			if (minNs == 0 || minNs > one) {
-				minNs = static_cast<double>(one);
-			}
-		}
-        size_t timeCount = node->costTime.size();
-		double sum = sumNsOverflow * (double(LLONG_MAX) / ns2s) + sumNs / ns2s;
-        double avg = sum / timeCount;
-		double min = minNs / ns2s;
-		double max = maxNs / ns2s;
-        double stdDev = 0.0;
-        double diff;
-        for (long long one : node->costTime) {
-            diff = one/ ns2s - avg;
-            stdDev += (diff * diff) / timeCount;
-        }
-        stdDev = sqrt(stdDev);
-		output = output + node->name + ": sum = " + std::to_string(sum) + " count = " + std::to_string(node->costTime.size()) +
-			" avg = " + std::to_string(avg) + " stdDev = " + std::to_string(stdDev) +
-			" min = " + std::to_string(min) + " max = " + std::to_string(max) + "\n";
-		delete node;
-	}
-	codeMap_.clear();
-	return output;
 }
 
 void ErrorCodeInfo::set(int apiCode, const string &info){
@@ -1105,4 +1055,4 @@ void ErrorCodeInfo::set(const ErrorCodeInfo &src) {
 	set(src.errorCode, src.errorInfo);
 }
 
-}    // namespace dolphindb
+} // namespace dolphindb

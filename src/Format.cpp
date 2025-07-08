@@ -5,38 +5,45 @@
  *      Author: dzhou
  */
 
-#include <climits>
-
 #include "Format.h"
 #include "Exceptions.h"
+#include "Types.h"
 #include "Util.h"
+
 #include <algorithm>
+#include <climits>
+#include <cstddef>
+#include <cstring>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace dolphindb {
-const string TemporalFormat::pmString = "PM";
-const string TemporalFormat::amString = "AM";
+const std::string TemporalFormat::pmString = "PM";
+const std::string TemporalFormat::amString = "AM";
 const char* TemporalFormat::monthName[12] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
-vector<pair<int, int> > TemporalFormat::formatMap;
-const long long NumberFormat::power10_[10] = {10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000ll, 10000000000ll};
+std::vector<std::pair<int, int> > TemporalFormat::formatMap;
+const long long NumberFormat::power10_[10] = {10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000LL, 10000000000LL};
 const double NumberFormat::enableScientificNotationBeyond_ = 1.0e+15;
 const double NumberFormat::epsilon_ = 1.0e-12;
 
 
-int NumberFormat::printFraction(char* buf, int digitCount, bool optional, double& fraction){
+int NumberFormat::printFraction(char* buf, int digitCount, bool optional, double& fraction)
+{
 	int cursor = 0;
-	while(digitCount){
+	while(digitCount != 0){
 		int count = (std::min)(digitCount, 10);
 		digitCount -= count;
 		double val = fraction * power10_[count - 1];
-		long long x = (long long)val;
+		auto x = (long long)val;
 		fraction = val - x;
 		int start = cursor;
 		bool notZero = x != 0;
-		while(x){
+		while(x != 0){
 			buf[cursor++] = x % 10 + '0';
 			x = x / 10;
 		}
-		if(cursor - start < count && (!optional || digitCount || notZero)){
+		if(cursor - start < count && (!optional || (digitCount != 0) || notZero)){
 			for(int i = count - cursor + start; i > 0; --i)
 				buf[cursor++] = '0';
 		}
@@ -48,17 +55,19 @@ int NumberFormat::printFraction(char* buf, int digitCount, bool optional, double
 		}
 	}
 	if(optional){
-		while(cursor && buf[cursor -1] == '0') --cursor;
+		while((cursor != 0) && buf[cursor -1] == '0') --cursor;
 	}
 	return cursor;
 }
 
-NumberFormat::NumberFormat(const string& form): percent_(0), science_(0), segmentLength_(INT_MAX),
-		integerMinDigits_(0), fractionMinDigits_(0), fractionOptionalDigits_(0), headSize_(0), tailSize_(0), rounding_(0) {
+NumberFormat::NumberFormat(const std::string & form): percent_(false), science_(0), segmentLength_(INT_MAX),
+		integerMinDigits_(0), fractionMinDigits_(0), fractionOptionalDigits_(0), headSize_(0), tailSize_(0), rounding_(0)
+{
     initialize(form);
 }
 
-void NumberFormat::initialize(const string& form) {
+void NumberFormat::initialize(const std::string & form)
+{
 	if(form.empty())
 		throw RuntimeException("The format string can't be empty.");
 	int firstSymPos = -1;
@@ -159,7 +168,7 @@ void NumberFormat::initialize(const string& form) {
 
 	rounding_ = 0.5;
 	int digits = fractionMinDigits_ + fractionOptionalDigits_;
-	while(digits){
+	while(digits != 0){
 		int count = (std::min)(digits, 10);
 		digits -= count;
 		rounding_ /= power10_[count - 1];
@@ -173,12 +182,13 @@ void NumberFormat::initialize(const string& form) {
 	tail_ = form.substr(lastSymPos + 1, tailSize_);
 }
 
-string NumberFormat::format(double x) const{
-	char buf[128];
-	int cursor = 0;
+std::string NumberFormat::format(double x) const
+{
+    char buf[128];
+    int cursor = 0;
 
-   for(int i=0; i<headSize_; ++i)
-	   buf[cursor++] = head_[i];
+    for (int i = 0; i < headSize_; ++i)
+        buf[cursor++] = head_[i];
 
     if (x < 0) {
         buf[cursor++] = '-';
@@ -187,108 +197,112 @@ string NumberFormat::format(double x) const{
     if (percent_)
         x *= 100;
 
-    bool enableSciNotation = science_ || x >= enableScientificNotationBeyond_;
+    bool enableSciNotation = (science_ != 0) || x >= enableScientificNotationBeyond_;
     int sciencePower = 0;
     if (enableSciNotation) {
-    	while(x < 1){
-    		sciencePower -= 10;
-    		x *= power10_[9];
-    	}
-        if(x >= 10){
-        	while(x >= power10_[9]){
-        		sciencePower += 10;
-        		x /= power10_[9];
-        	}
-        	int i = 0;
-        	while(i<10 && x >= power10_[i]) ++i;
-        	if(i >= 1){
-        		sciencePower += i;
-        		x /= power10_[i - 1];
-        	}
+        while (x < 1) {
+            sciencePower -= 10;
+            x *= power10_[9];
+        }
+        if (x >= 10) {
+            while (x >= power10_[9]) {
+                sciencePower += 10;
+                x /= power10_[9];
+            }
+            int i = 0;
+            while (i < 10 && x >= power10_[i]) {
+                ++i;
+            }
+            if (i >= 1) {
+                sciencePower += i;
+                x /= power10_[i - 1];
+            }
         }
         if (integerMinDigits_ > 1) {
-        	int count = integerMinDigits_ - 1;
-        	while(count){
-        		int tmp = (std::min)(count, 10);
-        		x *= power10_[tmp -1];
-        		count -= tmp;
-        	}
+            int count = integerMinDigits_ - 1;
+            while (count != 0) {
+                int tmp = (std::min)(count, 10);
+                x *= power10_[tmp - 1];
+                count -= tmp;
+            }
             sciencePower -= integerMinDigits_ - 1;
         }
     }
     x += rounding_;
-    long long integral = (long long)x;
+    auto integral = (long long)x;
     double fraction = x - integral;
 
     // output integer part
     int intStart = cursor;
     int digits = 0;
-    while (integral) {
-    	if(digits && digits % segmentLength_ == 0)
-    		buf[cursor++] = ',';
+    while (integral != 0) {
+        if ((digits != 0) && digits % segmentLength_ == 0)
+            buf[cursor++] = ',';
         buf[cursor++] = integral % 10 + '0';
         ++digits;
         integral /= 10;
     }
-	for (; digits < integerMinDigits_; ++digits)
-		buf[cursor++] = '0';
-    //reverse the digits of integer part
-	int intLen = (cursor - intStart)/2;
-	for(int i=0; i<intLen; ++i){
-		char tmp = buf[intStart + i];
-		buf[intStart + i] = buf[cursor - 1 - i];
-		buf[cursor - 1 - i] = tmp;
-	}
-	if(enableSciNotation && cursor - intStart == integerMinDigits_ + 1){
-		++sciencePower;
-		fraction /= 10;
-		--cursor;
-	}
+    for (; digits < integerMinDigits_; ++digits)
+        buf[cursor++] = '0';
+    // reverse the digits of integer part
+    int intLen = (cursor - intStart) / 2;
+    for (int i = 0; i < intLen; ++i) {
+        char tmp = buf[intStart + i];
+        buf[intStart + i] = buf[cursor - 1 - i];
+        buf[cursor - 1 - i] = tmp;
+    }
+    if (enableSciNotation && cursor - intStart == integerMinDigits_ + 1) {
+        ++sciencePower;
+        fraction /= 10;
+        --cursor;
+    }
 
-	//output fraction part
-    if (point_){
+    // output fraction part
+    if (point_) {
         buf[cursor++] = '.';
-        if(fractionMinDigits_){
-        	cursor += printFraction(buf + cursor, fractionMinDigits_, false, fraction);
+        if (fractionMinDigits_ != 0) {
+            cursor += printFraction(buf + cursor, fractionMinDigits_, false, fraction);
         }
-        if(fractionOptionalDigits_){
-        	cursor += printFraction(buf + cursor, fractionOptionalDigits_, true, fraction);
+        if (fractionOptionalDigits_ != 0) {
+            cursor += printFraction(buf + cursor, fractionOptionalDigits_, true, fraction);
         }
-        if(buf[cursor -1] == '.') --cursor;
+        if (buf[cursor - 1] == '.')
+            --cursor;
     }
 
     if (enableSciNotation) {
         buf[cursor++] = 'E';
-        if (sciencePower < 0){
+        if (sciencePower < 0) {
             sciencePower = -sciencePower;
             buf[cursor++] = '-';
         }
         intStart = cursor;
-		digits = 0;
-		while (sciencePower) {
-			buf[cursor++] = sciencePower % 10 + '0';
-			++digits;
-			sciencePower /= 10;
-		}
-		for (; digits < science_; ++digits)
-			buf[cursor++] = '0';
-		//reverse the digits of integer part
-		intLen = (cursor - intStart)/2;
-		for(int i=0; i<intLen; ++i){
-			char tmp = buf[intStart + i];
-			buf[intStart + i] = buf[cursor - 1 - i];
-			buf[cursor - 1 - i] = tmp;
-		}
+        digits = 0;
+        while (sciencePower != 0) {
+            buf[cursor++] = sciencePower % 10 + '0';
+            ++digits;
+            sciencePower /= 10;
+        }
+        for (; digits < science_; ++digits)
+            buf[cursor++] = '0';
+        // reverse the digits of integer part
+        intLen = (cursor - intStart) / 2;
+        for (int i = 0; i < intLen; ++i) {
+            char tmp = buf[intStart + i];
+            buf[intStart + i] = buf[cursor - 1 - i];
+            buf[cursor - 1 - i] = tmp;
+        }
     }
     if (percent_)
         buf[cursor++] = '%';
-    for(int i=0; i<tailSize_; ++i)
-    	buf[cursor++] = tail_[i];
+    for (int i = 0; i < tailSize_; ++i)
+        buf[cursor++] = tail_[i];
     buf[cursor] = 0;
     return buf;
 }
 
-string NumberFormat::toString(long long x){
+std::string NumberFormat::toString(long long x)
+{
 	char buf[30];
 	int cursor = 0;
 	int start = 0;
@@ -297,7 +311,7 @@ string NumberFormat::toString(long long x){
 		start = 1;
 		x = -x;
 	}
-	while (x) {
+	while (x != 0) {
 		buf[cursor++] = x % 10 + '0';
 		x /= 10;
 	}
@@ -314,9 +328,10 @@ string NumberFormat::toString(long long x){
 	return buf;
 }
 
-DecimalFormat::DecimalFormat(const string& form) : format_(0), negFormat_(0){
+DecimalFormat::DecimalFormat(const std::string & form) : format_(nullptr), negFormat_(nullptr)
+{
 	size_t pos = form.find(';');
-	if(pos == string::npos || pos == 0 || pos == form.size() - 1)
+	if(pos == std::string::npos || pos == 0 || pos == form.size() - 1)
 		format_ = new NumberFormat(form);
 	else{
 		format_ = new NumberFormat(form.substr(0, pos));
@@ -324,22 +339,24 @@ DecimalFormat::DecimalFormat(const string& form) : format_(0), negFormat_(0){
 	}
 }
 
-DecimalFormat::~DecimalFormat(){
-	if(format_ != NULL)
+DecimalFormat::~DecimalFormat()
+{
+	if(format_ != nullptr)
 		delete format_;
-	if(negFormat_ != NULL)
+	if(negFormat_ != nullptr)
 		delete negFormat_;
 }
 
-string DecimalFormat::format(double x) const {
-	if(negFormat_ != NULL && x < 0)
+std::string DecimalFormat::format(double x) const
+{
+	if(negFormat_ != nullptr && x < 0)
 		return negFormat_->format(-x);
-	else
-		return format_->format(x);
+	return format_->format(x);
 }
 
-vector<pair<int, int> > TemporalFormat::initFormatMap() {
-	vector<pair<int, int> > initvector(128, std::make_pair(-1, -1));
+std::vector<std::pair<int, int> > TemporalFormat::initFormatMap()
+{
+	std::vector<std::pair<int, int> > initvector(128, std::make_pair(-1, -1));
 	initvector['y'] = std::make_pair(0, 4);
 	initvector['M'] = std::make_pair(1, 2);
 	initvector['d'] = std::make_pair(2, 2);
@@ -353,22 +370,24 @@ vector<pair<int, int> > TemporalFormat::initFormatMap() {
 	return initvector;
 }
 
-TemporalFormat::TemporalFormat(const string& form) : quickFormat_(false), segmentCount_(0) {
+TemporalFormat::TemporalFormat(const std::string & form) : quickFormat_(false), segmentCount_(0)
+{
 	initialize(form);
 }
 
-void TemporalFormat::initialize(const string& form) {
+void TemporalFormat::initialize(const std::string & form)
+{
 	if(formatMap.empty())
 		formatMap = TemporalFormat::initFormatMap();
 	int len = static_cast<int>(form.length());
 	if(len == 0)
 		throw RuntimeException("The format string can't be empty.");
-	else if(len > 128)
+	if(len > 128)
 		throw RuntimeException("The format string is too big.");
 	format_.reserve(len);
 
 	//process escape first
-	vector<bool> escape(len);
+	std::vector<bool> escape(len);
 	int cursor = 0;
 	int i = 0;
 	while(i < len){
@@ -379,8 +398,7 @@ void TemporalFormat::initialize(const string& form) {
 			format_.append(1, form[i+1]);
 			escape[cursor++] = true;
 			i += 2;
-		}
-		else{
+		} else{
 			format_.append(1, ch);
 			escape[cursor++] = false;
 			++i;
@@ -409,7 +427,8 @@ void TemporalFormat::initialize(const string& form) {
 	}
 }
 
-string TemporalFormat::format(long long nowtime, DATA_TYPE dtype) const{
+std::string TemporalFormat::format(long long nowtime, DATA_TYPE dtype) const
+{
 	int timeNumber[10];
 	memset(timeNumber, 0, sizeof(timeNumber));
 	timeNumber[0] = 1970;
@@ -464,8 +483,8 @@ string TemporalFormat::format(long long nowtime, DATA_TYPE dtype) const{
 			break;
 		}
 		case DT_DATETIME: {
-			int tmp = static_cast<int>(nowtime / 86400ll);
-			nowtime = nowtime % 86400ll;
+			int tmp = static_cast<int>(nowtime / 86400LL);
+			nowtime = nowtime % 86400LL;
 			Util::parseDate(tmp, timeNumber[0], timeNumber[1], timeNumber[2]);
 			timeNumber[7] = nowtime % 60;
 			nowtime = nowtime / 60;
@@ -489,11 +508,11 @@ string TemporalFormat::format(long long nowtime, DATA_TYPE dtype) const{
             break;
 		}
 		case DT_TIMESTAMP: {
-			int tmp = static_cast<int>(nowtime / 86400000ll);
-			nowtime = nowtime % 86400000ll;
+			int tmp = static_cast<int>(nowtime / 86400000LL);
+			nowtime = nowtime % 86400000LL;
 			if(nowtime < 0){
 				--tmp;
-				nowtime += 86400000ll;
+				nowtime += 86400000LL;
 			}
 			Util::parseDate(tmp, timeNumber[0], timeNumber[1], timeNumber[2]);
 			timeNumber[8] = nowtime % 1000;
@@ -507,8 +526,8 @@ string TemporalFormat::format(long long nowtime, DATA_TYPE dtype) const{
 			break;
 		}
 		default: {
-			int tmp = static_cast<int>(nowtime / 86400000000000ll);
-			nowtime = nowtime % 86400000000000ll;
+			int tmp = static_cast<int>(nowtime / 86400000000000LL);
+			nowtime = nowtime % 86400000000000LL;
 			Util::parseDate(tmp, timeNumber[0], timeNumber[1], timeNumber[2]);
 			timeNumber[9] = nowtime % 1000000000;
 			nowtime = nowtime / 1000000000;
@@ -523,14 +542,14 @@ string TemporalFormat::format(long long nowtime, DATA_TYPE dtype) const{
 	}
 
 	if (quickFormat_) {
-		string templateString(format_);
+		std::string templateString(format_);
 		for (int i = 0; i < segmentCount_; ++i) {
 			int leftPos = segments_[i].startPos_;
 			int rightPos = segments_[i].endPos_;
 			int id = segments_[i].timeUnitIndex_;
 			if (id == 5) {
 				for (int j = leftPos, cnt = 0; j <= rightPos; ++j, ++cnt) {
-					templateString[j] = cnt < 2 ? (timeNumber[5] ? pmString[cnt] : amString[cnt]) : ' ';
+					templateString[j] = cnt < 2 ? ((timeNumber[5] != 0) ? pmString[cnt] : amString[cnt]) : ' ';
 				}
 			} else if (id == 1 && rightPos - leftPos + 1 == 3) {
 				const char* month = monthName[timeNumber[1] - 1];
@@ -547,51 +566,49 @@ string TemporalFormat::format(long long nowtime, DATA_TYPE dtype) const{
 		}
 		return templateString;
 	}
-	else {
-		string resultString;
-		int prePos = 0;
-		for (int i = 0; i < segmentCount_; ++i) {
-			string tmpString;
-			int leftPos = segments_[i].startPos_;
-			int rightPos = segments_[i].endPos_;
-			int index = segments_[i].timeUnitIndex_;
-			int unitDemandlength = segments_[i].maxLength_;
-			int formatDemandLength = rightPos - leftPos + 1;
+	std::string resultString;
+	int prePos = 0;
+	for (int i = 0; i < segmentCount_; ++i) {
+		std::string tmpString;
+		int leftPos = segments_[i].startPos_;
+		int rightPos = segments_[i].endPos_;
+		int index = segments_[i].timeUnitIndex_;
+		int unitDemandlength = segments_[i].maxLength_;
+		int formatDemandLength = rightPos - leftPos + 1;
 
-			resultString += format_.substr(prePos, leftPos - prePos);
-			if (index == 5) {
-				for (int j = 0; j < formatDemandLength; ++j) {
-					tmpString += (j < 2) ? (timeNumber[5] ? pmString[j] : amString[j]) : ' ';
-				}
-			} else if (index == 1 && formatDemandLength == 3) {
-				const char* month = monthName[timeNumber[1] - 1];
-				for (int j = 0; j < 3; ++j) {
-					tmpString += month[j];
-				}
-			} else if (index == 0 && formatDemandLength == 2) {
-				resultString += (timeNumber[0] / 10) % 10 + '0';
-				resultString += timeNumber[0] % 10 + '0';
-			} else {
-				int tmpNumber = timeNumber[index];
-				int cntDigits = 0;
-
-				for (int j = 0; j < unitDemandlength; ++j) {
-					cntDigits++;
-					tmpString += tmpNumber % 10 + '0';
-					tmpNumber /= 10;
-					if (cntDigits >= formatDemandLength && tmpNumber == 0)
-						break;
-				}
-				for (int j = 0; j < formatDemandLength - cntDigits; ++j)
-					tmpString += '0';
-				std::reverse(tmpString.begin(), tmpString.end());
+		resultString += format_.substr(prePos, leftPos - prePos);
+		if (index == 5) {
+			for (int j = 0; j < formatDemandLength; ++j) {
+				tmpString += (j < 2) ? ((timeNumber[5] != 0) ? pmString[j] : amString[j]) : ' ';
 			}
-			resultString += tmpString;
-			prePos = rightPos + 1;
+		} else if (index == 1 && formatDemandLength == 3) {
+			const char *month = monthName[timeNumber[1] - 1];
+			for (int j = 0; j < 3; ++j) {
+				tmpString += month[j];
+			}
+		} else if (index == 0 && formatDemandLength == 2) {
+			resultString += ((timeNumber[0] / 10) % 10) + '0';
+			resultString += (timeNumber[0] % 10) + '0';
+		} else {
+			int tmpNumber = timeNumber[index];
+			int cntDigits = 0;
+
+			for (int j = 0; j < unitDemandlength; ++j) {
+				cntDigits++;
+				tmpString += (tmpNumber % 10) + '0';
+				tmpNumber /= 10;
+				if (cntDigits >= formatDemandLength && tmpNumber == 0)
+					break;
+			}
+			for (int j = 0; j < formatDemandLength - cntDigits; ++j)
+				tmpString += '0';
+			std::reverse(tmpString.begin(), tmpString.end());
 		}
-		resultString += format_.substr(prePos, format_.length() - prePos);
-		return resultString;
+		resultString += tmpString;
+		prePos = rightPos + 1;
 	}
+	resultString += format_.substr(prePos, format_.length() - prePos);
+	return resultString;
 }
 
-}
+} // namespace dolphindb

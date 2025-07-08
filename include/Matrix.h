@@ -14,14 +14,14 @@ namespace dolphindb {
 class EXPORT_DECL Matrix{
 public:
     Matrix(int cols, int rows);
-    virtual ~Matrix(){}
+    virtual ~Matrix() = default;
     void setRowLabel(const ConstantSP& label);
     void setColumnLabel(const ConstantSP& label);
     bool reshape(INDEX cols, INDEX rows);
     std::string getString() const;
     std::string getString(INDEX index) const ;
     ConstantSP get(const ConstantSP& index) const ;
-    bool set(const ConstantSP index, const ConstantSP& value);
+    bool set(const ConstantSP& index, const ConstantSP& value);
     virtual std::string getString(int column, int row) const = 0;
     virtual ConstantSP getInstance(INDEX size) const = 0;
     virtual ConstantSP getColumn(INDEX index) const = 0;
@@ -35,14 +35,14 @@ public:
 protected:
     void calculateInvalidLength(INDEX colStart, int colLength,INDEX rowStart, int rowLength, int& invalidLenBeginning, int& invalidLenEnding) const;
 
-protected:
+
     int cols_;
     int rows_;
     ConstantSP rowLabel_;
     ConstantSP colLabel_;
 };
 
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

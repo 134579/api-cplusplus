@@ -1,4 +1,4 @@
-inc = include_directories('../include')
+inc = include_directories('../include', '../include/lz4')
 src = files(
     'AsynWorker.cpp',
     'BatchTableWriter.cpp',
@@ -32,5 +32,11 @@ src = files(
     'Types.cpp',
     'Util.cpp',
     'Vector.cpp',
-    'lz4.c'
+    'lz4/lz4.c'
 )
+
+if host_machine.system() == 'linux'
+    src += files('platform/Linux.cpp')
+elif host_machine.system() == 'windows'
+    src += files('platform/Windows.cpp')
+endif

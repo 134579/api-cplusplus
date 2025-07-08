@@ -1,8 +1,20 @@
 #include "Guid.h"
+#include "Exceptions.h"
 #include "Util.h"
-#include "Platform.h"
+
+#ifdef __linux__
+#include "uuid/uuid.h"
+#elif defined(_WIN32)
+#include "ComBaseapi.h"
+#endif
+
+#include <cstdint>
+#include <cstring>
+#include <string>
 
 namespace dolphindb {
+
+// NOLINTBEGIN(*)
 
 uint32_t murmur32_16b(const unsigned char* key){
     const uint32_t m = 0x5bd1e995;
@@ -113,6 +125,9 @@ uint32_t murmur32(const char *key, size_t len){
 
     return h;
 }
+
+// NOLINTEND(*)
+
 Guid::Guid(bool newGuid) {
     if (!newGuid) {
         memset(uuid_, 0, 16);
@@ -139,7 +154,7 @@ Guid::Guid(const Guid& copy) {
 }
 
 bool Guid::isZero() const {
-    const unsigned char* a = (const unsigned char*)uuid_;
+    const auto* a = (const unsigned char*)uuid_;
     return (*(long long*)a) == 0 && (*(long long*)(a + 8)) == 0;
 }
 
@@ -157,4 +172,4 @@ uint64_t GuidHash::operator()(const Guid& guid) const {
     return murmur32_16b(guid.bytes());
 }
 
-}
+} // namespace dolphindb

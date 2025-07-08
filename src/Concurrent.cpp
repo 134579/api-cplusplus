@@ -5,21 +5,26 @@
  *      Author: dzhou
  */
 
-#include <iostream>
-#include <chrono>
-
-#ifdef MAC
-	#include <errno.h>
-#endif
-
 #include "Concurrent.h"
 #include "Exceptions.h"
+
+#ifdef __linux__
+#include <pthread.h>
+#include <semaphore.h>
+#endif
+#ifdef MAC
+#include <errno.h>
+#endif
+
+#include <cerrno>
+#include <chrono>
+#include <ctime>
+#include <iostream>
+#include <string>
 
 namespace dolphindb {
 
 Runnable::Runnable():status_(0){}
-
-Runnable::~Runnable(){}
 
 void Runnable::start(){
 	status_ = 1;
@@ -86,7 +91,7 @@ RWLock::RWLock(){
 #ifdef _WIN32
 	InitializeSRWLock(&lock_);
 #else
-	int rc = pthread_rwlock_init(&lock_, NULL);
+	int rc = pthread_rwlock_init(&lock_, nullptr);
 	if(rc != 0)
 		throw RuntimeException("Failed to initialize read write lock with errCode " + std::to_string(rc));
 #endif
@@ -164,12 +169,13 @@ void RWLock::releaseWrite(){
 #endif
 }
 
+//NOLINTBEGIN(*)
 
 ConditionalVariable::ConditionalVariable(){
 #ifdef _WIN32
 	InitializeConditionVariable (&conditionalVariable_);
 #else
-	pthread_cond_init (&conditionalVariable_, NULL);
+	pthread_cond_init (&conditionalVariable_, nullptr);
 #endif
 }
 
@@ -195,7 +201,7 @@ bool ConditionalVariable::wait(Mutex& mutex, int milliSeconds){
 #else
 	struct timespec curTime;
 	clock_gettime(CLOCK_REALTIME, &curTime);
-	long long ns = curTime.tv_nsec + (long long)milliSeconds * 1000000ll;
+	long long ns = curTime.tv_nsec + ((long long)milliSeconds * 1000000LL);
 	curTime.tv_sec += ns / 1000000000;
 	curTime.tv_nsec = ns % 1000000000;
 	return pthread_cond_timedwait(&conditionalVariable_, &mutex.mutex_, &curTime) == 0;
@@ -218,6 +224,8 @@ void ConditionalVariable::notifyAll(){
 #endif
 }
 
+//NOLINTEND(*)
+
 void CountDownLatch::wait(){
 	LockGuard<Mutex> lock(&mutex_);
 	while (count_ > 0){
@@ -227,7 +235,7 @@ void CountDownLatch::wait(){
 
 bool CountDownLatch::wait(int milliseconds){
 	LockGuard<Mutex> lock(&mutex_);
-	long long expire = std::chrono::steady_clock::now().time_since_epoch()/std::chrono::nanoseconds(1) + milliseconds * 1000000ll;
+	long long expire = std::chrono::steady_clock::now().time_since_epoch()/std::chrono::nanoseconds(1) + (milliseconds * 1000000LL);
 	int remaining = milliseconds;
 	while (count_ > 0 && remaining > 0){
 		condition_.wait(mutex_, remaining);
@@ -272,18 +280,18 @@ Semaphore::Semaphore(int resources){
 
 #ifdef _WIN32
 	if (resources == 0) {
-		sem_ = CreateSemaphore(NULL, 0, LONG_MAX, NULL);
+		sem_ = CreateSemaphore(nullptr, 0, LONG_MAX, nullptr);
 	}
 	else {
 #ifdef UNICODE
 		std::wstring text = std::to_wstring(resources) + L"_DDB_SEM";
-		sem_ = CreateSemaphore(NULL, 0, LONG_MAX, text.data());
+		sem_ = CreateSemaphore(nullptr, 0, LONG_MAX, text.data());
 #else
 		std::string text = std::to_string(resources) + "DDB_SEM_";
-		sem_ = CreateSemaphore(NULL, 0, LONG_MAX, text.data());
+		sem_ = CreateSemaphore(nullptr, 0, LONG_MAX, text.data());
 #endif
 	}
-	if(sem_ == NULL)
+	if(sem_ == nullptr)
 		throw RuntimeException("Failed to create semaphore with error code " + std::to_string(GetLastError()));
 #elif defined MAC
 	// std::atomic<long long>
@@ -355,7 +363,7 @@ int SleepEx(int ms){
 	struct timeval timeout;
 	timeout.tv_sec = ms/1000;
 	timeout.tv_usec = (ms%1000)*1000;
-	if(-1 == select(0, NULL, NULL, NULL, &timeout)){
+	if(-1 == select(0, nullptr, nullptr, nullptr, &timeout)){
 		return errno;
 	}
 	return 0;
@@ -391,19 +399,18 @@ bool Semaphore::tryAcquire(int waitMilliSeconds){
 	if(waitMilliSeconds > 0){
 		struct timespec curTime;
 		clock_gettime(CLOCK_REALTIME, &curTime);
-		long long ns = curTime.tv_nsec + (long long)waitMilliSeconds * 1000000ll;
+		long long ns = curTime.tv_nsec + ((long long)waitMilliSeconds * 1000000LL);
 		curTime.tv_sec += ns / 1000000000;
 		curTime.tv_nsec = ns % 1000000000;
 		return sem_timedwait(&sem_, &curTime) == 0;
-	}else{
-		return sem_trywait(&sem_) == 0;
 	}
+	return sem_trywait(&sem_) == 0;
 #endif
 }
 
 void Semaphore::release(){
 #ifdef _WIN32
-	if(!ReleaseSemaphore(sem_, 1, NULL))
+	if(!ReleaseSemaphore(sem_, 1, nullptr))
 		throw RuntimeException("Failed to release semaphore with error code " + std::to_string(GetLastError()));
 #elif defined MAC
 	int ret = sem_post(sem_);
@@ -437,37 +444,9 @@ Thread::~Thread(){
 #endif
 }
 
-
-void Thread::setAffinity(int id) {
-#ifdef _WIN32
-	SYSTEM_INFO SystemInfo;
-	GetSystemInfo(&SystemInfo);
-	if (static_cast<DWORD>(id) >= SystemInfo.dwNumberOfProcessors) {
-		throw RuntimeException("Core id exceed limit " + std::to_string(SystemInfo.dwNumberOfProcessors));
-	}
-	if (SetThreadAffinityMask(thread_, 1ll << id) == 0) {
-		throw RuntimeException("BindCore failed, error code "+GetLastError());
-	}
-#elif defined MAC
-	throw RuntimeException("MacOS can't setaffinity.");
-#else
-	int cpus = 0;
-	cpus = sysconf(_SC_NPROCESSORS_ONLN);
-	if (id >= cpus) {
-		throw RuntimeException("Core id exceed limit " + std::to_string(cpus));
-	}
-	cpu_set_t mask;
-	CPU_ZERO(&mask);
-	CPU_SET(id, &mask);
-	if (sched_setaffinity(0, sizeof(mask), &mask) == -1) {
-		throw RuntimeException("BindCore failed, error code " + std::to_string(errno));
-	}
-#endif
-}
-
 void Thread::start(){
 #ifdef _WIN32
-	thread_=CreateThread(NULL,0,(LPTHREAD_START_ROUTINE) startFunc,this,0,&threadId_);
+	thread_=CreateThread(nullptr,0,(LPTHREAD_START_ROUTINE) startFunc,this,0,&threadId_);
 	if(thread_==0){
 		std::cout<<"Failed to create thread with error code "<<GetLastError()<<std::endl;
 	}
@@ -483,28 +462,8 @@ void Thread::join(){
 #ifdef _WIN32
 	WaitForSingleObject(thread_,INFINITE);
 #else
-	pthread_join(thread_, NULL);
+	pthread_join(thread_, nullptr);
 #endif
 }
 
-void Thread::sleep(int milliSeconds){
-#ifdef _WIN32
-	Sleep(milliSeconds);
-#else
-	usleep(1000*milliSeconds);
-#endif
-}
-
-int Thread::getID(){
-#ifdef _WIN32
-	return GetCurrentThreadId();
-#elif defined MAC
-	return syscall(SYS_thread_selfid);
-#else
-	return syscall(__NR_gettid);
-#endif
-}
-
-}
-
-
+} // namespace dolphindb

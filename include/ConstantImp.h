@@ -2,26 +2,26 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
-#include <climits>
 #include <algorithm>
-#include <functional>
-#include <stdio.h>
+#include <climits>
+#include <cstdio>
 #include <cstring>
-#include <iostream>
-#include <unordered_set>
-#include <typeinfo>
-#include <sstream>
-#include <iomanip>
-#include <map>
 #include <deque>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <typeinfo>
+#include <unordered_set>
 
-#include "Util.h"
-#include "ScalarImp.h"
-#include "Types.h"
-#include "internal/WideInteger.h"
-#include "SysIO.h"
-#include "Matrix.h"
 #include "FixSTL.h"
+#include "Matrix.h"
+#include "ScalarImp.h"
+#include "SysIO.h"
+#include "Types.h"
+#include "Util.h"
+#include "internal/WideInteger.h"
 
 #if defined(_MSC_VER)
 #pragma warning( push )
@@ -38,24 +38,24 @@ namespace dolphindb {
 
 class AnyVector:public Vector{
 public:
-	AnyVector(int sz):data_(sz, Constant::void_), containNull_(false){}
+	explicit AnyVector(int sz):data_(sz, Constant::void_), containNull_(false){}
 	AnyVector(const std::deque<ConstantSP>& data, bool containNull):data_(data), containNull_(containNull){}
 	AnyVector(const std::vector<ConstantSP>& data, bool containNull):data_(data.begin(), data.end()), containNull_(containNull){}
-	virtual ~AnyVector(){}
-	virtual bool containNotMarshallableObject() const override;
+	~AnyVector() override = default;
+	bool containNotMarshallableObject() const override;
 	bool isLargeConstant() const override {return !containNotMarshallableObject();}
 	bool getNullFlag() const override {return containNull_;}
 	void setNullFlag(bool containNull) override {containNull_=containNull;}
-	virtual INDEX getCapacity() const override {return 0;}
+	INDEX getCapacity() const override {return 0;}
 	bool isFastMode() const override {return false;}
-	virtual size_t getUnitLength() const override {return 0;}
+	size_t getUnitLength() const override {return 0;}
 	void clear() override;
 	bool sizeable() const override {return true;}
 	DATA_TYPE getType() const override {return DT_ANY;}
 	DATA_TYPE getRawType() const override { return DT_ANY;}
 	DATA_CATEGORY getCategory() const override {return MIXED;}
 	std::string getString(INDEX index) const override {return data_[index]->getString();}
-	virtual const std::string& getStringRef(INDEX index) const override { throw RuntimeException("getStringRef method not supported for AnyVector");}
+	const std::string& getStringRef(INDEX index) const override { throw RuntimeException("getStringRef method not supported for AnyVector");}
 	bool set(INDEX index, const ConstantSP& value) override ;
 	bool set(const ConstantSP& index, const ConstantSP& value) override;
 	bool assign(const ConstantSP& value) override;
@@ -163,7 +163,7 @@ public:
 			capacity_=sz;
 		data_ = srcData;
 	}
-	virtual ~AbstractFastVector(){
+	~AbstractFastVector() override{
 		delete[] data_;
 	}
 
@@ -195,17 +195,19 @@ public:
 		return true;
 	}
 
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const override {
+	ConstantSP getSubVector(INDEX start, INDEX length) const override {
+		if (start < 0 || length < 0 || start + length > size_) {
+			throw IllegalArgumentException("getSubVector", "index out of range: start=" + std::to_string(start) + ", length=" + std::to_string(length));
+		}
 		return getSubVector(start, length, std::abs(length));
 	}
 
-	virtual ConstantSP getSubVector(INDEX start, INDEX length, INDEX capacity) const override {
+	ConstantSP getSubVector(INDEX start, INDEX length, INDEX capacity) const override {
 		DATA_TYPE type = getType();
 		T* data = getDataArray(start,length,capacity);
 		if(data)
 			return Util::createVector(type,std::abs(length), capacity, true, getExtraParamForType(), data, containNull_);
-		else
-			throw MemoryException();
+		throw MemoryException();
 	}
 
 	VECTOR_TYPE getVectorType() const override {return VECTOR_TYPE::ARRAY;}
@@ -221,13 +223,11 @@ public:
 			size_t actualLength;
 			ret = in->readBytes((char*)(data_ + i), unitLength,  targetNumElement, actualLength);
 			i += static_cast<INDEX>(actualLength);
-		}
-		else{
+		} else{
 			for(; i<end; ++i){
 				if((ret = in->readBytes((char*)(data_+i), unitLength, true)) != OK){
 					numElement = i - indexStart;
-					if(i > size_)
-						size_ = i;
+					size_ = std::max(i, size_);
 					if(!containNull_)
 						containNull_ = hasNullInRange(indexStart, i);
 					return ret;
@@ -235,8 +235,7 @@ public:
 			}
 		}
 		numElement = i - indexStart;
-		if(i > size_)
-			size_ = i;
+		size_ = std::max(i, size_);
 		if(!containNull_)
 			containNull_ = hasNullInRange(indexStart, i);
 		return ret;
@@ -251,34 +250,32 @@ public:
 		if(data){
 			return Util::createVector(type,length, 0, true, getExtraParamForType(), (void*)data, haveNull);
 		}
-		else
-			throw MemoryException();
+		throw MemoryException();
 	}
 
-	virtual ConstantSP getInstance(INDEX sz) const override {
+	ConstantSP getInstance(INDEX sz) const override {
 		DATA_TYPE type = getType();
 		INDEX capacity = (std::max)(1, sz);
 		T* data = new T[capacity];
 		return Util::createVector(type,sz, capacity, true, getExtraParamForType(), (void*)data, false);
 	}
 
-	virtual ConstantSP getValue() const override {
+	ConstantSP getValue() const override {
 		DATA_TYPE type = getType();
 		Vector* copy;
 		T* data = getDataArray(0, size_);
-		if(data != NULL){
+		if(data != nullptr){
 			copy = Util::createVector(type,size_, 0, true, getExtraParamForType(), (void*)data, containNull_);
 			copy->setForm(getForm());
 			return copy;
 		}
-		else
-			throw MemoryException();
+		throw MemoryException();
 	}
 
-	virtual ConstantSP getValue(INDEX capacity) const override {
+	ConstantSP getValue(INDEX capacity) const override {
 		DATA_TYPE type = getType();
 		Vector* copy;
-		T* data = NULL;
+		T* data = nullptr;
 		capacity = (std::max)(capacity, (INDEX)size_);
 		data = new T[capacity];
 		memcpy(data, data_, sizeof(T) * size_);
@@ -311,59 +308,51 @@ public:
 		return start<end;
 	}
 
-	virtual INDEX getCapacity() const override {return capacity_;}
+	INDEX getCapacity() const override {return capacity_;}
 	bool isFastMode() const override {return true;}
-	virtual void* getDataArray() const override {return (void*)data_;}
-	virtual size_t getUnitLength() const override {return sizeof(T);}
+	void* getDataArray() const override {return (void*)data_;}
+	size_t getUnitLength() const override {return sizeof(T);}
 	bool sizeable() const override {return capacity_>0;}
 	ConstantSP get(INDEX index) const override = 0;
-	virtual char getBool() const override {
+	char getBool() const override {
 		if(size_ == 1)
 			return getBool(0);
-		else
-			throw RuntimeException("The vector can't be converted to bool scalar.");
+		throw RuntimeException("The vector can't be converted to bool scalar.");
 	}
-	virtual char getChar() const override {
+	char getChar() const override {
 		if(size_ == 1)
 			return getChar(0);
-		else
-			throw RuntimeException("The vector can't be converted to char scalar.");
+		throw RuntimeException("The vector can't be converted to char scalar.");
 	}
-	virtual short getShort() const override {
+	short getShort() const override {
 		if(size_ == 1)
 			return getShort(0);
-		else
-			throw RuntimeException("The vector can't be converted to short scalar.");
+		throw RuntimeException("The vector can't be converted to short scalar.");
 	}
-	virtual int getInt() const override {
+	int getInt() const override {
 		if(size_ == 1)
 			return getInt(0);
-		else
-			throw RuntimeException("The vector can't be converted to int scalar.");
+		throw RuntimeException("The vector can't be converted to int scalar.");
 	}
-	virtual long long getLong() const override {
+	long long getLong() const override {
 		if(size_ == 1)
 			return getLong(0);
-		else
-			throw RuntimeException("The vector can't be converted to long scalar.");
+		throw RuntimeException("The vector can't be converted to long scalar.");
 	}
-	virtual INDEX getIndex() const override {
+	INDEX getIndex() const override {
 		if(size_ == 1)
 			return getIndex(0);
-		else
-			throw RuntimeException("The vector can't be converted to index scalar.");
+		throw RuntimeException("The vector can't be converted to index scalar.");
 	}
-	virtual float getFloat() const override {
+	float getFloat() const override {
 		if(size_ == 1)
 			return getFloat(0);
-		else
-			throw RuntimeException("The vector can't be converted to float scalar.");
+		throw RuntimeException("The vector can't be converted to float scalar.");
 	}
-	virtual double getDouble() const override {
+	double getDouble() const override {
 		if(size_ == 1)
 			return getDouble(0);
-		else
-			throw RuntimeException("The vector can't be converted to double scalar.");
+		throw RuntimeException("The vector can't be converted to double scalar.");
 	}
 	void setBool(char val) override {data_[0]=(T)val;}
 	void setChar(char val) override {data_[0]=(T)val;}
@@ -424,7 +413,7 @@ public:
 
 		for(int i=0; i<segCount; ++i){
 			INDEX* delIndices = dataSeg[i];
-			INDEX count = ((std::min))(segmentSize, sz - i * segmentSize);
+			INDEX count = ((std::min))(segmentSize, sz - (i * segmentSize));
 			for(; j<count; ++j){
 				if(delIndices[j] > prevIndex + 1){
 					INDEX end = delIndices[j];
@@ -483,8 +472,7 @@ public:
 		for(i=0;i<size_ && data_[i]!=val;++i);
 		if(i<size_)
 			return true;
-		else
-			return false;
+		return false;
 	}
 
 	INDEX search(const T& val){
@@ -492,8 +480,7 @@ public:
 		for(i=0;i<size_ && data_[i]!=val;++i);
 		if(i<size_)
 			return i;
-		else
-			return -1;
+		return -1;
 	}
 
 	void nullFill(const ConstantSP& val) override {
@@ -511,8 +498,7 @@ public:
 		if(containNull_){
 			for(int i=0;i<len;++i)
 				buf[i]=(data_[start+i]==nullVal_);
-		}
-		else{
+		} else{
 			memset(buf,0,len);
 		}
 		return true;
@@ -521,8 +507,7 @@ public:
 		if(containNull_){
 			for(int i=0;i<len;++i)
 				buf[i]=(data_[start+i]!=nullVal_);
-		}
-		else{
+		} else{
 			memset(buf,1,len);
 		}
 		return true;
@@ -532,11 +517,11 @@ public:
 		return copyData<char>(start, len, DT_BOOL, CHAR_MIN, buf);
 	}
 
-	virtual const char* getBoolConst(INDEX start, int len, char* buf) const override {
+	const char* getBoolConst(INDEX start, int len, char* buf) const override {
 		return getDataConst<char>(start, len, DT_BOOL, CHAR_MIN, buf);
 	}
 
-	virtual char* getBoolBuffer(INDEX start, int len, char* buf) const override {
+	char* getBoolBuffer(INDEX start, int len, char* buf) const override {
 		return getDataBuffer<char>(start, len, DT_BOOL, buf);
 	}
 
@@ -544,11 +529,11 @@ public:
 		return copyData<char>(start, len, DT_CHAR, CHAR_MIN, buf);
 	}
 
-	virtual const char* getCharConst(INDEX start, int len, char* buf) const override {
+	const char* getCharConst(INDEX start, int len, char* buf) const override {
 		return getDataConst<char>(start, len, DT_CHAR, CHAR_MIN, buf);
 	}
 
-	virtual char* getCharBuffer(INDEX start, int len, char* buf) const override {
+	char* getCharBuffer(INDEX start, int len, char* buf) const override {
 		return getDataBuffer<char>(start, len, DT_CHAR, buf);
 	}
 
@@ -556,11 +541,11 @@ public:
 		return copyData<short>(start, len, DT_SHORT, SHRT_MIN, buf);
 	}
 
-	virtual const short* getShortConst(INDEX start, int len, short* buf) const override {
+	const short* getShortConst(INDEX start, int len, short* buf) const override {
 		return getDataConst<short>(start, len, DT_SHORT, SHRT_MIN, buf);
 	}
 
-	virtual short* getShortBuffer(INDEX start, int len, short* buf) const override {
+	short* getShortBuffer(INDEX start, int len, short* buf) const override {
 		return getDataBuffer<short>(start, len, DT_SHORT, buf);
 	}
 
@@ -569,12 +554,12 @@ public:
 		return copyData<int>(start, len, type, INT_MIN, buf);
 	}
 
-	virtual const int* getIntConst(INDEX start, int len, int* buf) const override {
+	const int* getIntConst(INDEX start, int len, int* buf) const override {
 		DATA_TYPE type = getRawType()==DT_INT ? getType() : DT_INT;
 		return getDataConst<int>(start, len, type, INT_MIN, buf);
 	}
 
-	virtual int* getIntBuffer(INDEX start, int len, int* buf) const override {
+	int* getIntBuffer(INDEX start, int len, int* buf) const override {
 		DATA_TYPE type = getRawType()==DT_INT ? getType() : DT_INT;
 		return getDataBuffer<int>(start, len, type, buf);
 	}
@@ -584,12 +569,12 @@ public:
 		return copyData<long long>(start, len, type, LLONG_MIN, buf);
 	}
 
-	virtual const long long* getLongConst(INDEX start, int len, long long* buf) const override {
+	const long long* getLongConst(INDEX start, int len, long long* buf) const override {
 		DATA_TYPE type = getRawType()== DT_LONG ? getType() : DT_LONG;
 		return getDataConst<long long>(start, len, type, LLONG_MIN, buf);
 	}
 
-	virtual long long* getLongBuffer(INDEX start, int len, long long* buf) const override {
+	long long* getLongBuffer(INDEX start, int len, long long* buf) const override {
 		DATA_TYPE type = getRawType()== DT_LONG ? getType() : DT_LONG;
 		return getDataBuffer<long long>(start, len, type, buf);
 	}
@@ -598,11 +583,11 @@ public:
 		return copyData<INDEX>(start, len, DT_INDEX, INDEX_MIN, buf);
 	}
 
-	virtual const INDEX* getIndexConst(INDEX start, int len, INDEX* buf) const override {
+	const INDEX* getIndexConst(INDEX start, int len, INDEX* buf) const override {
 		return getDataConst<INDEX>(start, len, DT_INDEX, INDEX_MIN, buf);
 	}
 
-	virtual INDEX* getIndexBuffer(INDEX start, int len, INDEX* buf) const override {
+	INDEX* getIndexBuffer(INDEX start, int len, INDEX* buf) const override {
 		return getDataBuffer<INDEX>(start, len, DT_INDEX, buf);
 	}
 
@@ -610,11 +595,11 @@ public:
 		return copyData<float>(start, len, DT_FLOAT, FLT_NMIN, buf);
 	}
 
-	virtual const float* getFloatConst(INDEX start, int len, float* buf) const override {
+	const float* getFloatConst(INDEX start, int len, float* buf) const override {
 		return getDataConst<float>(start, len, DT_FLOAT, FLT_NMIN, buf);
 	}
 
-	virtual float* getFloatBuffer(INDEX start, int len, float* buf) const override {
+	float* getFloatBuffer(INDEX start, int len, float* buf) const override {
 		return getDataBuffer<float>(start, len, DT_FLOAT, buf);
 	}
 
@@ -622,15 +607,15 @@ public:
 		return copyData<double>(start, len, DT_DOUBLE, DBL_NMIN, buf);
 	}
 
-	virtual const double* getDoubleConst(INDEX start, int len, double* buf) const override {
+	const double* getDoubleConst(INDEX start, int len, double* buf) const override {
 		return getDataConst<double>(start, len, DT_DOUBLE, DBL_NMIN, buf);
 	}
 
-	virtual double* getDoubleBuffer(INDEX start, int len, double* buf) const override {
+	double* getDoubleBuffer(INDEX start, int len, double* buf) const override {
 		return getDataBuffer<double>(start, len, DT_DOUBLE, buf);
 	}
 
-	virtual void* getDataBuffer(INDEX start, int len, void* buf) const override {
+	void* getDataBuffer(INDEX start, int len, void* buf) const override {
 		return (T*)(data_+ start);
 	}
 
@@ -731,8 +716,7 @@ public:
 			for(INDEX i=start; i<length; ++i)
 				if(data_[i] != nullVal_)
 					data_[i] += incVal;
-		}
-		else{
+		} else{
 			for(INDEX i=start; i<length; ++i)
 				data_[i] += incVal;
 		}
@@ -745,8 +729,7 @@ public:
 			for(INDEX i=start; i<length; ++i)
 				if(data_[i] != nullVal_)
 					data_[i] += incVal;
-		}
-		else{
+		} else{
 			for(INDEX i=start; i<length; ++i)
 				data_[i] += incVal;
 		}
@@ -766,8 +749,7 @@ public:
 			for(int i=0;i<len;++i)
 				if(data_[i]!=nullVal_)
 					data_[i]=-data_[i];
-		}
-		else{
+		} else{
 			for(int i=0;i<len;++i)
 				data_[i]=-data_[i];
 		}
@@ -882,7 +864,7 @@ protected:
 	}
 
 	template<typename Y>
-	inline bool copyData(int start, int len, DATA_TYPE targetType, Y targetNullVal, Y* buf) const {
+	bool copyData(int start, int len, DATA_TYPE targetType, Y targetNullVal, Y* buf) const {
 		if(getType() == targetType)
 			memcpy(buf, data_+start, sizeof(Y) * len);
 		else if(containNull_){
@@ -894,8 +876,7 @@ protected:
 				for(int i=0;i<len;++i)
 					buf[i] = (data_[start+i] == nullVal_)? targetNullVal : static_cast<Y>(data_[start+i]);
 			}
-		}
-		else{
+		} else{
 			if(targetType == DT_BOOL){
 				for(int i=0;i<len;++i)
 					buf[i] = data_[start+i] != 0;
@@ -909,10 +890,10 @@ protected:
 	}
 
 	template<typename Y>
-	inline const Y* getDataConst(int start, int len, DATA_TYPE targetType, Y targetNullVal, Y* buf) const {
+	const Y* getDataConst(int start, int len, DATA_TYPE targetType, Y targetNullVal, Y* buf) const {
 		if(getType() == targetType)
 			return (Y*)data_+start;
-		else if(containNull_)
+		if(containNull_)
 			if(targetType == DT_BOOL){
 				for(int i=0;i<len;++i)
 					buf[i] = (data_[start+i] == nullVal_)? targetNullVal : (bool)data_[start+i];
@@ -920,8 +901,7 @@ protected:
 			else{
 				for(int i=0;i<len;++i)
 					buf[i] = (data_[start+i] == nullVal_)? targetNullVal : static_cast<Y>(data_[start+i]);
-			}
-		else{
+			} else{
 			if(targetType == DT_BOOL){
 				for(int i=0;i<len;++i)
 					buf[i] = (bool)data_[start+i];
@@ -935,18 +915,17 @@ protected:
 	}
 
 	template<typename Y>
-	inline Y* getDataBuffer(int start, int len, DATA_TYPE targetType, Y* buf) const {
+	Y* getDataBuffer(int start, int len, DATA_TYPE targetType, Y* buf) const {
 		if(getType() == targetType)
 			return (Y*)data_ + start;
-		else
-			return buf;
+		return buf;
 	}
 
 	template<typename Y>
-	inline bool setData(int start, int len, DATA_TYPE sourceType, Y sourceNullVal, const Y* buf){
+	bool setData(int start, int len, DATA_TYPE sourceType, Y sourceNullVal, const Y* buf){
 		if(buf == (Y*)data_+start)
 			return true;
-		else if(getType() == sourceType)
+		if(getType() == sourceType)
 			memcpy(reinterpret_cast<void *>(data_ + start), reinterpret_cast<const void *>(buf), sizeof(Y) * len);
 		else
 			for(int i=0;i<len;++i)
@@ -955,7 +934,7 @@ protected:
 	}
 
 	template<typename Y>
-	inline bool appendData(Y* buf, int len, DATA_TYPE sourceType, Y sourceNullVal){
+	bool appendData(Y* buf, int len, DATA_TYPE sourceType, Y sourceNullVal){
 		checkCapacity(len);
 		if(getType() == sourceType)
 			memcpy(reinterpret_cast<void *>(data_ + size_), reinterpret_cast<const void *>(buf), sizeof(Y) * len);
@@ -968,7 +947,7 @@ protected:
 
 	void checkCapacity(int appendSize){
 		if(size_+appendSize>capacity_){
-			INDEX newCapacity= static_cast<INDEX>((size_ + appendSize) * 1.2);
+			auto newCapacity= static_cast<INDEX>((size_ + appendSize) * 1.2);
 			T* newData = new T[newCapacity];
 			memcpy(newData,data_,size_*sizeof(T));
 			delete[] data_;
@@ -985,7 +964,7 @@ protected:
 		if(containNull_){
 			haveNull=containNull_;
 			if(indexVector->isIndexArray()){
-				UINDEX* bufIndex=(UINDEX*)indexVector->getIndexArray();
+				auto* bufIndex=(UINDEX*)indexVector->getIndexArray();
 				for(INDEX i=0;i<len;++i)
 					buf[i]=bufIndex[i]<sz?data_[bufIndex[i]]:nullVal_;
 			}
@@ -1003,10 +982,9 @@ protected:
 					start+=count;
 				}
 			}
-		}
-		else{
+		} else{
 			if(indexVector->isIndexArray()){
-				UINDEX* bufIndex=(UINDEX*)indexVector->getIndexArray();
+				auto* bufIndex=(UINDEX*)indexVector->getIndexArray();
 				for(INDEX i=0;i<len;++i){
 					if(bufIndex[i]<sz)
 						buf[i]=data_[bufIndex[i]];
@@ -1073,8 +1051,7 @@ protected:
 					buf[i] = (start + i >= 0 && start + i < size_) ? data_[start + i] : getNullValue<T>();
 				}
 			}
-		}
-		else{
+		} else{
 			T* src=data_+start;
 			T* dest=buf;
 			length=std::abs(length);
@@ -1092,14 +1069,7 @@ protected:
 		}
 	}
 
-	int getSegmentCount(INDEX sz, int segmentSizeInBit) const {
-		return (sz >> segmentSizeInBit) + (sz & ((1 << segmentSizeInBit) - 1) ? 1 : 0);
-	}
-
-
-
-protected:
-	typedef typename std::unordered_map<T, INDEX>::const_iterator iterator;
+	using iterator = typename std::unordered_map<T, INDEX>::const_iterator;
 	T* data_;
 	T nullVal_;
 	int size_;
@@ -1113,7 +1083,7 @@ class FastVoidVector:public AbstractFastVector<char>{
 	FastVoidVector(int sz, int capacity, char* srcData, bool containNull):AbstractFastVector(sz,capacity,srcData,CHAR_MIN, containNull){
 		dataType_ = DT_VOID;
 	}
-	virtual ~FastVoidVector(){}
+	~FastVoidVector() override = default;
 	DATA_TYPE getType() const override {return DT_VOID;}
 	DATA_TYPE getRawType() const override { return DT_VOID;}
 	DATA_CATEGORY getCategory() const override {return NOTHING;}
@@ -1147,7 +1117,7 @@ public:
 	FastBoolVector(int sz, int capacity, char* srcData, bool containNull):AbstractFastVector(sz,capacity,srcData,CHAR_MIN, containNull){
 		dataType_ = DT_BOOL;
 	}
-	virtual ~FastBoolVector(){}
+	~FastBoolVector() override = default;
 	DATA_TYPE getType() const override {return DT_BOOL;}
 	DATA_TYPE getRawType() const override { return DT_BOOL;}
 	DATA_CATEGORY getCategory() const override {return LOGICAL;}
@@ -1170,7 +1140,7 @@ public:
 	FastCharVector(int sz, int capacity, char* srcData, bool containNull):AbstractFastVector(sz,capacity,srcData,CHAR_MIN,containNull){
 		dataType_ = DT_CHAR;
 	}
-	virtual ~FastCharVector(){}
+	~FastCharVector() override = default;
 	DATA_TYPE getType() const override {return DT_CHAR;}
 	DATA_TYPE getRawType() const override { return DT_CHAR;}
 	DATA_CATEGORY getCategory() const override {return INTEGRAL;}
@@ -1199,7 +1169,7 @@ public:
 	FastShortVector(int sz, int capacity, short* srcData,bool containNull):AbstractFastVector(sz,capacity,srcData,SHRT_MIN,containNull){
 		dataType_ = DT_SHORT;
 	}
-	virtual ~FastShortVector(){}
+	~FastShortVector() override = default;
 	DATA_TYPE getType() const override {return DT_SHORT;}
 	DATA_TYPE getRawType() const override { return DT_SHORT;}
 	DATA_CATEGORY getCategory() const override {return INTEGRAL;}
@@ -1226,13 +1196,13 @@ public:
 	FastIntVector(int sz, int capacity, int* srcData, bool containNull):AbstractFastVector(sz,capacity,srcData,INT_MIN,containNull){
 		dataType_ = DT_INT;
 	}
-	virtual ~FastIntVector(){}
+	~FastIntVector() override = default;
 	DATA_TYPE getType() const override {return DT_INT;}
 	DATA_TYPE getRawType() const override { return DT_INT;}
 	DATA_CATEGORY getCategory() const override {return INTEGRAL;}
 #ifndef INDEX64
 	bool isIndexArray() const override { return true;}
-	virtual INDEX* getIndexArray() const override { return data_;}
+	INDEX* getIndexArray() const override { return data_;}
 #endif
 	std::string getString(INDEX index) const override { return Int::toString(data_[index]);}
 	bool set(INDEX index, const ConstantSP& value) override;
@@ -1257,7 +1227,7 @@ public:
 	FastLongVector(int sz, int capacity, long long* srcData, bool containNull):AbstractFastVector(sz,capacity,srcData,LLONG_MIN,containNull){
 		dataType_ = DT_LONG;
 	}
-	virtual ~FastLongVector(){}
+	~FastLongVector() override = default;
 	DATA_TYPE getType() const override {return DT_LONG;}
 	DATA_TYPE getRawType() const override { return DT_LONG;}
 	DATA_CATEGORY getCategory() const override {return INTEGRAL;}
@@ -1288,40 +1258,40 @@ public:
 	FastFloatVector(int sz, int capacity, float* srcData, bool containNull):AbstractFastVector(sz,capacity,srcData,FLT_NMIN,containNull){
 		dataType_ = DT_FLOAT;
 	}
-	virtual ~FastFloatVector(){}
+	~FastFloatVector() override = default;
 	DATA_TYPE getType() const override {return DT_FLOAT;}
 	DATA_TYPE getRawType() const override { return DT_FLOAT;}
 	DATA_CATEGORY getCategory() const override {return FLOATING;}
-	virtual char getChar(INDEX index) const override { return getData<char>(index, CHAR_MIN);}
-	virtual short getShort(INDEX index) const override { return getData<short>(index, SHRT_MIN);}
-	virtual int getInt(INDEX index) const override {return getData<int>(index, INT_MIN);}
-	virtual long long getLong(INDEX index) const override {return getData<long long>(index, LLONG_MIN);}
+	char getChar(INDEX index) const override { return getData<char>(index, CHAR_MIN);}
+	short getShort(INDEX index) const override { return getData<short>(index, SHRT_MIN);}
+	int getInt(INDEX index) const override {return getData<int>(index, INT_MIN);}
+	long long getLong(INDEX index) const override {return getData<long long>(index, LLONG_MIN);}
 
 	bool getChar(INDEX start, int len, char* buf) const override {
 		return copyData<char>(start, len, CHAR_MIN, buf);
 	}
-	virtual const char* getCharConst(INDEX start, int len, char* buf) const override {
+	const char* getCharConst(INDEX start, int len, char* buf) const override {
 		copyData<char>(start, len, CHAR_MIN, buf);
 		return buf;
 	}
 	bool getShort(INDEX start, int len, short* buf) const override {
 		return copyData<short>(start, len, SHRT_MIN, buf);
 	}
-	virtual const short* getShortConst(INDEX start, int len, short* buf) const override {
+	const short* getShortConst(INDEX start, int len, short* buf) const override {
 		copyData<short>(start, len, SHRT_MIN, buf);
 		return buf;
 	}
 	bool getInt(INDEX start, int len, int* buf) const override {
 		return copyData<int>(start, len, INT_MIN, buf);
 	}
-	virtual const int* getIntConst(INDEX start, int len, int* buf) const override {
+	const int* getIntConst(INDEX start, int len, int* buf) const override {
 		copyData<int>(start, len, INT_MIN, buf);
 		return buf;
 	}
 	bool getLong(INDEX start, int len, long long* buf) const override {
 		return copyData<long long>(start, len, LLONG_MIN, buf);
 	}
-	virtual const long long* getLongConst(INDEX start, int len, long long* buf) const override {
+	const long long* getLongConst(INDEX start, int len, long long* buf) const override {
 		copyData<long long>(start, len, LLONG_MIN, buf);
 		return buf;
 	}
@@ -1338,18 +1308,17 @@ public:
 
 private:
 	template<typename Y>
-	inline Y getData(INDEX index, Y targetNullVal) const {
+	Y getData(INDEX index, Y targetNullVal) const {
 		float x = data_[index];
 		return (x == nullVal_) ? targetNullVal : (x < 0 ? (Y)(x - 0.5) : (Y)(x + 0.5));
 	}
 	template<typename Y>
-	inline bool copyData(INDEX start, int len, Y targetNullVal, Y* buf) const {
+	bool copyData(INDEX start, int len, Y targetNullVal, Y* buf) const {
 		if(containNull_)
 			for(int i=0;i<len;++i){
 				float x=data_[start+i];
 				buf[i] = (x==nullVal_)? targetNullVal : (x<0?(Y)(x-0.5):(Y)(x+0.5));
-			}
-		else
+			} else
 			for(int i=0;i<len;++i){
 				float x=data_[start+i];
 				buf[i] = x<0? (Y)(x-0.5) : (Y)(x+0.5);
@@ -1363,40 +1332,40 @@ public:
 	FastDoubleVector(int sz, int capacity, double* srcData, bool containNull):AbstractFastVector(sz,capacity,srcData,DBL_NMIN,containNull){
 		dataType_ = DT_DOUBLE;
 	}
-	virtual ~FastDoubleVector(){}
+	~FastDoubleVector() override = default;
 	DATA_TYPE getType() const override {return DT_DOUBLE;}
 	DATA_TYPE getRawType() const override { return DT_DOUBLE;}
 	DATA_CATEGORY getCategory() const override {return FLOATING;}
-	virtual char getChar(INDEX index) const override { return getData<char>(index, CHAR_MIN);}
-	virtual short getShort(INDEX index) const override { return getData<short>(index, SHRT_MIN);}
-	virtual int getInt(INDEX index) const override {return getData<int>(index, INT_MIN);}
-	virtual long long getLong(INDEX index) const override {return getData<long long>(index, LLONG_MIN);}
+	char getChar(INDEX index) const override { return getData<char>(index, CHAR_MIN);}
+	short getShort(INDEX index) const override { return getData<short>(index, SHRT_MIN);}
+	int getInt(INDEX index) const override {return getData<int>(index, INT_MIN);}
+	long long getLong(INDEX index) const override {return getData<long long>(index, LLONG_MIN);}
 
 	bool getChar(INDEX start, int len, char* buf) const override {
 		return copyData<char>(start, len, CHAR_MIN, buf);
 	}
-	virtual const char* getCharConst(INDEX start, int len, char* buf) const override {
+	const char* getCharConst(INDEX start, int len, char* buf) const override {
 		copyData<char>(start, len, CHAR_MIN, buf);
 		return buf;
 	}
 	bool getShort(INDEX start, int len, short* buf) const override {
 		return copyData<short>(start, len, SHRT_MIN, buf);
 	}
-	virtual const short* getShortConst(INDEX start, int len, short* buf) const override {
+	const short* getShortConst(INDEX start, int len, short* buf) const override {
 		copyData<short>(start, len, SHRT_MIN, buf);
 		return buf;
 	}
 	bool getInt(INDEX start, int len, int* buf) const override {
 		return copyData<int>(start, len, INT_MIN, buf);
 	}
-	virtual const int* getIntConst(INDEX start, int len, int* buf) const override {
+	const int* getIntConst(INDEX start, int len, int* buf) const override {
 		copyData<int>(start, len, INT_MIN, buf);
 		return buf;
 	}
 	bool getLong(INDEX start, int len, long long* buf) const override {
 		return copyData<long long>(start, len, LLONG_MIN, buf);
 	}
-	virtual const long long* getLongConst(INDEX start, int len, long long* buf) const override {
+	const long long* getLongConst(INDEX start, int len, long long* buf) const override {
 		copyData<long long>(start, len, LLONG_MIN, buf);
 		return buf;
 	}
@@ -1407,23 +1376,22 @@ public:
 	ConstantSP get(const ConstantSP& index) const override;
 	void fill(INDEX start, INDEX length, const ConstantSP& value) override;
 	bool append(const ConstantSP& value, INDEX appendSize) override;
-	bool append(const ConstantSP& value, INDEX start, INDEX ) override;
+	bool append(const ConstantSP& value, INDEX start, INDEX  /*length*/) override;
 	int compare(INDEX index, const ConstantSP& target) const override;
 
 private:
 	template<typename Y>
-	inline Y getData(INDEX index, Y targetNullVal) const{
+	Y getData(INDEX index, Y targetNullVal) const{
 		double x = data_[index];
 		return (x == nullVal_) ? targetNullVal : (x < 0 ? (Y)(x - 0.5) : (Y)(x + 0.5));
 	}
 	template<typename Y>
-	inline bool copyData(INDEX start, int len, Y targetNullVal, Y* buf) const {
+	bool copyData(INDEX start, int len, Y targetNullVal, Y* buf) const {
 		if(containNull_)
 			for(int i=0;i<len;++i){
 				double x=data_[start+i];
 				buf[i] = (x==nullVal_)? targetNullVal : (x<0?(Y)(x-0.5):(Y)(x+0.5));
-			}
-		else
+			} else
 			for(int i=0;i<len;++i){
 				double x=data_[start+i];
 				buf[i] = x<0? (Y)(x-0.5) : (Y)(x+0.5);
@@ -1436,16 +1404,16 @@ private:
 class FastTemporalVector:public FastIntVector{
 public:
 	FastTemporalVector(int sz,int capacity,int* srcData,bool containNull):FastIntVector(sz,capacity,srcData,containNull){}
-	virtual ~FastTemporalVector(){}
+	~FastTemporalVector() override = default;
 	DATA_CATEGORY getCategory() const override {return TEMPORAL;}
 	bool isIndexArray() const override { return false;}
-	INDEX* getIndexArray() const override { return NULL;}
+	INDEX* getIndexArray() const override { return nullptr;}
 	ConstantSP castTemporal(DATA_TYPE expectType) override = 0;
 };
 
 class FastArrayVector: public Vector {
 public:
-	FastArrayVector(int sz, int capacity, char* srcData, bool containNull, DATA_TYPE dataType, INDEX *pindex=NULL, int extraParam = 0) {
+	FastArrayVector(int sz, int capacity, char* srcData, bool containNull, DATA_TYPE dataType, INDEX *pindex=nullptr, int extraParam = 0) {
 #if defined(DDB_VERSION) && DDB_VERSION < 200
 		throw RuntimeException("Array vector is not supported by the current version. Please upgrade to 2.00 or higher.");
 #endif
@@ -1454,24 +1422,23 @@ public:
 		rowCount_ = 0;
 		rowsRead_ = 1;
 
-		index_ 	     	= NULL;
+		index_ 	     	= nullptr;
 		dataType_ 		= dataType;	// e.g. DT_INT + ARRAY_TYPE_BASE
 		dataCategory 	= ARRAY;
 		baseType_ 	 	= DATA_TYPE(dataType_ - ARRAY_TYPE_BASE);	// e.g. DT_INT
 		index_ 			= Util::createVector(DT_INT, sz, capacity, true, 0, pindex);
 		valueSize_ = sz;
-		if(pindex == NULL){
+		if(pindex == nullptr){
 			for(int i = 0; i < sz; ++i){
 				index_->setInt(i, i + 1);
 			}
-		}
-		else {
+		} else {
 			if (sz > 0) {
 				valueSize_ = pindex[sz - 1];
 			}
 		}
 		value_          = Util::createVector(baseType_, valueSize_, valueSize_, true, extraParam, srcData);
-		if(srcData == NULL){
+		if(srcData == nullptr){
 			for(int i = 0; i < valueSize_; ++i){
 				value_->setNull(i);
 			}
@@ -1506,8 +1473,8 @@ public:
 		value_->setTemporary(false);
 	}
 
-	virtual ~FastArrayVector(){}
-	virtual DATA_TYPE 	  getType() const override {return dataType_;};
+	~FastArrayVector() override = default;
+	DATA_TYPE 	  getType() const override {return dataType_;};
 	DATA_TYPE 	  getRawType() const override { return baseType_;}
 	DATA_CATEGORY getCategory() const override {return ARRAY;}
 	VECTOR_TYPE   getVectorType() const override {return VECTOR_TYPE::ARRAYVECTOR;}
@@ -1527,26 +1494,26 @@ public:
 	// get a sub-array-vector, corresponding to `arrayVector[start, start + length]`
 	ConstantSP 	  getSubVector(INDEX start, INDEX length) const override { return getSubVector(start, length, length); }
 	ConstantSP    getSubVector(INDEX start, INDEX length, INDEX capacity) const override;
-	virtual	bool 		  isNull(INDEX index) const override;
+	bool 		  isNull(INDEX index) const override;
 	bool   		  isNull(INDEX start, int len, char* buf) const override;
 	bool 		  isValid(INDEX start, int len, char* buf) const override;
 	bool  		  remove(INDEX count) override;
 	bool 	      remove(const ConstantSP& index) override;
-	virtual ConstantSP    getValue() const override;
-	virtual ConstantSP    getValue(INDEX capacity) const override;
-	virtual INDEX 		  getCapacity() const override { return index_->getCapacity(); }
-	virtual size_t 		  getUnitLength() const override { return value_->getUnitLength(); }
-	virtual ConstantSP    getInstance(INDEX size) const override;
-	virtual INDEX 		  size() const override { return size_; }
+	ConstantSP    getValue() const override;
+	ConstantSP    getValue(INDEX capacity) const override;
+	INDEX 		  getCapacity() const override { return index_->getCapacity(); }
+	size_t 		  getUnitLength() const override { return value_->getUnitLength(); }
+	ConstantSP    getInstance(INDEX size) const override;
+	INDEX 		  size() const override { return size_; }
 	bool 		  sizeable() const override {return value_->sizeable();}
 	virtual long long     count() const { return count(0, size_);}
 	virtual long long 	  count(INDEX start, INDEX length) const;
-	ConstantSP			  getSourceValue() { return value_; }
-	ConstantSP			  getSourceIndex() { return index_; }
+	ConstantSP			  getSourceValue() { return (ConstantSP)value_; }
+	ConstantSP			  getSourceIndex() { return (ConstantSP)index_; }
 
 #ifndef INDEX64
 	bool isIndexArray() const override { return true;}
-	virtual INDEX* getIndexArray() const override { return index_->getIndexArray();}
+	INDEX* getIndexArray() const override { return index_->getIndexArray();}
 #endif
 
 	// get the `index`th element each row, corresponding to `arrayVector[index]`
@@ -1567,10 +1534,10 @@ public:
 	void   prev(INDEX steps) override {throw RuntimeException("Array Vector doesn't support method prev");}
 	void   next(INDEX steps) override {throw RuntimeException("Array Vector doesn't support method next");}
 	bool   getHash(INDEX start, int len, int buckets, int* buf) const override {throw RuntimeException("Array Vector doesn't support method getHash");}
-	virtual int    serialize(char* buf, int bufSize, INDEX indexStart, int offset, int& numElement, int& partial) const override;
+	int    serialize(char* buf, int bufSize, INDEX indexStart, int offset, int& numElement, int& partial) const override;
 	IO_ERR deserialize(DataInputStream* in, INDEX indexStart, INDEX targetNumElement, INDEX& numElement) override;
-	virtual INDEX rows() const override { return index_->rows(); }
-	virtual INDEX columns() const override { return value_->rows(); }
+	INDEX rows() const override { return index_->rows(); }
+	INDEX columns() const override { return value_->rows(); }
 	INDEX		  checkVectorSize();//<0: The vectors in the array vector are of different size. >=0: The vectors are of the same size {x}.
 	VectorSP	  getFlatValueArray(){ return value_; }
 	void reserveValue(INDEX capacity) { value_->reserve(capacity); }
@@ -1588,7 +1555,7 @@ private:
 	ConstantSP  sliceColumnRange(int colStart, int colEnd, INDEX rowStart, INDEX rowEnd) const;
 	ConstantSP  sliceOneColumn(int colIndex, INDEX rowStart, INDEX rowEnd) const;
 
-private:
+
 
 	bool 		   containNull_;
 	DATA_TYPE 	   baseType_;
@@ -1613,7 +1580,7 @@ public:
 	FastDateVector(int sz,int capacity,int* srcData,bool containNull):FastTemporalVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_DATE;
 	}
-	virtual ~FastDateVector(){}
+	~FastDateVector() override = default;
 	DATA_TYPE getType() const override {return DT_DATE;}
 	ConstantSP get(INDEX index) const override {return ConstantSP(new Date(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
@@ -1626,7 +1593,7 @@ public:
 	FastDateTimeVector(int sz,int capacity,int* srcData,bool containNull):FastTemporalVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_DATETIME;
 	}
-	virtual ~FastDateTimeVector(){}
+	~FastDateTimeVector() override = default;
 	DATA_TYPE getType() const override {return DT_DATETIME;}
 	ConstantSP get(INDEX index) const override {return ConstantSP(new DateTime(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
@@ -1639,9 +1606,9 @@ public:
     FastDateHourVector(int sz,int capacity,int* srcData,bool containNull):FastTemporalVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_DATEHOUR;
 	}
-    virtual ~FastDateHourVector(){}
+    ~FastDateHourVector() override = default;
     DATA_TYPE getType() const override {return DT_DATEHOUR;}
-    virtual ConstantSP get(INDEX index) const override {return ConstantSP(new DateHour(data_[index]));}
+    ConstantSP get(INDEX index) const override {return ConstantSP(new DateHour(data_[index]));}
     ConstantSP get(const ConstantSP& index) const override;
     std::string getString(INDEX index) const override { return DateHour::toString(data_[index]);}
     ConstantSP castTemporal(DATA_TYPE expectType) override;
@@ -1652,16 +1619,15 @@ public:
 	FastMonthVector(int sz,int capacity,int* srcData,bool containNull):FastTemporalVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_MONTH;
 	}
-	virtual ~FastMonthVector(){}
+	~FastMonthVector() override = default;
 	DATA_TYPE getType() const override {return DT_MONTH;}
-	virtual ConstantSP get(INDEX index) const override {return ConstantSP(new Month(data_[index]));}
+	ConstantSP get(INDEX index) const override {return ConstantSP(new Month(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
 	std::string getString(INDEX index) const override { return Month::toString(data_[index]);}
 	ConstantSP castTemporal(DATA_TYPE expectType) override {
 		if(expectType == DT_MONTH)
 			return getValue();
-		else
-			throw RuntimeException("castTemporal from MONTH to "+ Util::getDataTypeString(expectType)+" not supported ");
+		throw RuntimeException("castTemporal from MONTH to "+ Util::getDataTypeString(expectType)+" not supported ");
 	}
 };
 
@@ -1670,9 +1636,9 @@ public:
 	FastTimeVector(int sz,int capacity,int* srcData,bool containNull):FastTemporalVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_TIME;
 	}
-	virtual ~FastTimeVector(){}
+	~FastTimeVector() override = default;
 	DATA_TYPE getType() const override {return DT_TIME;}
-	virtual ConstantSP get(INDEX index) const override {return ConstantSP(new Time(data_[index]));}
+	ConstantSP get(INDEX index) const override {return ConstantSP(new Time(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
 	std::string getString(INDEX index) const override { return Time::toString(data_[index]);}
 	void validate() override;
@@ -1684,9 +1650,9 @@ public:
 	FastMinuteVector(int sz,int capacity,int* srcData,bool containNull):FastTemporalVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_MINUTE;
 	}
-	virtual ~FastMinuteVector(){}
+	~FastMinuteVector() override = default;
 	DATA_TYPE getType() const override {return DT_MINUTE;}
-	virtual ConstantSP get(INDEX index) const override {return ConstantSP(new Minute(data_[index]));}
+	ConstantSP get(INDEX index) const override {return ConstantSP(new Minute(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
 	std::string getString(INDEX index) const override { return Minute::toString(data_[index]);}
 	void validate() override;
@@ -1698,9 +1664,9 @@ public:
 	FastSecondVector(int sz,int capacity,int* srcData,bool containNull):FastTemporalVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_SECOND;
 	}
-	virtual ~FastSecondVector(){}
+	~FastSecondVector() override = default;
 	DATA_TYPE getType() const override {return DT_SECOND;}
-	virtual ConstantSP get(INDEX index) const override {return ConstantSP(new Second(data_[index]));}
+	ConstantSP get(INDEX index) const override {return ConstantSP(new Second(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
 	std::string getString(INDEX index) const override { return Second::toString(data_[index]);}
 	void validate() override;
@@ -1712,10 +1678,10 @@ public:
 	FastNanoTimeVector(int sz,int capacity,long long* srcData,bool containNull):FastLongVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_NANOTIME;
 	}
-	virtual ~FastNanoTimeVector(){}
+	~FastNanoTimeVector() override = default;
 	DATA_TYPE getType() const override {return DT_NANOTIME;}
 	DATA_CATEGORY getCategory() const override {return TEMPORAL;}
-	virtual ConstantSP get(INDEX index) const override {return ConstantSP(new NanoTime(data_[index]));}
+	ConstantSP get(INDEX index) const override {return ConstantSP(new NanoTime(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
 	std::string getString(INDEX index) const override { return NanoTime::toString(data_[index]);}
 	void validate() override;
@@ -1727,10 +1693,10 @@ public:
 	FastTimestampVector(int sz,int capacity,long long* srcData,bool containNull):FastLongVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_TIMESTAMP;
 	}
-	virtual ~FastTimestampVector(){}
+	~FastTimestampVector() override = default;
 	DATA_TYPE getType() const override {return DT_TIMESTAMP;}
 	DATA_CATEGORY getCategory() const override {return TEMPORAL;}
-	virtual ConstantSP get(INDEX index) const override {return ConstantSP(new Timestamp(data_[index]));}
+	ConstantSP get(INDEX index) const override {return ConstantSP(new Timestamp(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
 	std::string getString(INDEX index) const override { return Timestamp::toString(data_[index]);}
 	ConstantSP castTemporal(DATA_TYPE expectType) override;
@@ -1741,10 +1707,10 @@ public:
 	FastNanoTimestampVector(int sz,int capacity,long long* srcData,bool containNull):FastLongVector(sz,capacity,srcData,containNull){
 		dataType_ = DT_NANOTIMESTAMP;
 	}
-	virtual ~FastNanoTimestampVector(){}
+	~FastNanoTimestampVector() override = default;
 	DATA_TYPE getType() const override {return DT_NANOTIMESTAMP;}
 	DATA_CATEGORY getCategory() const override {return TEMPORAL;}
-	virtual ConstantSP get(INDEX index) const override {return ConstantSP(new NanoTimestamp(data_[index]));}
+	ConstantSP get(INDEX index) const override {return ConstantSP(new NanoTimestamp(data_[index]));}
 	ConstantSP get(const ConstantSP& index) const override;
 	std::string getString(INDEX index) const override { return NanoTimestamp::toString(data_[index]);}
 	ConstantSP castTemporal(DATA_TYPE expectType) override;
@@ -1753,30 +1719,30 @@ public:
 class FastBoolMatrix:public Matrix, public FastBoolVector{
 public:
 	FastBoolMatrix(int colNum, int rowNum, int colCapacity, char* data, bool containNull):Matrix(colNum,rowNum),FastBoolVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastBoolMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastBoolMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {return FastBoolVector::getString(column*rows_+row);}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString(int column, int row) const override {return FastBoolVector::getString((column*rows_)+row);}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastBoolVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastBoolVector::get((column*rows_)+row);}
 
 private:
 	using FastBoolVector::get;
@@ -1786,30 +1752,30 @@ private:
 class FastCharMatrix:public Matrix, public FastCharVector{
 public:
 	FastCharMatrix(int colNum, int rowNum, int colCapacity, char* data, bool containNull):Matrix(colNum,rowNum),FastCharVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastCharMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastCharMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {return FastCharVector::getString(column*rows_+row);}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString(int column, int row) const override {return FastCharVector::getString((column*rows_)+row);}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastCharVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastCharVector::get((column*rows_)+row);}
 
 private:
 	using FastCharVector::get;
@@ -1819,30 +1785,30 @@ private:
 class FastShortMatrix:public Matrix, public FastShortVector{
 public:
 	FastShortMatrix(int colNum, int rowNum, int colCapacity, short* data, bool containNull):Matrix(colNum,rowNum),FastShortVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastShortMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastShortMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {return FastShortVector::getString(column*rows_+row);}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString(int column, int row) const override {return FastShortVector::getString((column*rows_)+row);}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastShortVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastShortVector::get((column*rows_)+row);}
 
 private:
 	using FastShortVector::get;
@@ -1852,30 +1818,30 @@ private:
 class FastIntMatrix:public Matrix, public FastIntVector{
 public:
 	FastIntMatrix(int colNum, int rowNum, int colCapacity, int* data, bool containNull):Matrix(colNum,rowNum),FastIntVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastIntMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastIntMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {return FastIntVector::getString(column*rows_+row);}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString(int column, int row) const override {return FastIntVector::getString((column*rows_)+row);}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastIntVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastIntVector::get((column*rows_)+row);}
 
 private:
 	using FastIntVector::get;
@@ -1885,30 +1851,30 @@ private:
 class FastLongMatrix:public Matrix, public FastLongVector{
 public:
 	FastLongMatrix(int colNum, int rowNum, int colCapacity, long long* data, bool containNull):Matrix(colNum,rowNum),FastLongVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastLongMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastLongMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {return FastLongVector::getString(column*rows_+row);}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString(int column, int row) const override {return FastLongVector::getString((column*rows_)+row);}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastLongVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastLongVector::get((column*rows_)+row);}
 
 private:
 	using FastLongVector::get;
@@ -1918,30 +1884,30 @@ private:
 class FastFloatMatrix:public Matrix, public FastFloatVector{
 public:
 	FastFloatMatrix(int colNum, int rowNum, int colCapacity, float* data, bool containNull):Matrix(colNum,rowNum),FastFloatVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastFloatMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastFloatMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {return FastFloatVector::getString(column*rows_+row);}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString(int column, int row) const override {return FastFloatVector::getString((column*rows_)+row);}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastFloatVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastFloatVector::get((column*rows_)+row);}
 
 private:
 	using FastFloatVector::get;
@@ -1951,30 +1917,30 @@ private:
 class FastDoubleMatrix:public Matrix, public FastDoubleVector{
 public:
 	FastDoubleMatrix(int colNum, int rowNum, int colCapacity, double* data, bool containNull):Matrix(colNum,rowNum),FastDoubleVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastDoubleMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastDoubleMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {return FastDoubleVector::getString(column*rows_+row);}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString(int column, int row) const override {return FastDoubleVector::getString((column*rows_)+row);}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastDoubleVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastDoubleVector::get((column*rows_)+row);}
 
 private:
 	using FastDoubleVector::get;
@@ -1984,32 +1950,32 @@ private:
 class FastDateMatrix:public Matrix, public FastDateVector{
 public:
 	FastDateMatrix(int colNum, int rowNum, int colCapacity, int* data, bool containNull):Matrix(colNum,rowNum),FastDateVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastDateMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastDateMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastDateVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastDateVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastDateVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastDateVector::get((column*rows_)+row);}
 
 private:
 	using FastDateVector::get;
@@ -2019,32 +1985,32 @@ private:
 class FastDateTimeMatrix:public Matrix, public FastDateTimeVector{
 public:
 	FastDateTimeMatrix(int colNum, int rowNum, int colCapacity, int* data, bool containNull):Matrix(colNum,rowNum),FastDateTimeVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastDateTimeMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastDateTimeMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastDateTimeVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastDateTimeVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastDateTimeVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastDateTimeVector::get((column*rows_)+row);}
 
 private:
 	using FastDateTimeVector::get;
@@ -2054,32 +2020,32 @@ private:
 class FastDateHourMatrix:public Matrix, public FastDateHourVector{
 public:
     FastDateHourMatrix(int colNum, int rowNum, int colCapacity, int* data, bool containNull):Matrix(colNum,rowNum),FastDateHourVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-    virtual ~FastDateHourMatrix(){}
-    virtual ConstantSP getValue() const override;
-    virtual INDEX columns() const override {return cols_;}
-    virtual INDEX rows() const override {return rows_;}
+    ~FastDateHourMatrix() override = default;
+    ConstantSP getValue() const override;
+    INDEX columns() const override {return cols_;}
+    INDEX rows() const override {return rows_;}
     bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
     ConstantSP getRowLabel() const override {return rowLabel_;}
     void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
     ConstantSP getColumnLabel() const override {return colLabel_;}
     void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-    virtual std::string getString(int column, int row) const override {
-        return FastDateHourVector::getString(column*rows_+row);
+    std::string getString(int column, int row) const override {
+        return FastDateHourVector::getString((column*rows_)+row);
     }
-    virtual std::string getString() const override { return Matrix::getString();}
+    std::string getString() const override { return Matrix::getString();}
     std::string getString(INDEX index) const override {return Matrix::getString(index);}
     bool set(INDEX column, INDEX row, const ConstantSP& value) override;
     bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-    virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-    virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+    ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+    ConstantSP getItem(INDEX index) const override {return getColumn(index);}
     bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-    virtual ConstantSP getRow(INDEX index) const override;
-    virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-    virtual ConstantSP  getColumn(INDEX index) const override;
+    ConstantSP getRow(INDEX index) const override;
+    ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+    ConstantSP  getColumn(INDEX index) const override;
     bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-    virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-    virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-    virtual ConstantSP get(INDEX column, INDEX row) const override {return FastDateHourVector::get(column*rows_+row);}
+    ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+    ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+    ConstantSP get(INDEX column, INDEX row) const override {return FastDateHourVector::get((column*rows_)+row);}
 
 private:
 	using FastDateHourVector::get;
@@ -2089,32 +2055,32 @@ private:
 class FastMonthMatrix:public Matrix, public FastMonthVector{
 public:
 	FastMonthMatrix(int colNum, int rowNum, int colCapacity, int* data, bool containNull):Matrix(colNum,rowNum),FastMonthVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastMonthMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastMonthMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastMonthVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastMonthVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastMonthVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastMonthVector::get((column*rows_)+row);}
 
 private:
 	using FastMonthVector::get;
@@ -2124,32 +2090,32 @@ private:
 class FastTimeMatrix:public Matrix, public FastTimeVector{
 public:
 	FastTimeMatrix(int colNum, int rowNum, int colCapacity, int* data, bool containNull):Matrix(colNum,rowNum),FastTimeVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastTimeMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastTimeMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastTimeVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastTimeVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastTimeVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastTimeVector::get((column*rows_)+row);}
 
 private:
 	using FastTimeVector::get;
@@ -2159,32 +2125,32 @@ private:
 class FastSecondMatrix:public Matrix, public FastSecondVector{
 public:
 	FastSecondMatrix(int colNum, int rowNum, int colCapacity, int* data, bool containNull):Matrix(colNum,rowNum),FastSecondVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastSecondMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastSecondMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastSecondVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastSecondVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastSecondVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastSecondVector::get((column*rows_)+row);}
 
 private:
 	using FastSecondVector::get;
@@ -2194,32 +2160,32 @@ private:
 class FastMinuteMatrix:public Matrix, public FastMinuteVector{
 public:
 	FastMinuteMatrix(int colNum, int rowNum, int colCapacity, int* data, bool containNull):Matrix(colNum,rowNum),FastMinuteVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastMinuteMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastMinuteMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastMinuteVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastMinuteVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastMinuteVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastMinuteVector::get((column*rows_)+row);}
 
 private:
 	using FastMinuteVector::get;
@@ -2229,32 +2195,32 @@ private:
 class FastNanoTimeMatrix:public Matrix, public FastNanoTimeVector{
 public:
 	FastNanoTimeMatrix(int colNum, int rowNum, int colCapacity, long long* data, bool containNull):Matrix(colNum,rowNum),FastNanoTimeVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastNanoTimeMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastNanoTimeMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastNanoTimeVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastNanoTimeVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastNanoTimeVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastNanoTimeVector::get((column*rows_)+row);}
 
 private:
 	using FastNanoTimeVector::get;
@@ -2264,32 +2230,32 @@ private:
 class FastTimestampMatrix:public Matrix, public FastTimestampVector{
 public:
 	FastTimestampMatrix(int colNum, int rowNum, int colCapacity, long long* data, bool containNull):Matrix(colNum,rowNum),FastTimestampVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastTimestampMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastTimestampMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastTimestampVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastTimestampVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastTimestampVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastTimestampVector::get((column*rows_)+row);}
 
 private:
 	using FastTimestampVector::get;
@@ -2299,32 +2265,32 @@ private:
 class FastNanoTimestampMatrix:public Matrix, public FastNanoTimestampVector{
 public:
 	FastNanoTimestampMatrix(int colNum, int rowNum, int colCapacity, long long* data, bool containNull):Matrix(colNum,rowNum),FastNanoTimestampVector(colNum*rowNum,colCapacity*rowNum,data,containNull){setForm(DF_MATRIX);}
-	virtual ~FastNanoTimestampMatrix(){}
-	virtual ConstantSP getValue() const override;
-	virtual INDEX columns() const override {return cols_;}
-	virtual INDEX rows() const override {return rows_;}
+	~FastNanoTimestampMatrix() override = default;
+	ConstantSP getValue() const override;
+	INDEX columns() const override {return cols_;}
+	INDEX rows() const override {return rows_;}
 	bool reshape(INDEX colNum, INDEX rowNum) override {return Matrix::reshape(colNum, rowNum);}
 	ConstantSP getRowLabel() const override {return rowLabel_;}
 	void setRowLabel(const ConstantSP& label) override {Matrix::setRowLabel(label);}
 	ConstantSP getColumnLabel() const override {return colLabel_;}
 	void setColumnLabel(const ConstantSP& label) override {Matrix::setColumnLabel(label);}
-	virtual std::string getString(int column, int row) const override {
-		return FastNanoTimestampVector::getString(column*rows_+row);
+	std::string getString(int column, int row) const override {
+		return FastNanoTimestampVector::getString((column*rows_)+row);
 	}
-	virtual std::string getString() const override { return Matrix::getString();}
+	std::string getString() const override { return Matrix::getString();}
 	std::string getString(INDEX index) const override {return Matrix::getString(index);}
 	bool set(INDEX column, INDEX row, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override {return Matrix::set(index,value);}
-	virtual ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
-	virtual ConstantSP getItem(INDEX index) const override {return getColumn(index);}
+	ConstantSP get(const ConstantSP& index) const override {return Matrix::get(index);}
+	ConstantSP getItem(INDEX index) const override {return getColumn(index);}
 	bool setItem(INDEX index, const ConstantSP& value) override {return setColumn(index,value);}
-	virtual ConstantSP getRow(INDEX index) const override;
-	virtual ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
-	virtual ConstantSP  getColumn(INDEX index) const override;
+	ConstantSP getRow(INDEX index) const override;
+	ConstantSP getWindow(INDEX colStart, int colLength,INDEX rowStart, int rowLength) const override;
+	ConstantSP  getColumn(INDEX index) const override;
 	bool setColumn(INDEX index, const ConstantSP& value) override {fill(index*rows_,rows_,value);return true;}
-	virtual ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
-	virtual ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
-	virtual ConstantSP get(INDEX column, INDEX row) const override {return FastNanoTimestampVector::get(column*rows_+row);}
+	ConstantSP getInstance(INDEX sz) const override { return Util::createMatrix(getType(),sz,rows_,sz,getExtraParamForType());}
+	ConstantSP getInstance() const override { return Util::createMatrix(getType(),cols_,rows_,cols_,getExtraParamForType());}
+	ConstantSP get(INDEX column, INDEX row) const override {return FastNanoTimestampVector::get((column*rows_)+row);}
 
 private:
 	using FastNanoTimestampVector::get;
@@ -2335,14 +2301,14 @@ class AbstractStringVector : public Vector{
 public:
 	bool getNullFlag() const override {return containNull_;}
 	void setNullFlag(bool containNull) override {containNull_=containNull;}
-	virtual char getBool() const override {throw IncompatibleTypeException(DT_BOOL,DT_STRING);}
-	virtual char getChar() const override {throw IncompatibleTypeException(DT_CHAR,DT_STRING);}
-	virtual short getShort() const override {throw IncompatibleTypeException(DT_SHORT,DT_STRING);}
-	virtual int getInt() const override {throw IncompatibleTypeException(DT_INT,DT_STRING);}
-	virtual long long getLong() const override {throw IncompatibleTypeException(DT_LONG,DT_STRING);}
-	virtual INDEX getIndex() const override {throw IncompatibleTypeException(DT_INDEX,DT_STRING);}
-	virtual float getFloat() const override {throw IncompatibleTypeException(DT_FLOAT,DT_STRING);}
-	virtual double getDouble() const override {throw IncompatibleTypeException(DT_DOUBLE,DT_STRING);}
+	char getBool() const override {throw IncompatibleTypeException(DT_BOOL,DT_STRING);}
+	char getChar() const override {throw IncompatibleTypeException(DT_CHAR,DT_STRING);}
+	short getShort() const override {throw IncompatibleTypeException(DT_SHORT,DT_STRING);}
+	int getInt() const override {throw IncompatibleTypeException(DT_INT,DT_STRING);}
+	long long getLong() const override {throw IncompatibleTypeException(DT_LONG,DT_STRING);}
+	INDEX getIndex() const override {throw IncompatibleTypeException(DT_INDEX,DT_STRING);}
+	float getFloat() const override {throw IncompatibleTypeException(DT_FLOAT,DT_STRING);}
+	double getDouble() const override {throw IncompatibleTypeException(DT_DOUBLE,DT_STRING);}
 	void neg() override {throw IncompatibleTypeException(DT_DOUBLE,DT_STRING);}
 
 protected:
@@ -2357,21 +2323,21 @@ public:
     DATA_TYPE getRawType() const override { return blob_ ? DT_BLOB: DT_STRING;}
     DATA_CATEGORY getCategory() const override {return blob_ ? BINARY : LITERAL;}
 
-	virtual ~StringVector(){}
+	~StringVector() override = default;
 	IO_ERR deserialize(DataInputStream* in, INDEX indexStart, INDEX targetNumElement, INDEX& numElement) override;
-	virtual INDEX getCapacity() const override {return static_cast<INDEX>(data_.capacity());}
+	INDEX getCapacity() const override {return static_cast<INDEX>(data_.capacity());}
 	INDEX reserve(INDEX capacity) override;
 	bool isFastMode() const override {return false;}
-	virtual size_t getUnitLength() const override {return 0;}
+	size_t getUnitLength() const override {return 0;}
 	void clear() override {
 		data_.clear();
 		containNull_ = false;
 	}
 	bool sizeable() const override {return true;}
-	virtual int compare(INDEX index, const ConstantSP& target) const override {return data_[index].compare(target->getString());}
+	int compare(INDEX index, const ConstantSP& target) const override {return data_[index].compare(target->getString());}
 	std::string getString(INDEX index) const override {return data_[index];}
-	virtual const std::string& getStringRef() const override {return data_[0];}
-	virtual const std::string& getStringRef(INDEX index) const override { return data_[index];}
+	const std::string& getStringRef() const override {return data_[0];}
+	const std::string& getStringRef(INDEX index) const override { return data_[index];}
 	bool set(INDEX index, const ConstantSP& value) override {
 		data_[index]=value->getString();
 		if(data_[index].empty())
@@ -2380,10 +2346,10 @@ public:
 	}
 	bool set(const ConstantSP& index, const ConstantSP& value) override;
 	bool assign(const ConstantSP& value) override;
-	virtual ConstantSP get(INDEX index) const override {return ConstantSP(new String(data_[index], blob_));}
+	ConstantSP get(INDEX index) const override {return ConstantSP(new String(data_[index], blob_));}
 	using AbstractStringVector::get;
 	ConstantSP get(const ConstantSP& index) const override;
-	bool isNull(INDEX index) const override {return data_[index].size()==0;}
+	bool isNull(INDEX index) const override {return data_[index].empty();}
 	bool isNull() const override {return false;}
 	void setNull(INDEX index) override {data_[index]="";}
 	void setNull() override {}
@@ -2393,11 +2359,11 @@ public:
 	void fill(INDEX start, INDEX length, const ConstantSP& value) override;
 	void nullFill(const ConstantSP& val) override;
 	bool isNull(INDEX start, int len, char* buf) const override;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const override { return getSubVector(start, length, std::abs(length));}
-	virtual ConstantSP getSubVector(INDEX start, INDEX length, INDEX capacity) const override;
-	virtual ConstantSP getInstance(INDEX sz) const override {return ConstantSP(new StringVector(sz, sz, blob_));}
-	virtual ConstantSP getValue() const override;
-	virtual ConstantSP getValue(INDEX capacity) const override {return ConstantSP(new StringVector(data_, capacity, containNull_, blob_));}
+	ConstantSP getSubVector(INDEX start, INDEX length) const override { return getSubVector(start, length, std::abs(length));}
+	ConstantSP getSubVector(INDEX start, INDEX length, INDEX capacity) const override;
+	ConstantSP getInstance(INDEX sz) const override {return ConstantSP(new StringVector(sz, sz, blob_));}
+	ConstantSP getValue() const override;
+	ConstantSP getValue(INDEX capacity) const override {return ConstantSP(new StringVector(data_, capacity, containNull_, blob_));}
 	bool append(const ConstantSP& value, INDEX appendSize) override;
 	bool appendString(std::string* buf, int len) override;
 	bool appendString(char** buf, int len) override;
@@ -2405,12 +2371,12 @@ public:
 	bool remove(const ConstantSP& index) override;
 	void prev(INDEX steps) override;
 	void next(INDEX steps) override;
-	virtual int serialize(char* buf, int bufSize, INDEX indexStart, int offset, int& numElement, int& partial) const override;
+	int serialize(char* buf, int bufSize, INDEX indexStart, int offset, int& numElement, int& partial) const override;
 	using AbstractStringVector::getString;
 	bool getString(INDEX start, int len, std::string** buf) const override;
 	bool getString(INDEX start, int len, char** buf) const override;
-	virtual std::string** getStringConst(INDEX start, int len, std::string** buf) const override;
-	virtual char** getStringConst(INDEX start, int len, char** buf) const override;
+	std::string** getStringConst(INDEX start, int len, std::string** buf) const override;
+	char** getStringConst(INDEX start, int len, char** buf) const override;
 	void setString(const std::string& val) override {
 		checkString(val);
 		data_[0]=val;
@@ -2432,27 +2398,27 @@ public:
 	}
 	bool has(const std::string& val) const {	return std::find(data_.begin(),data_.end(),val)!=data_.end();}
 	INDEX search(const std::string& val);
-	virtual INDEX size() const override {return static_cast<INDEX>(data_.size());}
+	INDEX size() const override {return static_cast<INDEX>(data_.size());}
 	using AbstractStringVector::getMember;
 	std::string getMember(const int& index) const { return data_[index];}
 	void setMember(const int& index, const std::string& val){data_[index]=val;}
 	void upper() override;
 	void lower() override;
-	virtual void trim() override;
-	virtual void strip() override;
+	void trim() override;
+	void strip() override;
 	void reverse() override {std::reverse(data_.begin(),data_.end());}
 	void reverse(INDEX start, INDEX end) override {std::reverse(data_.begin()+start,data_.begin()+end+1);}
 	void replace(const ConstantSP& oldVal, const ConstantSP& newVal) override;
-	virtual long long getAllocatedMemory() const override;
-	virtual long long getAllocatedMemory(INDEX size) const override;
+	long long getAllocatedMemory() const override;
+	long long getAllocatedMemory(INDEX size) const override;
 	bool getHash(INDEX start, int len, int buckets, int* buf) const override {
 		for(int i=0; i<len; ++i)
 			buf[i] = murmur32(data_[start + i].data(), data_[start + i].size()) % buckets;
 		return true;
 	}
-	virtual void* getDataArray() const override {return (void*)&data_[0];}
+	void* getDataArray() const override {return (void*)&data_[0];}
 
-	virtual int asof(const ConstantSP& value) const override {
+	int asof(const ConstantSP& value) const override {
 		const std::string& target = value->getStringRef();
 		int start = 0;
 		int end = size() - 1;
@@ -2472,7 +2438,7 @@ public:
 private:
 	void checkString(const std::string& val);
 
-private:
+
 	mutable std::vector<std::string> data_;
     bool blob_;
 };
@@ -2480,12 +2446,12 @@ private:
 class FastFixedLengthVector : public Vector {
 public:
 	FastFixedLengthVector(DATA_TYPE type, int fixedLength, int size, int capacity, unsigned char* srcData, bool containNull);
-	virtual ~FastFixedLengthVector();
+	~FastFixedLengthVector() override;
 	DATA_CATEGORY getCategory() const override { return BINARY;}
-	virtual int getExtraParamForType() const override {return fixedLength_;}
+	int getExtraParamForType() const override {return fixedLength_;}
 	DATA_TYPE getType() const override { return type_;}
-	virtual INDEX getCapacity() const override {return capacity_;}
-	virtual INDEX size() const override {return size_;}
+	INDEX getCapacity() const override {return capacity_;}
+	INDEX size() const override {return size_;}
 	INDEX reserve(INDEX capacity) override;
 	void resize(INDEX size) override;
 	bool isFastMode() const override {return true;}
@@ -2522,17 +2488,17 @@ public:
 	void reverse(INDEX start, INDEX length) override;
 	bool getNullFlag() const override {return containNull_;}
 	void setNullFlag(bool containNull) override {containNull_=containNull;}
-	virtual char getBool() const override {throw IncompatibleTypeException(DT_BOOL,type_);}
-	virtual char getChar() const override {throw IncompatibleTypeException(DT_CHAR,type_);}
-	virtual short getShort() const override {throw IncompatibleTypeException(DT_SHORT,type_);}
-	virtual int getInt() const override {throw IncompatibleTypeException(DT_INT,type_);}
-	virtual long long getLong() const override {throw IncompatibleTypeException(DT_LONG,type_);}
-	virtual INDEX getIndex() const override {throw IncompatibleTypeException(DT_INDEX,type_);}
-	virtual float getFloat() const override {throw IncompatibleTypeException(DT_FLOAT,type_);}
-	virtual double getDouble() const override {throw IncompatibleTypeException(DT_DOUBLE,type_);}
+	char getBool() const override {throw IncompatibleTypeException(DT_BOOL,type_);}
+	char getChar() const override {throw IncompatibleTypeException(DT_CHAR,type_);}
+	short getShort() const override {throw IncompatibleTypeException(DT_SHORT,type_);}
+	int getInt() const override {throw IncompatibleTypeException(DT_INT,type_);}
+	long long getLong() const override {throw IncompatibleTypeException(DT_LONG,type_);}
+	INDEX getIndex() const override {throw IncompatibleTypeException(DT_INDEX,type_);}
+	float getFloat() const override {throw IncompatibleTypeException(DT_FLOAT,type_);}
+	double getDouble() const override {throw IncompatibleTypeException(DT_DOUBLE,type_);}
 	bool getBinary(INDEX start, int len, int unitLenght, unsigned char* buf) const override;
-	virtual const unsigned char* getBinaryConst(INDEX start, int len, int unitLength, unsigned char* buf) const override;
-	virtual unsigned char* getBinaryBuffer(INDEX start, int len, int unitLength, unsigned char* buf) const override;
+	const unsigned char* getBinaryConst(INDEX start, int len, int unitLength, unsigned char* buf) const override;
+	unsigned char* getBinaryBuffer(INDEX start, int len, int unitLength, unsigned char* buf) const override;
 	void* getDataBuffer(INDEX start, int len, void* buf) const override;
 	void setBinary(INDEX index, int unitLength, const unsigned char* val) override;
 	bool setBinary(INDEX start, int len, int unitLength, const unsigned char* buf) override;
@@ -2549,12 +2515,11 @@ protected:
 	unsigned char** getSegmentDataArray(INDEX start, INDEX length) const;
 	unsigned char** getSegmentDataArray(INDEX start, INDEX length, INDEX capacity) const;
 	void getDataArray(INDEX start, INDEX length, unsigned char* buf) const;
-	int getSegmentCount(INDEX size, int segmentSizeInBit) const;
 	//start is inclusive, but end is exclusive
 	virtual bool hasNullInRange(const unsigned char* buf, INDEX start, INDEX end) const { return true;}
 	void* getDataArray() const override {return (void*)data_;}
 
-protected:
+
 	int fixedLength_;
 	INDEX size_;
 	INDEX capacity_;
@@ -2568,30 +2533,26 @@ class FastRecordVector : public FastFixedLengthVector {
 public:
 	FastRecordVector(DATA_TYPE type, int sz, int capacity, unsigned char* srcData, bool containNull): FastFixedLengthVector(type, sizeof(T), sz, capacity, srcData, containNull){}
 	using FastFixedLengthVector::get;
-	virtual ConstantSP get(const ConstantSP& index) const override {
+	ConstantSP get(const ConstantSP& index) const override {
 		if(index->isVector()){
 			return retrieve((Vector*)index.get());
 		}
-		else{
-			UINDEX idx=(UINDEX)index->getIndex();
-			if(idx<(UINDEX)size_){
-				return createScalar(data_ + idx*fixedLength_);
-			}
-			else
-				return Util::createNullConstant(type_);
+		auto idx = (UINDEX)index->getIndex();
+		if (idx < (UINDEX)size_) {
+			return createScalar(data_ + (idx * fixedLength_));
 		}
+		return Util::createNullConstant(type_);
 	}
-	virtual ConstantSP get(int index) const override { return createScalar(data_ + index * fixedLength_);}
-	virtual int compare(INDEX index, const ConstantSP& target) const override {
-		T* cur = (T*)(data_ + index*fixedLength_);
+	ConstantSP get(int index) const override { return createScalar(data_ + (index * fixedLength_));}
+	int compare(INDEX index, const ConstantSP& target) const override {
+		T* cur = (T*)(data_ + (index*fixedLength_));
 		return cur->compare(*(T*)target->getBinary());
 	}
 	using FastFixedLengthVector::getBinary;
 	const unsigned char* getBinary() const override {
 		if(size_ == 1)
 			return data_;
-		else
-			throw RuntimeException("A scalar object is expected. But the actual object is a vector.");
+		throw RuntimeException("A scalar object is expected. But the actual object is a vector.");
 	}
 	void replace(const ConstantSP& oldVal, const ConstantSP& newVal) override {
 		const T oldV = *(T*)oldVal->getBinary();
@@ -2603,7 +2564,7 @@ public:
 		}
 	}
 	bool isNull(INDEX index) const override {
-		return ((T*)(data_ + index*fixedLength_))->isNull();
+		return ((T*)(data_ + (index*fixedLength_)))->isNull();
 	}
 	void nullFill(const ConstantSP& val) override {
 		if(val->getType() != type_)
@@ -2612,7 +2573,7 @@ public:
 		const T* data = (const T*)data_;
 		for(INDEX i=0; i<size_; ++i){
 			if(data[i].isNull())
-				memcpy(data_ + i* fixedLength_, buf, fixedLength_);
+				memcpy(data_ + (i* fixedLength_), buf, fixedLength_);
 		}
 	}
 	bool isNull(INDEX start, int len, char* buf) const override {
@@ -2652,10 +2613,10 @@ private:
 class FastInt128Vector : public FastRecordVector<Guid, GuidHash> {
 public:
 	FastInt128Vector(DATA_TYPE type, int size, int capacity, unsigned char* srcData, bool containNull);
-	virtual ~FastInt128Vector(){}
+	~FastInt128Vector() override = default;
 	DATA_TYPE getRawType() const override { return DT_INT128;}
-	virtual const Guid getInt128() const override;
-	std::string getString(INDEX index) const override { return Int128::toString(data_ + index*fixedLength_);}
+	Guid getInt128() const override;
+	std::string getString(INDEX index) const override { return Int128::toString(data_ + (index*fixedLength_));}
 	void setString(INDEX index, const std::string& val) override {
 		unsigned char buf[16];
 		if(Int128::parseInt128(val.data(), val.length(),buf)==false){
@@ -2666,9 +2627,9 @@ public:
 	bool appendString(std::string* strarray, int len) override {
 		checkCapacity(len);
 		bool haveNull = false;
-		unsigned char *pdata = data_ + size_ * fixedLength_;
+		unsigned char *pdata = data_ + (size_ * fixedLength_);
 		for (int i = 0; i < len; i++, strarray++, pdata += fixedLength_) {
-			if (strarray->length() == 0) {
+			if (strarray->empty()) {
 				haveNull = true;
 				memset(pdata, 0, fixedLength_);
 			}
@@ -2685,7 +2646,7 @@ public:
 	bool appendString(char** buf, int len) override {
 		checkCapacity(len);
 		bool haveNull = false;
-		unsigned char *pdata = data_ + size_ * fixedLength_;
+		unsigned char *pdata = data_ + (size_ * fixedLength_);
 		for (int i = 0; i < len; i++, pdata += fixedLength_) {
 			std::size_t buflen = strlen(buf[i]);
 			if (buflen == 0) {
@@ -2704,7 +2665,7 @@ public:
 	}
 	bool getHash(INDEX start, int len, int buckets, int* buf) const override {
 		for(int i=0; i<len; ++i)
-			buf[i] = murmur32_16b(data_ + (start + i)*16) % buckets;
+			buf[i] = murmur32_16b(data_ + ((start + i)*16)) % buckets;
 		return true;
 	}
 
@@ -2713,8 +2674,8 @@ public:
 class FastUuidVector : public FastInt128Vector {
 public:
 	FastUuidVector(int size, int capacity, unsigned char* srcData, bool containNull);
-	virtual ~FastUuidVector(){}
-	std::string getString(INDEX index) const override { return Guid::getString(data_ + index * fixedLength_);}
+	~FastUuidVector() override = default;
+	std::string getString(INDEX index) const override { return Guid::getString(data_ + (index * fixedLength_));}
 	void setString(INDEX index, const std::string& val) override {
 		unsigned char buf[16];
 		if (Util::fromGuid(val.data(), buf) == false) {
@@ -2725,9 +2686,9 @@ public:
 	bool appendString(std::string* strarray, int len) override {
 		checkCapacity(len);
 		bool haveNull = false;
-		unsigned char *pdata = data_ + size_ * fixedLength_;
+		unsigned char *pdata = data_ + (size_ * fixedLength_);
 		for (int i = 0; i < len; i++, strarray++, pdata += fixedLength_) {
-			if (strarray->length() == 0) {
+			if (strarray->empty()) {
 				haveNull = true;
 				memset(pdata, 0, fixedLength_);
 			}
@@ -2744,7 +2705,7 @@ public:
 	bool appendString(char** buf, int len) override {
 		checkCapacity(len);
 		bool haveNull = false;
-		unsigned char *pdata = data_ + size_ * fixedLength_;
+		unsigned char *pdata = data_ + (size_ * fixedLength_);
 		for (int i = 0; i < len; i++, pdata += fixedLength_) {
 			std::size_t buflen = strlen(buf[i]);
 			if (buflen == 0) {
@@ -2766,8 +2727,8 @@ public:
 class FastIPAddrVector : public FastInt128Vector {
 public:
 	FastIPAddrVector(int size, int capacity, unsigned char* srcData, bool containNull);
-	virtual ~FastIPAddrVector(){}
-	std::string getString(INDEX index) const override { return IPAddr::toString(data_ + index * fixedLength_);}
+	~FastIPAddrVector() override = default;
+	std::string getString(INDEX index) const override { return IPAddr::toString(data_ + (index * fixedLength_));}
 	void setString(INDEX index, const std::string& val) override {
 		unsigned char buf[16];
 		if (IPAddr::parseIPAddr(val.data(), val.length(), buf) == false) {
@@ -2778,9 +2739,9 @@ public:
 	bool appendString(std::string* strarray, int len) override {
 		checkCapacity(len);
 		bool haveNull = false;
-		unsigned char *pdata = data_ + size_ * fixedLength_;
+		unsigned char *pdata = data_ + (size_ * fixedLength_);
 		for (int i = 0; i < len; i++, strarray++, pdata += fixedLength_) {
-			if (strarray->length() == 0) {
+			if (strarray->empty()) {
 				haveNull = true;
 				memset(pdata, 0, fixedLength_);
 			}
@@ -2797,7 +2758,7 @@ public:
 	bool appendString(char** buf, int len) override {
 		checkCapacity(len);
 		bool haveNull = false;
-		unsigned char *pdata = data_ + size_ * fixedLength_;
+		unsigned char *pdata = data_ + (size_ * fixedLength_);
 		for (int i = 0; i < len; i++, pdata += fixedLength_) {
 			std::size_t buflen = strlen(buf[i]);
 			if (buflen == 0) {
@@ -2818,19 +2779,19 @@ public:
 
 class FastSymbolVector : public AbstractFastVector<int> {
 public:
-	FastSymbolVector(SymbolBaseSP base, int sz, int capacity, int* srcData, bool containNull) :AbstractFastVector(sz, capacity, srcData, 0, containNull),  base_(base){
+	FastSymbolVector(const SymbolBaseSP &base, int sz, int capacity, int* srcData, bool containNull) :AbstractFastVector(sz, capacity, srcData, 0, containNull),  base_(base){
 		if(sz > 0){
 			base_->find("");
 		}
 	}
-	virtual ~FastSymbolVector(){}
+	~FastSymbolVector() override = default;
 	DATA_TYPE getType() const override {return DT_SYMBOL;}
 	DATA_CATEGORY getCategory() const override {return LITERAL;}
 	DATA_TYPE getRawType() const override {return DT_INT;};
-	virtual int compare(INDEX index, const ConstantSP& target) const override {return base_->getSymbol(data_[index]).compare(target->getString());}
+	int compare(INDEX index, const ConstantSP& target) const override {return base_->getSymbol(data_[index]).compare(target->getString());}
 	std::string getString(INDEX index) const override {return base_->getSymbol(data_[index]);}
-	virtual const std::string& getStringRef(INDEX index) const override { return base_->getSymbol(data_[index]);}
-	virtual const std::string& getStringRef() const override { return base_->getSymbol(data_[0]); }
+	const std::string& getStringRef(INDEX index) const override { return base_->getSymbol(data_[index]);}
+	const std::string& getStringRef() const override { return base_->getSymbol(data_[0]); }
 	bool set(INDEX index, const ConstantSP& value) override;
 	bool set(const ConstantSP& index, const ConstantSP& value) override;
 	ConstantSP get(INDEX index) const override;
@@ -2842,13 +2803,12 @@ public:
 			if(data_[i] == 0) data_[i] = id;
 		}
 	}
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const override { return getSubVector(start, length, std::abs(length));}
-	virtual ConstantSP getSubVector(INDEX start, INDEX length, INDEX capacity) const override {
+	ConstantSP getSubVector(INDEX start, INDEX length) const override { return getSubVector(start, length, std::abs(length));}
+	ConstantSP getSubVector(INDEX start, INDEX length, INDEX capacity) const override {
 		int* data = getDataArray(start,length,capacity);
 		if(data)
 			return new FastSymbolVector(base_, length, capacity, data, false);
-		else
-			throw MemoryException();
+		throw MemoryException();
 	}
 	ConstantSP getInstance(INDEX sz) const override {
 		INDEX capacity = (std::max)(1, sz);
@@ -2875,8 +2835,7 @@ public:
 			}else{
 				data_[size_] = base_->findAndInsert(value->getString(0));
 			}
-		}
-		else{
+		} else{
 			if(value->getCategory() != LITERAL || value->size() < appendSize)
 				return false;
 			for(int i = 0; i < appendSize; i++){
@@ -2930,20 +2889,18 @@ public:
 		}
 		return true;
 	}
-	virtual std::string** getStringConst(INDEX start, int len, std::string** buf) const override;
-	virtual char** getStringConst(INDEX start, int len, char** buf) const override;
+	std::string** getStringConst(INDEX start, int len, std::string** buf) const override;
+	char** getStringConst(INDEX start, int len, char** buf) const override;
 	bool has(const std::string& val) const {
 		int id = base_->find(val);
 		if(id == -1){
 			return false;
-		}else{
-			int i;
-			for(i=0;i<size_ && data_[i]!=id;++i);
-			if(i<size_)
-				return true;
-			else
-				return false;
 		}
+		int i;
+		for(i=0;i<size_ && data_[i]!=id;++i);
+		if(i<size_)
+			return true;
+		return false;
 	}
 	INDEX search(const std::string& val){
 		int id = base_->find(val);
@@ -2952,11 +2909,9 @@ public:
 			for(i=0;i<size_ && data_[i]!=id;++i);
 			if(i<size_)
 				return i;
-			else
-				return -1;
-		}else{
 			return -1;
 		}
+		return -1;
 	}
 	void replace(const ConstantSP& oldVal, const ConstantSP& newVal) override {
 		const std::string oldV = oldVal->getString();
@@ -2970,7 +2925,7 @@ public:
 		}
 	}
 	bool isIndexArray() const override { return false;}
-	virtual INDEX* getIndexArray() const override { return NULL;}
+	INDEX* getIndexArray() const override { return nullptr;}
 	bool validIndex(INDEX uplimit) override;
 	bool validIndex(INDEX start, INDEX length, INDEX uplimit) override;
 	bool getHash(INDEX start, int len, int buckets, int* buf) const override {
@@ -3000,18 +2955,17 @@ public:
 		int* data = getDataArray(index, haveNull);
 		if(data)
 			return new FastSymbolVector(base_, length, length, data, haveNull);
-		else
-			throw MemoryException();
+		throw MemoryException();
 	}
-	virtual char getBool() const override {throw IncompatibleTypeException(DT_BOOL,DT_SYMBOL);}
-	virtual char getChar() const override {throw IncompatibleTypeException(DT_CHAR,DT_SYMBOL);}
-	virtual short getShort() const override {throw IncompatibleTypeException(DT_SHORT,DT_SYMBOL);}
-	virtual long long getLong() const override {throw IncompatibleTypeException(DT_LONG,DT_SYMBOL);}
-	virtual INDEX getIndex() const override {throw IncompatibleTypeException(DT_INDEX,DT_SYMBOL);}
-	virtual float getFloat() const override {throw IncompatibleTypeException(DT_FLOAT,DT_SYMBOL);}
-	virtual double getDouble() const override {throw IncompatibleTypeException(DT_DOUBLE,DT_SYMBOL);}
+	char getBool() const override {throw IncompatibleTypeException(DT_BOOL,DT_SYMBOL);}
+	char getChar() const override {throw IncompatibleTypeException(DT_CHAR,DT_SYMBOL);}
+	short getShort() const override {throw IncompatibleTypeException(DT_SHORT,DT_SYMBOL);}
+	long long getLong() const override {throw IncompatibleTypeException(DT_LONG,DT_SYMBOL);}
+	INDEX getIndex() const override {throw IncompatibleTypeException(DT_INDEX,DT_SYMBOL);}
+	float getFloat() const override {throw IncompatibleTypeException(DT_FLOAT,DT_SYMBOL);}
+	double getDouble() const override {throw IncompatibleTypeException(DT_DOUBLE,DT_SYMBOL);}
 	void neg() override {throw IncompatibleTypeException(DT_DOUBLE,DT_SYMBOL);}
-	virtual SymbolBaseSP getSymbolBase() const override {return base_;}
+	SymbolBaseSP getSymbolBase() const override {return base_;}
 private:
 	SymbolBaseSP base_;
 };
@@ -3073,7 +3027,7 @@ inline bool mulOverflow(T a, U b, R &result) {
         if (a == std::numeric_limits<R>::min()) {
             return b > 1;
         }
-        else if (b == std::numeric_limits<R>::min()) {
+        if (b == std::numeric_limits<R>::min()) {
             return a > 1;
         }
         if (a < 0) {
@@ -3087,7 +3041,7 @@ inline bool mulOverflow(T a, U b, R &result) {
         if (a == std::numeric_limits<R>::min()) {
             return b <= -1;
         }
-        else if (b == std::numeric_limits<R>::min()) {
+        if (b == std::numeric_limits<R>::min()) {
             return a <= -1;
         }
         return (-a) > std::numeric_limits<R>::max() / (-b);
@@ -3250,7 +3204,7 @@ inline bool parseString(const char *str, size_t str_len, T &rawData, int &scale,
         ERR_WRONG_STATE = 3,
         ERR_SCALE_ERROR = 4,
         ERR_OVERFLOW = 5,
-        ERROR_CODE_COUNT,
+        ERROR_CODE_COUNT = 6,
     };
     const char *const msg[] = {
         "",
@@ -3404,9 +3358,8 @@ inline bool parseString(const char *str, size_t str_len, T &rawData, int &scale,
             if (noneZeroDigitsCount + scale - afterDigitCount > decimal_util::MaxPrecision<T>::value) {
                 errMsg = buildErrorMsg(ERR_OVERFLOW);
                 return false;
-            } else {
-                rawData = rawData * decimal_util::scaleMultiplier<T>(scale - afterDigitCount);
             }
+            rawData = rawData * decimal_util::scaleMultiplier<T>(scale - afterDigitCount);
         }
         if (sign < 0) {
             rawData = -rawData;
@@ -3520,7 +3473,7 @@ public:
     Decimal(const Decimal &other) : Constant(), scale_(other.scale_), rawData_(other.rawData_) {}
 
     template <typename U>
-    Decimal(const Decimal<U> &other) : Decimal(other.scale_) {
+    explicit Decimal(const Decimal<U> &other) : Decimal(other.scale_) {
         if (other.isNull()) {
             this->setNull();
         }
@@ -3532,7 +3485,7 @@ public:
         }
     }
 
-public:
+
     int getScale() const { return scale_; }
 
     raw_data_t getRawData() const { return rawData_; }
@@ -3543,7 +3496,7 @@ public:
         return decimal_util::toString(scale_, rawData_);
     }
 
-public:
+
     template <typename U, typename R = typename std::conditional<sizeof(T) >= sizeof(U), T, U>::type>
     int compare(const Decimal<U> &other) const {
         if (this->isNull()) {
@@ -3581,14 +3534,14 @@ public:
 
         if (lhs < rhs) {
             return -1;
-        } else if (lhs == rhs) {
-            return 0;
-        } else {
-            return 1;
         }
+		if (lhs == rhs) {
+            return 0;
+        }
+        return 1;
     }
 
-public:  /// Interface of Constant
+ /// Interface of Constant
     int getExtraParamForType() const override { return scale_; }
 
     bool isNull() const override { return rawData_ == std::numeric_limits<T>::min(); }
@@ -3601,9 +3554,8 @@ public:  /// Interface of Constant
         if (std::is_same<T, int128>::value) {
              const long double tmp = static_cast<long double>(rawData_) / static_cast<long double>(decimal_util::scaleMultiplier<T>(scale_));
             return static_cast<float>(tmp);
-        } else {
-            return static_cast<float>(rawData_) / static_cast<float>(decimal_util::scaleMultiplier<T>(scale_));
         }
+        return static_cast<float>(rawData_) / static_cast<float>(decimal_util::scaleMultiplier<T>(scale_));
     }
     double getDouble() const override {
         if (isNull()) {
@@ -3612,9 +3564,8 @@ public:  /// Interface of Constant
         if (std::is_same<T, int128>::value) {
             const long double tmp = static_cast<long double>(rawData_) / static_cast<long double>(decimal_util::scaleMultiplier<T>(scale_));
             return static_cast<double>(tmp);
-        } else {
-            return static_cast<double>(rawData_) / static_cast<double>(decimal_util::scaleMultiplier<T>(scale_));
         }
+        return static_cast<double>(rawData_) / static_cast<double>(decimal_util::scaleMultiplier<T>(scale_));
     }
 
     void setFloat(float val) override { decimal_util::valueToDecimalraw(val, scale_, &rawData_); }
@@ -3726,22 +3677,23 @@ public:  /// Interface of Constant
             double rhs = target->getDouble();
             if (lhs < rhs) {
                 return -1;
-            } else if (lhs == rhs) {
-                return 0;
-            } else {
-                return 1;
             }
-        } else if (cat != DENARY) {
+			if (lhs == rhs) {
+                return 0;
+            }
+            return 1;
+        }
+		if (cat != DENARY) {
             Decimal<T> tmp{scale_};
             tmp.assign(target);
 
             if (rawData_ < tmp.rawData_) {
                 return -1;
-            } else if (rawData_ == tmp.rawData_) {
-                return 0;
-            } else {
-                return 1;
             }
+			if (rawData_ == tmp.rawData_) {
+                return 0;
+            }
+            return 1;
         }
 
         if (target->getType() == DT_DECIMAL32) {
@@ -3837,7 +3789,7 @@ private:
         return decimal_util::DecimalType<T>::value;
     }
 
-private:
+
     template <typename U>
     friend class Decimal;
 
@@ -3853,9 +3805,9 @@ using Decimal32 = Decimal<int32_t>;
 using Decimal64 = Decimal<int64_t>;
 using Decimal128 = Decimal<wide_integer::int128>;
 
-typedef SmartPointer<Decimal32> Decimal32SP;
-typedef SmartPointer<Decimal64> Decimal64SP;
-typedef SmartPointer<Decimal128> Decimal128SP;
+using Decimal32SP = SmartPointer<Decimal32>;
+using Decimal64SP = SmartPointer<Decimal64>;
+using Decimal128SP = SmartPointer<Decimal128>;
 
 namespace decimal_util {
 	template <typename T>
@@ -3878,8 +3830,8 @@ class FastDecimalVector : public AbstractFastVector<T> {
     using AbstractFastVector<T>::capacity_;
     using AbstractFastVector<T>::containNull_;
 
-    typedef typename std::make_unsigned<T>::type unsigned_raw_data_t;
-    typedef typename std::add_pointer<unsigned_raw_data_t>::type unsigned_raw_data_ptr_t;
+    using unsigned_raw_data_t = typename std::make_unsigned<T>::type;
+    using unsigned_raw_data_ptr_t = typename std::add_pointer<unsigned_raw_data_t>::type;
 
 public:
     FastDecimalVector(int scale, int sz, int capacity, T *srcData, bool containNull)
@@ -3894,7 +3846,7 @@ public:
 
     int getScale() const { return scale_; }
 
-public:
+
     DATA_TYPE getType() const override { return type(); }
     DATA_TYPE getRawType() const override { return type(); }
     DATA_CATEGORY getCategory() const override { return DENARY; }
@@ -3914,9 +3866,8 @@ public:
         if (std::is_same<T, wide_integer::int128>::value) {
             const long double tmp = static_cast<long double>(data_[index]) / static_cast<long double>(decimal_util::scaleMultiplier<T>(scale_));
             return static_cast<float>(tmp);
-        } else {
-            return static_cast<float>(data_[index]) / static_cast<float>(decimal_util::scaleMultiplier<T>(scale_));
         }
+        return static_cast<float>(data_[index]) / static_cast<float>(decimal_util::scaleMultiplier<T>(scale_));
     }
     bool getFloat(INDEX start, int len, float* buf) const override{
         for(int i = 0; i < len; ++i){
@@ -3931,9 +3882,8 @@ public:
         if (std::is_same<T, wide_integer::int128>::value) {
             const long double tmp = static_cast<long double>(data_[index]) / static_cast<long double>(decimal_util::scaleMultiplier<T>(scale_));
             return static_cast<double>(tmp);
-        } else {
-            return static_cast<double>(data_[index]) / static_cast<double>(decimal_util::scaleMultiplier<T>(scale_));
         }
+        return static_cast<double>(data_[index]) / static_cast<double>(decimal_util::scaleMultiplier<T>(scale_));
     }
     bool getDouble(INDEX start, int len, double* buf) const override{
         for(int i = 0; i < len; ++i){
@@ -3957,7 +3907,7 @@ public:
         return true;
     }
 
-public:
+
     bool append(const ConstantSP& value, INDEX count) override {
         return append(value, 0, count);
     }
@@ -4268,7 +4218,7 @@ public:
         return tmp.compare(/*index*/0, target);
     }
 
-public:
+
     void nullFill(const ConstantSP &val) override {
         if (!containNull_) {
             return;
@@ -4325,7 +4275,7 @@ public:
         return ret;
     }
 
-public:
+
     bool getBinary(INDEX start, int len, int unitLength, unsigned char *buf) const override {
         if (unitLength != static_cast<int>(sizeof(T))) {
             throw RuntimeException("Invalid unit length");
@@ -4352,7 +4302,7 @@ public:
 		if (unitLength != static_cast<int>(sizeof(T))) {
 			throw RuntimeException("Invalid unit length");
 		}
-		memcpy(data_ + start * unitLength, buf, unitLength * len);
+		memcpy(data_ + (start * unitLength), buf, unitLength * len);
         return true;
     }
 
@@ -4361,7 +4311,7 @@ private:
         return decimal_util::DecimalType<T>::value;
     }
 
-private:
+
     int scale_;
 };
 
@@ -4369,10 +4319,10 @@ using FastDecimal32Vector = FastDecimalVector<int32_t>;
 using FastDecimal64Vector = FastDecimalVector<int64_t>;
 using FastDecimal128Vector = FastDecimalVector<wide_integer::int128>;
 
-typedef SmartPointer<FastDecimal32Vector> FastDecimal32VectorSP;
-typedef SmartPointer<FastDecimal64Vector> FastDecimal64VectorSP;
-typedef SmartPointer<FastDecimal128Vector> FastDecimal128VectorSP;
-}
+using FastDecimal32VectorSP = SmartPointer<FastDecimal32Vector>;
+using FastDecimal64VectorSP = SmartPointer<FastDecimal64Vector>;
+using FastDecimal128VectorSP = SmartPointer<FastDecimal128Vector>;
+} // namespace dolphindb
 
 #if defined(_MSC_VER)
 #pragma warning( pop )

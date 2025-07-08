@@ -2,15 +2,15 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
-#include <string>
-#include <vector>
-#include <map>
-#include <thread>
-#include <mutex>
 #include "SharedMem.h"
+#include "DolphinDB.h"
 #include "EventHandler.h"
 #include "StreamingUtil.h"
-#include "DolphinDB.h"
+#include <map>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -27,8 +27,8 @@ struct SubscribeQueue {
 	std::shared_ptr<std::atomic<bool>> stopped_{nullptr};
 	SubscribeQueue()
 		:queue_(nullptr), stopped_(nullptr) {}
-	SubscribeQueue(MessageQueueSP queue, std::shared_ptr<std::atomic<bool>> stopped)
-		:queue_(queue), stopped_(stopped) {}
+	SubscribeQueue(const MessageQueueSP &queue, std::shared_ptr<std::atomic<bool>> stopped)
+		:queue_(queue), stopped_(std::move(stopped)) {}
 };
 
 enum class SubscribeState {
@@ -58,12 +58,12 @@ protected:
     SubscribeQueue subscribeInternal(const SubscribeInfo &info,
                                      int64_t offset, bool resubscribe, const VectorSP &filter,
                                      bool msgAsTable, bool allowExists, int batchSize,
-									 std::string userName, std::string password,
+									 const std::string& userName, const std::string& password,
 									 const StreamDeserializerSP &blobDeserializer, const std::vector<std::string>& backupSites, bool isEvent, int resubscribeInterval, bool subOnce, bool convertMsgRowData, int resubscribeTimeout);
     bool unsubscribeInternal(std::string host, int port, std::string tableName, std::string actionName = DEFAULT_ACTION_NAME);
 
-protected:
-    SmartPointer<StreamingClientImpl> impl_;
+
+    std::shared_ptr<StreamingClientImpl> impl_;
     std::shared_ptr<UDPStreamingImpl> udpImpl_;
 };
 
@@ -84,17 +84,17 @@ public:
 	//listeningPort > 0 : listen mode, wait for server connection
 	//listeningPort = 0 : active mode, connect server by DBConnection socket
     explicit ThreadedClient(int listeningPort = 0);
-    ~ThreadedClient() override {}
+    ~ThreadedClient() override = default;
     ThreadSP subscribe(std::string host, int port, const MessageHandler &handler, std::string tableName,
                        std::string actionName = DEFAULT_ACTION_NAME, int64_t offset = -1, bool resub = true,
                        const VectorSP &filter = nullptr, bool msgAsTable = false, bool allowExists = false,
-						std::string userName="", std::string password="",
+						const std::string& userName="", const std::string& password="",
 					   const StreamDeserializerSP &blobDeserializer = nullptr, const std::vector<std::string>& backupSites = std::vector<std::string>(),int resubscribeInterval = 100, bool subOnce = false, int resubscribeTimeout = 0);
     ThreadSP subscribe(std::string host, int port, const MessageBatchHandler &handler, std::string tableName,
                        std::string actionName = DEFAULT_ACTION_NAME, int64_t offset = -1, bool resub = true,
                        const VectorSP &filter = nullptr, bool allowExists = false, int batchSize = 1,
 						double throttle = 1,bool msgAsTable = false,
-						std::string userName = "", std::string password = "",
+						const std::string& userName = "", const std::string& password = "",
 						const StreamDeserializerSP &blobDeserializer = nullptr, const std::vector<std::string>& backupSites = std::vector<std::string>(),int resubscribeInterval = 100,bool subOnce = false, int resubscribeTimeout = 0);
 	size_t getQueueDepth(const ThreadSP &thread);
     bool unsubscribe(std::string host, int port, std::string tableName, std::string actionName = DEFAULT_ACTION_NAME);
@@ -109,7 +109,7 @@ public:
     std::vector<ThreadSP> subscribe(std::string host, int port, const MessageHandler &handler, std::string tableName,
                                std::string actionName, int64_t offset = -1, bool resub = true,
                                const VectorSP &filter = nullptr, bool msgAsTable = false, bool allowExists = false,
-								std::string userName = "", std::string password = "",
+								const std::string& userName = "", const std::string& password = "",
 							   const StreamDeserializerSP &blobDeserializer = nullptr, const std::vector<std::string>& backupSites = std::vector<std::string>(), int resubscribeInterval = 100, bool subOnce = false, int resubscribeTimeout = 0);
     bool unsubscribe(std::string host, int port, std::string tableName, std::string actionName = DEFAULT_ACTION_NAME);
 	size_t getQueueDepth(const ThreadSP &thread);
@@ -128,7 +128,7 @@ public:
     MessageQueueSP subscribe(std::string host, int port, std::string tableName, std::string actionName = DEFAULT_ACTION_NAME,
                              int64_t offset = -1, bool resub = true, const VectorSP &filter = nullptr,
                              bool msgAsTable = false, bool allowExists = false,
-							std::string userName="", std::string password="",
+							const std::string& userName="", const std::string& password="",
 							 const StreamDeserializerSP &blobDeserializer = nullptr, const std::vector<std::string>& backupSites = std::vector<std::string>(), int resubscribeInterval = 100, bool subOnce = false, int resubscribeTimeout = 0);
     bool unsubscribe(std::string host, int port, std::string tableName, std::string actionName = DEFAULT_ACTION_NAME);
 };
@@ -139,7 +139,7 @@ class EXPORT_DECL IPCInMemoryStreamClient {
 public:
 	IPCInMemoryStreamClient() = default;
 	~IPCInMemoryStreamClient();
-	ThreadSP subscribe(const std::string& tableName, const IPCInMemoryTableReadHandler& handler, TableSP outputTable = nullptr, bool overwrite = true);
+	ThreadSP subscribe(const std::string& tableName, const IPCInMemoryTableReadHandler& handler, const TableSP& outputTable = nullptr, bool overwrite = true);
 	void unsubscribe(const std::string& tableName);
 private:
 	struct ThreadWrapper {
@@ -147,9 +147,9 @@ private:
 		bool isExit;
 	};
 	std::unordered_map<std::string, ThreadWrapper> tableName2thread_; // tableName -> (thread, isExit)
-	ThreadSP newHandleThread(const std::string& tableName, const IPCInMemoryTableReadHandler handler,
-		SmartPointer<IPCInMemTable> memTable,
-		TableSP outputTable, bool overwrite);
+	ThreadSP newHandleThread(const std::string& tableName, const IPCInMemoryTableReadHandler& handler,
+		const SmartPointer<IPCInMemTable>& memTable,
+		const TableSP& outputTable, bool overwrite);
 };
 
 #endif//LINUX

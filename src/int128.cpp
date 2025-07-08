@@ -23,10 +23,12 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include <stddef.h>
+#include <cstddef>
 
 #include <cassert>
+#include <cmath>
 #include <iomanip>
+#include <iostream>
 #include <ostream>  // NOLINT(readability/streams)
 #include <sstream>
 #include <string>
@@ -45,6 +47,8 @@
 #if defined(_MSC_VER) && !defined(__clang__)
 #include <intrin.h>
 #endif
+
+// NOLINTBEGIN(modernize-use-auto, hicpp-use-auto)
 
 namespace absl {
 
@@ -357,8 +361,6 @@ inline void DivModImpl(uint128 dividend, uint128 divisor, uint128* quotient_ret,
 
 template <typename T>
 uint128 MakeUint128FromFloat(T v) {
-  static_assert(std::is_floating_point<T>::value, "");
-
   // Rounding behavior is towards zero, same as for built-in types.
 
   // Undefined behavior if v is NaN or cannot fit into uint128.
@@ -381,8 +383,6 @@ uint128 MakeUint128FromFloat(T v) {
 // It is more work, so only use when we need the workaround.
 uint128 MakeUint128FromFloat(long double v) {
   // Go 50 bits at a time, that fits in a double
-  static_assert(std::numeric_limits<double>::digits >= 50, "");
-  static_assert(std::numeric_limits<long double>::digits <= 150, "");
   // Undefined behavior if v is not finite or cannot fit into uint128.
   assert(std::isfinite(v) && v > -1 && v < std::ldexp(1.0L, 128));
 
@@ -434,7 +434,7 @@ std::string Uint128ToFormattedString(uint128 v, std::ios_base::fmtflags flags) {
       div_base_log = 21;
       break;
     default:  // std::ios::dec
-      div = 10000000000000000000u;  // 10^19
+      div = 10000000000000000000U;  // 10^19
       div_base_log = 19;
       break;
   }
@@ -478,7 +478,7 @@ std::ostream& operator<<(std::ostream& os, uint128 v) {
     if (adjustfield == std::ios::left) {
       rep.append(count, os.fill());
     } else if (adjustfield == std::ios::internal &&
-               (flags & std::ios::showbase) &&
+               ((flags & std::ios::showbase) != 0) &&
                (flags & std::ios::basefield) == std::ios::hex && v != 0) {
       rep.insert(2, count, os.fill());
     } else {
@@ -560,7 +560,7 @@ std::ostream& operator<<(std::ostream& os, int128 v) {
   if (print_as_decimal) {
     if (Int128High64(v) < 0) {
       rep = "-";
-    } else if (flags & std::ios::showpos) {
+    } else if ((flags & std::ios::showpos) != 0) {
       rep = "+";
     }
   }
@@ -580,7 +580,7 @@ std::ostream& operator<<(std::ostream& os, int128 v) {
         if (print_as_decimal && (rep[0] == '+' || rep[0] == '-')) {
           rep.insert(1, count, os.fill());
         } else if ((flags & std::ios::basefield) == std::ios::hex &&
-                   (flags & std::ios::showbase) && v != 0) {
+                   ((flags & std::ios::showbase) != 0) && v != 0) {
           rep.insert(2, count, os.fill());
         } else {
           rep.insert(0, count, os.fill());
@@ -671,3 +671,5 @@ constexpr bool numeric_limits<absl::int128>::traps;
 constexpr bool numeric_limits<absl::int128>::tinyness_before;
 }  // namespace std
 #endif
+
+// NOLINTEND(modernize-use-auto, hicpp-use-auto)

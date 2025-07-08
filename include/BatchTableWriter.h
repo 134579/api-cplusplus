@@ -4,18 +4,19 @@
 
 #include "Exports.h"
 #include "Concurrent.h"
-#include "Types.h"
-#include "Exceptions.h"
 #include "Constant.h"
 #include "Dictionary.h"
+#include "Exceptions.h"
 #include "Table.h"
-#include <unordered_map>
-#include <string>
-#include <vector>
-#include <memory>
-#include <functional>
-#include <tuple>
+#include "Types.h"
 #include <cassert>
+#include <functional>
+#include <memory>
+#include <string>
+#include <thread>
+#include <tuple>
+#include <unordered_map>
+#include <vector>
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -30,7 +31,7 @@ public:
     /**
      * If fail to connect to the specified DolphinDB server, this function throw an exception.
      */
-    BatchTableWriter(const std::string& hostName, int port, const std::string& userId, const std::string& password, bool acquireLock=true);
+    BatchTableWriter(std::string hostName, int port, std::string userId, std::string password, bool acquireLock=true);
 
     virtual ~BatchTableWriter();
 
@@ -115,7 +116,7 @@ private:
         std::string createTmpSharedTable;
         SynchronizedQueue<std::vector<ConstantSP>> writeQueue;
         SynchronizedQueue<std::vector<ConstantSP>> saveQueue;
-        ThreadSP writeThread;
+        std::thread writeThread;
         TableSP writeTable;
 
         Mutex writeMutex;
@@ -126,7 +127,7 @@ private:
         bool finished = false;
     };
     //write failed or no data
-    bool writeTableAllData(SmartPointer<DestTable> destTable,bool partitioned);
+    bool writeTableAllData(const SmartPointer<DestTable>& destTable,bool partitioned);
     void insertRecursive(std::vector<ConstantSP>* row, DestTable* destTable, int colIndex){
         assert(colIndex == destTable->columnNum);
         std::ignore = colIndex;
@@ -134,7 +135,7 @@ private:
         if(destTable->finished){
             throw RuntimeException(std::string("Failed to insert data. Error writing data in backgroud thread. Please use getUnwrittenData to get data not written to server and remove talbe (") + destTable->dbName + " " + destTable->tableName + ").");
         }
-        destTable->writeQueue.push(std::move(*row));
+        destTable->writeQueue.push(*row);
         destTable->writeNotifier.notify();
     }
 
@@ -161,11 +162,11 @@ private:
         throw RuntimeException("Failed to insert data, unsupported data type.");
     }
     ConstantSP createObject(int dataType, Constant* val);
-    ConstantSP createObject(int dataType, ConstantSP val);
+    ConstantSP createObject(int dataType, const ConstantSP& val);
     ConstantSP createObject(int dataType, char val);
     ConstantSP createObject(int dataType, short val);
     ConstantSP createObject(int dataType, const char* val);
-    ConstantSP createObject(int dataType, std::string val);
+    ConstantSP createObject(int dataType, const std::string& val);
     ConstantSP createObject(int dataType, const unsigned char* val);
     ConstantSP createObject(int dataType, unsigned char val[]);
     ConstantSP createObject(int dataType, long long val);
@@ -173,7 +174,7 @@ private:
     ConstantSP createObject(int dataType, double val);
     ConstantSP createObject(int dataType, int val);
 
-private:
+
     const std::string hostName_;
     const int port_;
     const std::string userId_;
@@ -192,7 +193,7 @@ private:
 };
 
 
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

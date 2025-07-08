@@ -14,7 +14,7 @@ struct VersionT {
     bool check(const std::vector<VersionT> &required)
     {
         int max_major{0};
-        for (auto &r : required) {
+        for (const auto &r : required) {
             max_major = std::max(r.major, max_major);
             if (r.major != major) {
                 continue;
@@ -25,4 +25,4 @@ struct VersionT {
     }
 };
 
-}
+} // namespace dolphindb

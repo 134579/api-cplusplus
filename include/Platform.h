@@ -18,19 +18,18 @@
 
 #else
 
+#include <arpa/inet.h>
 #include <dirent.h>
 #include <error.h>
 #include <fcntl.h>
 #include <netdb.h>
-#include <pthread.h>
-#include <semaphore.h>
-#include <unistd.h>
-#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
-#include <uuid/uuid.h>
+#include <unistd.h>
 
 #endif

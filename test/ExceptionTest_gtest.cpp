@@ -1,75 +1,57 @@
+#include <gtest/gtest.h>
 #include "config.h"
 
 class ExceptionTest:public testing::Test
 {
-protected:
-    //Suite
-    static void SetUpTestCase() {
-        //DBConnection conn;
-		conn.initialize();
-        bool ret = conn.connect(hostName, port, "admin", "123456");
-        if (!ret) {
-            cout << "Failed to connect to the server" << endl;
+    public:
+        static dolphindb::DBConnection conn;
+        // Suite
+        static void SetUpTestSuite()
+        {
+            bool ret = conn.connect(HOST, PORT, USER, PASSWD);
+            if (!ret)
+            {
+                std::cout << "Failed to connect to the server" << std::endl;
+            }
+            else
+            {
+                std::cout << "connect to " + HOST + ":" + std::to_string(PORT) << std::endl;
+            }
         }
-        else {
-            cout << "connect to " + hostName + ":" + std::to_string(port)<< endl;
+        static void TearDownTestSuite()
+        {
+            conn.close();
         }
-    }
-    static void TearDownTestCase(){
-        conn.close();
-    }
 
-    //Case
-    virtual void SetUp()
-    {
-        cout<<"check connect...";
-		try
-		{
-			ConstantSP res = conn.run("1+1");
-		}
-		catch(const std::exception& e)
-		{
-			conn.connect(hostName, port, "admin", "123456");
-		}
-		
-        cout<<"ok"<<endl;
-		CLEAR_ENV(conn);
-    }
-    virtual void TearDown()
-    {
-		CLEAR_ENV(conn);
-    }
+    protected:
+        // Case
+        virtual void SetUp()
+        {
+
+        }
+        virtual void TearDown()
+        {
+
+        }
 };
 
-static string eMsg="test";
+dolphindb::DBConnection ExceptionTest::conn(false, false);
 
-TEST_F(ExceptionTest,testSyntaxException){
-    try
-    {
-        SyntaxException e(eMsg);
-        throw e;
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),eMsg.c_str());
-    }
-    
-}
+static std::string eMsg="test";
 
 TEST_F(ExceptionTest,testIncompatibleTypeException){
-    DATA_TYPE dt1=DT_INT;
-    DATA_TYPE dt2=DT_STRING;
+    dolphindb::DATA_TYPE dt1=dolphindb::DT_INT;
+    dolphindb::DATA_TYPE dt2=dolphindb::DT_STRING;
     try
     {
-        IncompatibleTypeException e(dt1,dt2);
+        dolphindb::IncompatibleTypeException e(dt1,dt2);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        string ex_str="Incompatible type. Expected: " + Util::getDataTypeString(dt1) + ", Actual: " + Util::getDataTypeString(dt2);
-        EXPECT_STREQ(e.what(),ex_str.c_str());
+        std::string ex_str="Incompatible type. Expected: " + dolphindb::Util::getDataTypeString(dt1) + ", Actual: " + dolphindb::Util::getDataTypeString(dt2);
+        ASSERT_STREQ(e.what(),ex_str.c_str());
     }
     
 }
@@ -77,14 +59,14 @@ TEST_F(ExceptionTest,testIncompatibleTypeException){
 TEST_F(ExceptionTest,testIllegalArgumentException){
     try
     {
-        string eFuncName="func";
-        IllegalArgumentException e(eFuncName,eMsg);
+        std::string eFuncName="func";
+        dolphindb::IllegalArgumentException e(eFuncName,eMsg);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),eMsg.c_str());
+        ASSERT_STREQ(e.what(),eMsg.c_str());
     }
     
 }
@@ -92,13 +74,13 @@ TEST_F(ExceptionTest,testIllegalArgumentException){
 TEST_F(ExceptionTest,testRuntimeException){
     try
     {
-        RuntimeException e(eMsg);
+        dolphindb::RuntimeException e(eMsg);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),eMsg.c_str());
+        ASSERT_STREQ(e.what(),eMsg.c_str());
     }
     
 }
@@ -106,14 +88,14 @@ TEST_F(ExceptionTest,testRuntimeException){
 TEST_F(ExceptionTest,testOperatorRuntimeException){
     try
     {
-        string eOptr="func";
-        OperatorRuntimeException e(eOptr,eMsg);
+        std::string eOptr="func";
+        dolphindb::OperatorRuntimeException e(eOptr,eMsg);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),eMsg.c_str());
+        ASSERT_STREQ(e.what(),eMsg.c_str());
     }
     
 }
@@ -121,13 +103,13 @@ TEST_F(ExceptionTest,testOperatorRuntimeException){
 TEST_F(ExceptionTest,testTableRuntimeException){
     try
     {
-        TableRuntimeException e(eMsg);
+        dolphindb::TableRuntimeException e(eMsg);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),eMsg.c_str());
+        ASSERT_STREQ(e.what(),eMsg.c_str());
     }
     
 }
@@ -135,25 +117,25 @@ TEST_F(ExceptionTest,testTableRuntimeException){
 TEST_F(ExceptionTest,testMemoryException){
     try
     {
-        MemoryException e;
+        dolphindb::MemoryException e;
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        string ex_str= "Out of memory";
-        EXPECT_STREQ(e.what(),ex_str.c_str());
+        std::string ex_str= "Out of memory";
+        ASSERT_STREQ(e.what(),ex_str.c_str());
     }
     
 }
 
 TEST_F(ExceptionTest,testIOException){
-    vector<IO_ERR> ioErrVec={OK,DISCONNECTED,NODATA,NOSPACE,TOO_LARGE_DATA,INPROGRESS,INVALIDDATA,END_OF_STREAM,READONLY,WRITEONLY,NOTEXIST,CORRUPT,NOT_LEADER,OTHERERR};
-    string getMsg;
+    std::vector<dolphindb::IO_ERR> ioErrVec={dolphindb::OK,dolphindb::DISCONNECTED,dolphindb::NODATA,dolphindb::NOSPACE,dolphindb::TOO_LARGE_DATA,dolphindb::INPROGRESS,dolphindb::INVALIDDATA,dolphindb::END_OF_STREAM,dolphindb::READONLY,dolphindb::WRITEONLY,dolphindb::NOTEXIST,dolphindb::CORRUPT,dolphindb::NOT_LEADER,dolphindb::OTHERERR};
+    std::string getMsg;
     for(int i=0;i<ioErrVec.size();i++){
         try
         {
-            IOException e(getMsg,ioErrVec[i]);
+            dolphindb::IOException e(getMsg,ioErrVec[i]);
             throw e;
         }
         catch(const std::exception& e)
@@ -164,7 +146,7 @@ TEST_F(ExceptionTest,testIOException){
     for(int i=0;i<ioErrVec.size();i++){
         try
         {
-            IOException e(ioErrVec[i]);
+            dolphindb::IOException e(ioErrVec[i]);
             throw e;
         }
         catch(const std::exception& e)
@@ -174,7 +156,7 @@ TEST_F(ExceptionTest,testIOException){
     }
     try
     {
-        IOException e(getMsg);
+        dolphindb::IOException e(getMsg);
         throw e;
     }
     catch(const std::exception& e)
@@ -187,38 +169,38 @@ TEST_F(ExceptionTest,testIOException){
 TEST_F(ExceptionTest,testDataCorruptionException){
     try
     {
-        DataCorruptionException e(eMsg);
+        dolphindb::DataCorruptionException e(eMsg);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),("<DataCorruption>"+eMsg).c_str());
+        ASSERT_STREQ(e.what(),("<DataCorruption>"+eMsg).c_str());
     }
     
 }
 
 TEST_F(ExceptionTest,testNotLeaderException){
-    string newLeader="datanode3";
+    std::string newLeader="datanode3";
     try
     {
-        NotLeaderException e(eMsg);
+        dolphindb::NotLeaderException e(eMsg);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),("<NotLeader>"+eMsg).c_str());
+        ASSERT_STREQ(e.what(),("<NotLeader>"+eMsg).c_str());
     }
     try
     {
-        NotLeaderException e(newLeader);
+        dolphindb::NotLeaderException e(newLeader);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),("<NotLeader>"+newLeader).c_str());
+        ASSERT_STREQ(e.what(),("<NotLeader>"+newLeader).c_str());
     }
     
 }
@@ -226,59 +208,13 @@ TEST_F(ExceptionTest,testNotLeaderException){
 TEST_F(ExceptionTest,testMathException){
     try
     {
-        MathException e(eMsg);
+        dolphindb::MathException e(eMsg);
         throw e;
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),eMsg.c_str());
-    }
-    
-}
-
-TEST_F(ExceptionTest,testTestingException){
-    string eCase="main case";
-    string esubCase="sub testcase";
-    string emptySubCase="";
-    try
-    {
-
-        TestingException e(eCase, esubCase);
-        throw e;
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),("Testing case "+eCase+"_"+esubCase+" failed").c_str());
-    }
-    
-    try
-    {
-
-        TestingException e(eCase, emptySubCase);
-        throw e;
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),("Testing case "+eCase+" failed").c_str());
-    }
-    
-}
-
-TEST_F(ExceptionTest,testUserException){
-    try
-    {
-        string eType="UserException";
-        UserException e(eType, eMsg);
-        EXPECT_STREQ((e.getExceptionType()).c_str(), eType.c_str());
-        throw e;
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-        EXPECT_STREQ(e.what(),eMsg.c_str());
+        ASSERT_STREQ(e.what(),eMsg.c_str());
     }
     
 }

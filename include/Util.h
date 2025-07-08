@@ -2,19 +2,21 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
-#include <string.h>
-#include <vector>
-#include <unordered_set>
-#include <ctime>
-#include <cassert>
-#include <random>
-#include <chrono>
-#include "Exports.h"
-#include "internal/WideInteger.h"
 #include "Constant.h"
-#include "Vector.h"
-#include "Table.h"
 #include "ErrorCodeInfo.h"
+#include "Exports.h"
+#include "Table.h"
+#include "Vector.h"
+#include "internal/WideInteger.h"
+#include <algorithm>
+#include <cassert>
+#include <chrono>
+#include <cstring>
+#include <ctime>
+#include <random>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #if defined(_MSC_VER)
 #pragma warning( push )
@@ -38,8 +40,8 @@ public:
 	static std::string VER;
 	static int VERNUM;
 	static std::string BUILD;
-#ifdef _MSC_VER
-	const static int BUF_SIZE = 1024;
+#if __cplusplus < 201703L
+	static const int BUF_SIZE = 1024;
 #else
 	static constexpr int BUF_SIZE = 1024;
 #endif
@@ -67,6 +69,7 @@ public:
 	static Constant* parseConstant(int type, const std::string& word);
 	static Constant* createConstant(DATA_TYPE dataType, int extraParam = 0);
 	static Constant* createNullConstant(DATA_TYPE dataType, int extraParam = 0);
+	static Constant* createBool(bool val);
 	static Constant* createBool(char val);
 	static Constant* createChar(char val);
 	static Constant* createShort(short val);
@@ -106,18 +109,18 @@ public:
 	static Table* createTable(const std::vector<std::string>& colNames, const std::vector<ConstantSP>& cols);
 	static Set* createSet(DATA_TYPE keyType, INDEX capacity);
 	static Dictionary* createDictionary(DATA_TYPE keyType, DATA_TYPE valueType);
-	static Vector* createVector(DATA_TYPE type, INDEX size, INDEX capacity = 0, bool fast = true, int extraParam = 0, void* data = 0, bool containNull = false);
-	static Vector* createArrayVector(VectorSP index, VectorSP value);
-	static Vector* createArrayVector(DATA_TYPE type, INDEX size, INDEX capacity = 0, bool fast = true, int extraParam = 0, void *data = NULL, INDEX *pindex = NULL, bool containNull = false);
-	static Vector* createMatrix(DATA_TYPE type, int cols, int rows, int colCapacity, int extraParam = 0, void* data = 0, bool containNull = false);
+	static Vector* createVector(DATA_TYPE type, INDEX size, INDEX capacity = 0, bool fast = true, int extraParam = 0, void* data = nullptr, bool containNull = false);
+	static Vector* createArrayVector(const VectorSP& index, const VectorSP& value);
+	static Vector* createArrayVector(DATA_TYPE type, INDEX size, INDEX capacity = 0, bool fast = true, int extraParam = 0, void *data = nullptr, INDEX *pindex = nullptr, bool containNull = false);
+	static Vector* createMatrix(DATA_TYPE type, int cols, int rows, int colCapacity, int extraParam = 0, void* data = nullptr, bool containNull = false);
 	static Vector* createDoubleMatrix(int cols, int rows);
 	static Vector* createPair(DATA_TYPE type, int extraParam = 0) {
 		if (type == DT_ANY) {
-			return NULL;
+			return nullptr;
 		}
 		Vector* pair = createVector(type, 2, 2, true, extraParam);
-		if (pair == NULL)
-			return NULL;
+		if (pair == nullptr)
+			return nullptr;
 		pair->setForm(DF_PAIR);
 		return pair;
 	}
@@ -180,9 +183,9 @@ public:
 	static std::string literalConstant(const std::string& str);
 	static void split(const char* s, char delim, std::vector<std::string> &elems);
 	static std::vector<std::string> split(const std::string &s, char delim);
-	inline static bool isDigit(char ch) { return '0' <= ch && ch <= '9'; }
-	inline static bool isDateDelimitor(char ch) { return ch == '.' || ch == '/' || ch == '-'; }
-	inline static bool isLetter(char ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'); }
+	static bool isDigit(char ch) { return '0' <= ch && ch <= '9'; }
+	static bool isDateDelimitor(char ch) { return ch == '.' || ch == '/' || ch == '-'; }
+	static bool isLetter(char ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'); }
 	static char escape(char original);
 	static void writeDoubleQuotedString(std::string& dest, const std::string& source);
 
@@ -219,7 +222,7 @@ public:
 	static Vector* createSubVector(const VectorSP& source, std::vector<int> indices);
 	static std::string getCategoryString(DATA_CATEGORY type);
 	static Vector* createSymbolVector(const SymbolBaseSP& symbolBase, INDEX size, INDEX capacity = 0, bool fast = true,
-		void* data = 0, void** dataSegment = 0, int segmentSizeInBit = 0, bool containNull = false);
+		void* data = nullptr, void** dataSegment = nullptr, int segmentSizeInBit = 0, bool containNull = false);
 
 	static void SetOrThrowErrorInfo(ErrorCodeInfo *errorCodeInfo, int errorCode, const std::string &errorInfo);
 	template<typename T>
@@ -245,88 +248,88 @@ public:
 	static bool setValue(ConstantSP& data, DATA_TYPE dataType, double val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
 	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const void* val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
 
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<std::nullptr_t> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<Constant*> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<ConstantSP> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<bool> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<char> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<short> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<const char*> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<std::string> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<const unsigned char*> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<long long> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<long int> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<int> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<float> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<double> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
-	static bool setValue(ConstantSP& data, DATA_TYPE dataType, std::vector<const void*> val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<std::nullptr_t>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<Constant*>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<ConstantSP>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<bool>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<char>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<short>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<const char*>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<std::string>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<const unsigned char*>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<long long>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<long int>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<int>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<float>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<double>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
+	static bool setValue(ConstantSP& data, DATA_TYPE dataType, const std::vector<const void*>& val, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
 	static bool setValue(ConstantSP& data, DATA_TYPE dataType, long long val, const char *pTypeName, ErrorCodeInfo &errorCodeInfo, int extraParam = 0);
 
 	template<typename T>
-	static ConstantSP createObject(DATA_TYPE dataType, T val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0) {
+	static ConstantSP createObject(DATA_TYPE dataType, T val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0) {
 		SetOrThrowErrorInfo(errorCodeInfo, ErrorCodeInfo::EC_InvalidObject, "It cannot be converted to " + getDataTypeString(dataType));
-		return NULL;
+		return nullptr;
 	}
-	static ConstantSP createObject(DATA_TYPE dataType, std::nullptr_t val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, Constant* val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, const ConstantSP& val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, bool val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, char val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, short val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, const char* val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::string val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, const unsigned char* val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, unsigned char val[], ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, char val[], ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, long long val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, long int val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, int val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, float val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, double val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, const void* val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, std::nullptr_t val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, Constant* val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const ConstantSP& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, bool val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, char val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, short val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const char* val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, std::string val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const unsigned char* val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, unsigned char val[], ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, char val[], ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, long long val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, long int val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, int val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, float val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, double val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const void* val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
 
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<std::nullptr_t> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<Constant*> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<ConstantSP> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<bool> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<char> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<short> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<const char*> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<std::string> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<const unsigned char*> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<long long> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<long int> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<int> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<float> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<double> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createObject(DATA_TYPE dataType, std::vector<const void*> val, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
-	static ConstantSP createValue(DATA_TYPE dataType, long long val, const char *pTypeName, ErrorCodeInfo *errorCodeInfo = NULL, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<std::nullptr_t>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<Constant*>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<ConstantSP>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<bool>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<char>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<short>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<const char*>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<std::string>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<const unsigned char*>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<long long>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<long int>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<int>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<float>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<double>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createObject(DATA_TYPE dataType, const std::vector<const void*>& val, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
+	static ConstantSP createValue(DATA_TYPE dataType, long long val, const char *pTypeName, ErrorCodeInfo *errorCodeInfo = nullptr, int extraParam = 0);
 	static bool checkColDataType(DATA_TYPE colDataType, bool isColTemporal, ConstantSP &constsp);
 	static unsigned long getCurThreadId();
 	static void writeFile(const char *pfilepath, const void *pbytes, std::size_t bytelen);
 
-	static void enumBoolVector(const VectorSP &pVector, std::function<bool(const char *pbuf, INDEX startIndex, INDEX size)> func, INDEX offset = 0) {
+	static void enumBoolVector(const VectorSP &pVector, const std::function<bool(const char *pbuf, INDEX startIndex, INDEX size)>& func, INDEX offset = 0) {
 		enumDdbVector<char>(pVector, &Vector::getBoolConst, func, offset);
 	}
-	static void enumIntVector(const VectorSP &pVector, std::function<bool(const int *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumIntVector(const VectorSP &pVector, const std::function<bool(const int *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumDdbVector<int>(pVector, &Vector::getIntConst, func, offset);
 	}
-	static void enumShortVector(const VectorSP &pVector, std::function<bool(const short *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumShortVector(const VectorSP &pVector, const std::function<bool(const short *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumDdbVector<short>(pVector, &Vector::getShortConst, func, offset);
 	}
-	static void enumCharVector(const VectorSP &pVector, std::function<bool(const char *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumCharVector(const VectorSP &pVector, const std::function<bool(const char *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumDdbVector<char>(pVector, &Vector::getCharConst, func, offset);
 	}
-	static void enumLongVector(const VectorSP &pVector, std::function<bool(const long long *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumLongVector(const VectorSP &pVector, const std::function<bool(const long long *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumDdbVector<long long>(pVector, &Vector::getLongConst, func, offset);
 	}
-	static void enumFloatVector(const VectorSP &pVector, std::function<bool(const float *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumFloatVector(const VectorSP &pVector, const std::function<bool(const float *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumDdbVector<float>(pVector, &Vector::getFloatConst, func, offset);
 	}
-	static void enumDoubleVector(const VectorSP &pVector, std::function<bool(const double *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumDoubleVector(const VectorSP &pVector, const std::function<bool(const double *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumDdbVector<double>(pVector, &Vector::getDoubleConst, func, offset);
 	}
-	static void enumStringVector(const VectorSP &pVector, std::function<bool(std::string **pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumStringVector(const VectorSP &pVector, const std::function<bool(std::string **pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		std::string* buffer[Util::BUF_SIZE];
 		std::string** pbuf;
 		INDEX startIndex = offset;
@@ -334,8 +337,7 @@ public:
 		INDEX leftSize = pVector->size() - startIndex;
 		while (leftSize > 0) {
 			size = leftSize;
-			if (size > Util::BUF_SIZE)
-				size = Util::BUF_SIZE;
+			size = std::min(size, Util::BUF_SIZE);
 			pbuf = pVector->getStringConst(startIndex, size, buffer);
 			if (func(pbuf, startIndex, size) == false)
 				break;
@@ -343,16 +345,16 @@ public:
 			startIndex += size;
 		}
 	}
-	static void enumInt128Vector(const VectorSP &pVector, std::function<bool(const Guid *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumInt128Vector(const VectorSP &pVector, const std::function<bool(const Guid *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumBinaryVector<Guid>(pVector, func, offset);
 	}
-	static void enumDecimal32Vector(const VectorSP &pVector, std::function<bool(const int32_t *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumDecimal32Vector(const VectorSP &pVector, const std::function<bool(const int32_t *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumBinaryVector<int32_t>(pVector, func, offset);
 	}
-	static void enumDecimal64Vector(const VectorSP &pVector, std::function<bool(const int64_t *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumDecimal64Vector(const VectorSP &pVector, const std::function<bool(const int64_t *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumBinaryVector<int64_t>(pVector, func, offset);
 	}
-	static void enumDecimal128Vector(const VectorSP &pVector, std::function<bool(const wide_integer::int128 *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumDecimal128Vector(const VectorSP &pVector, const std::function<bool(const wide_integer::int128 *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		enumBinaryVector<wide_integer::int128>(pVector, func, offset);
 	}
 
@@ -365,7 +367,7 @@ public:
     static void getConstantSP(std::vector<ConstantSP> &args) { std::ignore = args; }
 
     template <typename T, typename... Args>
-    static void getConstantSP(std::vector<ConstantSP> &args, T &&first, Args &&... other)
+    static void getConstantSP(std::vector<ConstantSP> &args, const T &first, Args &&... other)
     {
         args.push_back(getConstantSP(first));
         getConstantSP(args, std::forward<Args>(other)...);
@@ -373,7 +375,7 @@ public:
 
 private:
 	template <class T>
-	static void enumBinaryVector(const VectorSP &pVector, std::function<bool(const T *pbuf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+	static void enumBinaryVector(const VectorSP &pVector, const std::function<bool(const T *pbuf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		std::vector<T> buffer(Util::BUF_SIZE);
 		const T* pbuf;
 		INDEX startIndex = offset;
@@ -381,8 +383,7 @@ private:
 		INDEX leftSize = pVector->size() - startIndex;
 		while (leftSize > 0) {
 			size = leftSize;
-			if (size > Util::BUF_SIZE)
-				size = Util::BUF_SIZE;
+			size = std::min(size, Util::BUF_SIZE);
 			pbuf = (const T*)pVector->getBinaryConst(startIndex, size, sizeof(T), (unsigned char*)buffer.data());
 			if (func(pbuf, startIndex, size) == false)
 				break;
@@ -393,7 +394,7 @@ private:
 	template <class T>
 	static void enumDdbVector(const VectorSP &pVector,
 		const T* (Vector::*getConst)(INDEX, int, T*) const,
-		std::function<bool(const T *buf, INDEX startIndex, int length)> func, INDEX offset = 0) {
+		const std::function<bool(const T *buf, INDEX startIndex, int length)>& func, INDEX offset = 0) {
 		T buffer[Util::BUF_SIZE];
 		const T *pbuf;
 		INDEX startIndex = offset;
@@ -401,8 +402,7 @@ private:
 		INDEX leftSize = pVector->size() - startIndex;
 		while (leftSize > 0) {
 			size = leftSize;
-			if (size > Util::BUF_SIZE)
-				size = Util::BUF_SIZE;
+			size = std::min(size, Util::BUF_SIZE);
 			pbuf = (pVector.get()->*getConst)(startIndex, size, buffer);
 			if (func(pbuf, startIndex, size) == false)
 				break;
@@ -438,9 +438,8 @@ inline wide_integer::int128 getNullValue<wide_integer::int128>() { return std::n
 template <class T>
 class DdbVector {
 public:
-	DdbVector(int sz, int capacity = 0) : size_(sz), capacity_(capacity), dataNeedRelease_(true), containNull_(false){
-		if (capacity_ < size_)
-			capacity_ = size_;
+	explicit DdbVector(int sz, int capacity = 0) : size_(sz), capacity_(capacity), dataNeedRelease_(true), containNull_(false){
+		capacity_ = std::max(capacity_, size_);
 		if (capacity_ < 1) {
 			throw RuntimeException("can't create empty DdbVector.");
 		}
@@ -448,8 +447,7 @@ public:
 	}
 	//DdbVector own data and it will be released, don't delete data in the future.
 	DdbVector(T *dt, int sz, int capacity = 0) : data_(dt), size_(sz), capacity_(capacity), dataNeedRelease_(true), containNull_(false) {
-		if (capacity_ < size_)
-			capacity_ = size_;
+		capacity_ = std::max(capacity_, size_);
 	}
 	DdbVector(const DdbVector &src) = delete;
 	~DdbVector() {
@@ -591,11 +589,9 @@ public:
 			dataNeedRelease_ = false;
 			return pVector;
 		}
-		else {
-			Vector* pVector = Util::createVector(type, 0, size_, true, extraParam);
-			pVector->appendString((std::string*)data_, size_);
-			return pVector;
-		}
+		Vector* pVector = Util::createVector(type, 0, size_, true, extraParam);
+		pVector->appendString((std::string*)data_, size_);
+		return pVector;
 	}
 private:
 	T * data_;
@@ -604,7 +600,7 @@ private:
 	bool dataNeedRelease_, containNull_;
 };
 
-}
+} // namespace dolphindb
 
 #if defined(_MSC_VER)
 #pragma warning( pop )

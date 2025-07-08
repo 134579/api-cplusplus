@@ -165,7 +165,7 @@ class path : public std::filesystem::path {
     const std::filesystem::path& base = *this;
     return fmt::format(FMT_STRING("{}"), base);
   }
-  auto system_string() const -> std::string { return string(); }
+  auto system_string() const -> std::string { return std::string(); }
 
   auto generic_display_string() const -> std::string {
     const std::filesystem::path& base = *this;

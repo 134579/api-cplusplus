@@ -1,8 +1,28 @@
 #include "DolphinDBImp.h"
-#include "DolphinDB.h"
-#include "Logger.h"
+#include "Constant.h"
 #include "ConstantMarshall.h"
+#include "DolphinDB.h"
+#include "Exceptions.h"
+#include "Logger.h"
+#include "ScalarImp.h"
+#include "SmartPointer.h"
+#include "SysIO.h"
+#include "Types.h"
+#include "Util.h"
 #include "internal/Crypto.h"
+#ifdef USE_OPENSSL
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/sha.h>
+#endif
+
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <iostream>
+#include <string>
+#include <vector>
 
 #define APIMinVersionRequirement 300
 
@@ -30,8 +50,8 @@ void DBConnectionImpl::close() {
     }
 }
 
-bool DBConnectionImpl::connect(const string& hostName, int port, const string& userId,
-        const string& password, bool sslEnable,bool asynTask, int keepAliveTime, bool compress,
+bool DBConnectionImpl::connect(const std::string & hostName, int port, const std::string & userId,
+        const std::string & password, bool sslEnable,bool asynTask, int keepAliveTime, bool compress,
         bool python) {
     hostName_ = hostName;
     port_ = port;
@@ -88,14 +108,14 @@ bool DBConnectionImpl::connect() {
         throw IOException("Server connection response: '" + line);
 
     if (numObject == 1) {
-        short flag;
+        uint16_t flag;
         if ((ret = in->readShort(flag)) != OK)
             throw IOException("Failed to read object flag from the socket with IO error type " + std::to_string(ret));
-        DATA_FORM form = static_cast<DATA_FORM>(flag >> 8);
+        auto form = static_cast<DATA_FORM>(flag >> 8U);
 
         ConstantUnmarshallFactory factory(in);
         ConstantUnmarshall* unmarshall = factory.getConstantUnmarshall(form);
-        if(unmarshall==NULL)
+        if(unmarshall==nullptr)
             throw IOException("Failed to parse the incoming object" + std::to_string(form));
         if (!unmarshall->start(flag, true, ret)) {
             unmarshall->reset();
@@ -103,7 +123,7 @@ bool DBConnectionImpl::connect() {
         }
         ConstantSP result = unmarshall->getConstant();
         unmarshall->reset();
-        if (!result->getBool())
+        if (result->getBool() == 0)
             throw IOException("Failed to authenticate the user");
     }
 
@@ -126,9 +146,9 @@ bool DBConnectionImpl::connect() {
 
     try {
         if(asynTask_) {
-            SmartPointer<DBConnection> newConn = new DBConnection(false, false);
-            newConn->connect(hostName_, port_, userId_, pwd_);
-            requiredVersion =newConn->run("getRequiredAPIVersion()");
+            DBConnection newConn(false, false);
+            newConn.connect(hostName_, port_, userId_, pwd_);
+            requiredVersion = newConn.run("getRequiredAPIVersion()");
         }else{
             requiredVersion = run("getRequiredAPIVersion()");
         }
@@ -138,27 +158,26 @@ bool DBConnectionImpl::connect() {
     }
     if(!requiredVersion->isTuple()){
         return true;
-    }else{
-        int apiVersion = requiredVersion->get(0)->getInt();
-        if(apiVersion > APIMinVersionRequirement){
-            close();
-            throw IOException("Required C++ API version at least "  + std::to_string(apiVersion) + ". Current C++ API version is "+ std::to_string(APIMinVersionRequirement) +". Please update DolphinDB C++ API. ");
-        }
-        if(requiredVersion->size() >= 2 && requiredVersion->get(1)->getString() != ""){
-            std::cout<<requiredVersion->get(1)->getString() <<std::endl;
-        }
+    }
+    int apiVersion = requiredVersion->get(0)->getInt();
+    if(apiVersion > APIMinVersionRequirement){
+        close();
+        throw IOException("Required C++ API version at least "  + std::to_string(apiVersion) + ". Current C++ API version is "+ std::to_string(APIMinVersionRequirement) +". Please update DolphinDB C++ API. ");
+    }
+    if(requiredVersion->size() >= 2 && !requiredVersion->get(1)->getString().empty()){
+        std::cout<<requiredVersion->get(1)->getString() <<std::endl;
     }
     return true;
 }
 
-void DBConnectionImpl::login(const string& userId, const string& password, bool enableEncryption) {
+void DBConnectionImpl::login(const std::string & userId, const std::string & password, bool enableEncryption) {
     userId_ = userId;
     pwd_ = password;
     if (enableSCRAM_) {
-        return scramLogin();
+        scramLogin();
     }
     try {
-        return scramLogin();
+        scramLogin();
     } catch (DataCorruptionException&) {
         throw;
     } catch (...) {
@@ -185,7 +204,7 @@ void DBConnectionImpl::login(const string& userId, const string& password, bool 
     args.push_back(new String(pwd_));
     args.push_back(new Bool(encrypted_));
     ConstantSP result = run("login", args);
-    if (!result->getBool())
+    if (result->getBool() == 0)
         throw IOException("Failed to authenticate the user " + userId_);
 }
 
@@ -206,11 +225,11 @@ void DBConnectionImpl::scramLogin() {
         std::string errMsg(e.what());
         if (errMsg.find(unsupportStr) != string::npos) {
             throw IOException("SCRAM login is unavailble on current server.");
-        } else if (errMsg.find(wrongAuthModeStr) != string::npos) {
-            throw IOException("user '" + userId_ + "' doesn't support scram authMode.");
-        } else {
-            throw;
         }
+        if (errMsg.find(wrongAuthModeStr) != string::npos) {
+            throw IOException("user '" + userId_ + "' doesn't support scram authMode.");
+        }
+        throw;
     }
 
     if (!result->isVector() || result->size() != 3) {
@@ -297,20 +316,20 @@ void DBConnectionImpl::scramLogin() {
 }
 
 
-ConstantSP DBConnectionImpl::run(const string& script, int priority, int parallelism, int fetchSize, bool clearMemory, long seqNum) {
+ConstantSP DBConnectionImpl::run(const std::string & script, int priority, int parallelism, int fetchSize, bool clearMemory, long seqNum) {
     std::vector<ConstantSP> args;
     return run(script, "script", args, priority, parallelism, fetchSize, clearMemory, seqNum);
 }
 
-ConstantSP DBConnectionImpl::run(const string& funcName, std::vector<ConstantSP>& args, int priority, int parallelism, int fetchSize, bool clearMemory, long seqNum) {
+ConstantSP DBConnectionImpl::run(const std::string & funcName, std::vector<ConstantSP>& args, int priority, int parallelism, int fetchSize, bool clearMemory, long seqNum) {
     return run(funcName, "function", args, priority, parallelism, fetchSize, clearMemory, seqNum);
 }
 
-ConstantSP DBConnectionImpl::upload(const string& name, const ConstantSP& obj) {
+ConstantSP DBConnectionImpl::upload(const std::string & name, const ConstantSP& obj) {
     if (!Util::isVariableCandidate(name))
         throw RuntimeException(name + " is not a qualified variable name.");
     if (obj.isNull()) {
-        throw IllegalArgumentException(__FUNCNAME__, "Invalid obj (nullptr).");
+        throw IllegalArgumentException(DDB_FUNCNAME, "Invalid obj (nullptr).");
     }
     std::vector<ConstantSP> args(1, obj);
     return run(name, "variable", args);
@@ -360,7 +379,7 @@ long DBConnectionImpl::generateRequestFlag(bool clearSessionMemory, bool disable
     return flag;
 }
 
-ConstantSP DBConnectionImpl::run(const string& script, const string& scriptType, std::vector<ConstantSP>& args,
+ConstantSP DBConnectionImpl::run(const std::string & script, const std::string & scriptType, std::vector<ConstantSP>& args,
             int priority, int parallelism, int fetchSize, bool clearMemory, long seqNum) {
     if (!isConnected_)
         throw IOException("Couldn't send script/function to the remote host because the connection has been closed");
@@ -427,7 +446,7 @@ ConstantSP DBConnectionImpl::run(const string& script, const string& scriptType,
     if(asynTask_)
         return new Void();
 
-    if (littleEndian_ != (char)Util::isLittleEndian())
+    if (static_cast<int>(littleEndian_) != (char)Util::isLittleEndian())
         inputStream_->enableReverseIntegerByteOrder();
 
     string line;
@@ -468,19 +487,19 @@ ConstantSP DBConnectionImpl::run(const string& script, const string& scriptType,
         return new Void();
     }
 
-    short flag;
+    uint16_t flag;
     if ((ret = inputStream_->readShort(flag)) != OK) {
         close();
         throw IOException("Failed to read object flag from the socket with IO error type " + std::to_string(ret));
     }
 
-    DATA_FORM form = static_cast<DATA_FORM>(flag >> 8);
-    DATA_TYPE type = static_cast<DATA_TYPE >(flag & 0xff);
+    auto form = static_cast<DATA_FORM>(flag >> 8U);
+    auto type = static_cast<DATA_TYPE >(flag & 0xffU);
     if(fetchSize > 0 && form == DF_VECTOR && type == DT_ANY)
         return new BlockReader(inputStream_);
     ConstantUnmarshallFactory factory(inputStream_);
     ConstantUnmarshall* unmarshall = factory.getConstantUnmarshall(form);
-    if(unmarshall == NULL){
+    if(unmarshall == nullptr){
         DLogger::Error("Unknow incoming object form",form,"of type",type);
         inputStream_->reset(0);
         conn_->skipAll();
@@ -497,4 +516,4 @@ ConstantSP DBConnectionImpl::run(const string& script, const string& scriptType,
     return result;
 }
 
-}
+} // namespace dolphindb

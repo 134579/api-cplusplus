@@ -9,7 +9,7 @@
 namespace dolphindb {
 
 class CompressEncoderDecoder;
-typedef SmartPointer<CompressEncoderDecoder> CompressEncoderDecoderSP;
+using CompressEncoderDecoderSP = SmartPointer<CompressEncoderDecoder>;
 
 class CompressionFactory {
 public:
@@ -30,7 +30,7 @@ public:
 	};
 #pragma pack ()
 	static CompressEncoderDecoderSP GetEncodeDecoder(COMPRESS_METHOD type);
-	static IO_ERR decode(DataInputStreamSP compressSrc, DataOutputStreamSP &uncompressResult, Header &header);
+	static IO_ERR decode(const DataInputStreamSP& compressSrc, DataOutputStreamSP &uncompressResult, Header &header);
 	static IO_ERR encodeContent(const VectorSP &vec, const DataOutputStreamSP &compressResult, Header &header, bool checkSum);
 };
 
@@ -38,14 +38,14 @@ class CompressEncoderDecoder {
 public:
 	virtual IO_ERR decode(DataInputStreamSP compressSrc, DataOutputStreamSP &uncompressResult, const CompressionFactory::Header &header) = 0;
 	virtual IO_ERR encodeContent(const VectorSP &vec, const DataOutputStreamSP &compressResult, CompressionFactory::Header &header, bool checkSum) = 0;
-	virtual ~CompressEncoderDecoder(){}
+	virtual ~CompressEncoderDecoder() = default;
 };
 
 class CompressLZ4 : public CompressEncoderDecoder {
 public:
-	virtual IO_ERR decode(DataInputStreamSP compressSrc, DataOutputStreamSP &uncompressResult, const CompressionFactory::Header &header) override;
-	virtual IO_ERR encodeContent(const VectorSP &vec, const DataOutputStreamSP &compressResult, CompressionFactory::Header &header, bool checkSum) override;
-	virtual ~CompressLZ4() override;
+	IO_ERR decode(DataInputStreamSP compressSrc, DataOutputStreamSP &uncompressResult, const CompressionFactory::Header &header) override;
+	IO_ERR encodeContent(const VectorSP &vec, const DataOutputStreamSP &compressResult, CompressionFactory::Header &header, bool checkSum) override;
+	~CompressLZ4() override;
 private:
 	char * newBuffer(int size);
 	std::vector<char*> tempBufList_;
@@ -53,9 +53,9 @@ private:
 
 class CompressDeltaofDelta : public CompressEncoderDecoder {
 public:
-	virtual IO_ERR decode(DataInputStreamSP compressSrc, DataOutputStreamSP &uncompressResult, const CompressionFactory::Header &header) override;
-	virtual IO_ERR encodeContent(const VectorSP &vec, const DataOutputStreamSP &compressResult, CompressionFactory::Header &header, bool checkSum) override;
-	virtual ~CompressDeltaofDelta() override;
+	IO_ERR decode(DataInputStreamSP compressSrc, DataOutputStreamSP &uncompressResult, const CompressionFactory::Header &header) override;
+	IO_ERR encodeContent(const VectorSP &vec, const DataOutputStreamSP &compressResult, CompressionFactory::Header &header, bool checkSum) override;
+	~CompressDeltaofDelta() override;
 private:
 	char * newBuffer(int size);
 	std::vector<char*> tempBufList_;
@@ -63,4 +63,4 @@ private:
 	static const int maxCompressedSize_;
 };
 
-}//dolphindb
+} // namespace dolphindb

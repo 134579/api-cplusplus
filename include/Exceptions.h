@@ -2,15 +2,16 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
-#include <exception>
-#include <string>
 #include "Types.h"
 #include "Exports.h"
+#include <exception>
+#include <string>
+#include <utility>
 
 #ifdef _MSC_VER
-#define __FUNCNAME__ __FUNCSIG__
+#define DDB_FUNCNAME __FUNCSIG__
 #else
-#define __FUNCNAME__ __PRETTY_FUNCTION__
+#define DDB_FUNCNAME __PRETTY_FUNCTION__
 #endif
 
 namespace dolphindb {
@@ -23,8 +24,8 @@ public:
 		errMsg_.append("Incompatible type. Expected: " + getDataTypeName(expected_) + ", Actual: " + getDataTypeName(actual_));
 	}
 
-	virtual ~IncompatibleTypeException() throw(){}
-	virtual const char* what() const throw() { return errMsg_.c_str();}
+	~IncompatibleTypeException() noexcept override = default;
+	const char* what() const noexcept override { return errMsg_.c_str();}
 	DATA_TYPE expectedType(){return expected_;}
 	DATA_TYPE actualType(){return actual_;}
 private:
@@ -33,25 +34,13 @@ private:
 	std::string errMsg_;
 };
 
-class SyntaxException: public std::exception{
-public:
-	SyntaxException(const std::string& errMsg): errMsg_(errMsg){}
-	virtual const char* what() const throw(){
-		return errMsg_.c_str();
-	}
-	virtual ~SyntaxException() throw(){}
-
-private:
-	const std::string errMsg_;
-};
-
 class IllegalArgumentException : public std::exception{
 public:
-	IllegalArgumentException(const std::string& functionName, const std::string& errMsg): functionName_(functionName), errMsg_(errMsg){}
-	virtual const char* what() const throw(){
+	IllegalArgumentException(std::string functionName, std::string errMsg): functionName_(std::move(functionName)), errMsg_(std::move(errMsg)){}
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~IllegalArgumentException() throw(){}
+	~IllegalArgumentException() noexcept override = default;
 	const std::string& getFunctionName() const { return functionName_;}
 
 private:
@@ -61,11 +50,11 @@ private:
 
 class RuntimeException: public std::exception{
 public:
-	RuntimeException(const std::string& errMsg):errMsg_(errMsg){}
-	virtual const char* what() const throw(){
+	explicit RuntimeException(std::string errMsg):errMsg_(std::move(errMsg)){}
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~RuntimeException() throw(){}
+	~RuntimeException() noexcept override = default;
 
 private:
 	const std::string errMsg_;
@@ -73,11 +62,11 @@ private:
 
 class OperatorRuntimeException: public std::exception{
 public:
-	OperatorRuntimeException(const std::string& optr,const std::string& errMsg): operator_(optr),errMsg_(errMsg){}
-	virtual const char* what() const throw(){
+	OperatorRuntimeException(std::string optr,std::string errMsg): operator_(std::move(optr)),errMsg_(std::move(errMsg)){}
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~OperatorRuntimeException() throw(){}
+	~OperatorRuntimeException() noexcept override = default;
 	const std::string& getOperatorName() const { return operator_;}
 
 private:
@@ -87,11 +76,11 @@ private:
 
 class TableRuntimeException: public std::exception{
 public:
-	TableRuntimeException(const std::string& errMsg): errMsg_(errMsg){}
-	virtual const char* what() const throw(){
+	explicit TableRuntimeException(std::string errMsg): errMsg_(std::move(errMsg)){}
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~TableRuntimeException() throw(){}
+	~TableRuntimeException() noexcept override = default;
 
 private:
 	const std::string errMsg_;
@@ -100,10 +89,10 @@ private:
 class MemoryException: public std::exception{
 public:
 	MemoryException():errMsg_("Out of memory"){}
-	virtual const char* what() const throw(){
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~MemoryException() throw(){}
+	~MemoryException() noexcept override = default;
 
 private:
 	const std::string errMsg_;
@@ -111,13 +100,13 @@ private:
 
 class IOException: public std::exception{
 public:
-	IOException(const std::string& errMsg): errMsg_(errMsg), errCode_(OTHERERR){}
+	explicit IOException(std::string errMsg): errMsg_(std::move(errMsg)), errCode_(OTHERERR){}
 	IOException(const std::string& errMsg, IO_ERR errCode): errMsg_(errMsg + ". " + getCodeDescription(errCode)), errCode_(errCode){}
-	IOException(IO_ERR errCode): errMsg_(getCodeDescription(errCode)), errCode_(errCode){}
-	virtual const char* what() const throw(){
+	explicit IOException(IO_ERR errCode): errMsg_(getCodeDescription(errCode)), errCode_(errCode){}
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~IOException() throw(){}
+	~IOException() noexcept override = default;
 	IO_ERR getErrorCode() const {return errCode_;}
 private:
     std::string getCodeDescription(IO_ERR errCode) const
@@ -139,18 +128,18 @@ private:
         }
     }
 
-private:
+
 	const std::string errMsg_;
 	const IO_ERR errCode_;
 };
 
 class DataCorruptionException: public std::exception {
 public:
-	DataCorruptionException(const std::string& errMsg) : errMsg_("<DataCorruption>" + errMsg){}
-	virtual const char* what() const throw(){
+	explicit DataCorruptionException(const std::string& errMsg) : errMsg_("<DataCorruption>" + errMsg){}
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~DataCorruptionException() throw(){}
+	~DataCorruptionException() noexcept override = default;
 
 private:
 	const std::string errMsg_;
@@ -161,12 +150,12 @@ public:
 	//Electing a leader. Wait for a while to retry.
 	NotLeaderException() : errMsg_("<NotLeader>"){}
 	//Use the new leader specified in the input argument. format: <host>:<port>:<alias>, e.g. 192.168.1.10:8801:nodeA
-	NotLeaderException(const std::string& newLeader) : errMsg_("<NotLeader>" + newLeader), newLeader_(newLeader){}
+	explicit NotLeaderException(const std::string& newLeader) : errMsg_("<NotLeader>" + newLeader), newLeader_(newLeader){}
 	const std::string& getNewLeader() const {return newLeader_;}
-	virtual const char* what() const throw(){
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~NotLeaderException() throw(){}
+	~NotLeaderException() noexcept override = default;
 
 private:
 	const std::string errMsg_;
@@ -175,50 +164,14 @@ private:
 
 class MathException: public std::exception {
 public:
-	MathException(const std::string& errMsg) : errMsg_(errMsg){}
-	virtual const char* what() const throw(){
+	explicit MathException(std::string errMsg) : errMsg_(std::move(errMsg)){}
+	const char* what() const noexcept override{
 		return errMsg_.c_str();
 	}
-	virtual ~MathException() throw(){}
+	~MathException() noexcept override = default;
 
 private:
 	const std::string errMsg_;
 };
 
-class TestingException: public std::exception{
-public:
-	TestingException(const std::string& caseName,const std::string& subCaseName): name_(caseName),subName_(subCaseName){
-		if(subName_.empty())
-			errMsg_="Testing case "+name_+" failed";
-		else
-			errMsg_="Testing case "+name_+"_"+subName_+" failed";
-	}
-	virtual const char* what() const throw(){
-		return errMsg_.c_str();
-	}
-	const std::string& getCaseName() const {return name_;}
-	const std::string& getSubCaseName() const {return subName_;}
-	virtual ~TestingException() throw(){}
-
-private:
-	const std::string name_;
-	const std::string subName_;
-	std::string errMsg_;
-
-};
-
-class UserException: public std::exception{
-public:
-	UserException(const std::string exceptionType, const std::string& msg) : exceptionType_(exceptionType), msg_(msg){}
-	virtual const char* what() const throw(){
-		return msg_.c_str();
-	}
-	const std::string& getExceptionType() const { return exceptionType_;}
-	const std::string& getMessage() const { return msg_;}
-	virtual ~UserException() throw(){}
-private:
-	std::string exceptionType_;
-	std::string msg_;
-};
-
-}
+} // namespace dolphindb

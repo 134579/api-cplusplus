@@ -1,7 +1,7 @@
 #include "Table.h"
-#include "Vector.h"
-#include "Util.h"
 #include "ConstantImp.h"
+#include "Util.h"
+#include "Vector.h"
 
 namespace dolphindb {
 
@@ -41,8 +41,8 @@ private:
 
 class ResultSet {
 public:
-	ResultSet(const TableSP &table)
-		: table_(table), position_(0)
+	explicit ResultSet(const TableSP &table)
+		: table_(table) 
 	{
 		rows_ = table_->rows();
 		cols_ = table_->columns();
@@ -207,7 +207,7 @@ public:
 		return column_[col].doubleCol->getValue(position_);
 	}
 	template<typename T>
-	inline OneRowInArrayVector<T> getDataInArrayVector(int col){
+	OneRowInArrayVector<T> getDataInArrayVector(int col){
 		DATA_TYPE type = getDataType(col);
 		throw RuntimeException("Not support This Type in ResultSet " + std::to_string(type));
 	}
@@ -219,29 +219,27 @@ public:
 		ColumnPointer &column = column_[col];
 		if(column.charCol!=nullptr)
 			return (unsigned char*)&column.charCol->getValue(position_);
-		else if (column.shortCol != nullptr)
+		if (column.shortCol != nullptr)
 			return (unsigned char*)&column.shortCol->getValue(position_);
-		else if (column.intCol != nullptr)
+		if (column.intCol != nullptr)
 			return (unsigned char*)&column.intCol->getValue(position_);
-		else if (column.longCol != nullptr)
+		if (column.longCol != nullptr)
 			return (unsigned char*)&column.longCol->getValue(position_);
-		else if (column.floatCol != nullptr)
+		if (column.floatCol != nullptr)
 			return (unsigned char*)&column.floatCol->getValue(position_);
-		else if (column.doubleCol != nullptr)
+		if (column.doubleCol != nullptr)
 			return (unsigned char*)&column.doubleCol->getValue(position_);
-		else if (column.stringCol != nullptr)
+		if (column.stringCol != nullptr)
 			return (unsigned char*)column.stringCol->getValue(position_)->data();
-		else if(column.int128Col != nullptr)
+		if(column.int128Col != nullptr)
 			return (unsigned char*)&column.int128Col->getValue(position_);
-		else if (column.decimal32Col != nullptr)
+		if (column.decimal32Col != nullptr)
 			return (unsigned char*)&column.decimal32Col->getValue(position_);
-		else if (column.decimal64Col != nullptr)
+		if (column.decimal64Col != nullptr)
 			return (unsigned char*)&column.decimal64Col->getValue(position_);
-		else if (column.decimal128Col != nullptr)
+		if (column.decimal128Col != nullptr)
 			return (unsigned char*)&column.decimal128Col->getValue(position_);
-		else {
-			throw RuntimeException("This instance doesn't support getBinary.");
-		}
+		throw RuntimeException("This instance doesn't support getBinary.");
 	}
 	ConstantSP getObject(int col) const {
 		return column_[col].pVector->get(position_);
@@ -252,8 +250,7 @@ private:
 	public:
 		Column(const VectorSP &vector,
 			std::function<const T*(const VectorSP &pVector, INDEX position,int len, T *buf)> getBufConst)
-			: pVector_(vector), getBufConst_(getBufConst),
-				constRefBegin_(0), constRefEnd_(0) {
+			: pVector_(vector), getBufConst_(std::move(getBufConst)) {
 			rows_ = pVector_->rows();
 			isArrayVector_ = pVector_->getVectorType() == VECTOR_TYPE::ARRAYVECTOR;
 			if(isArrayVector_) {
@@ -296,7 +293,7 @@ private:
 		std::function<const T*(const VectorSP &pVector, INDEX position, int len, T *buf)> getBufConst_;
 		T *buffer_;
 		const T *constRef_;
-		INDEX constRefBegin_, constRefEnd_;
+		INDEX constRefBegin_{0}, constRefEnd_{0};
 		INDEX rows_;
 		bool isArrayVector_;
 		//used for arrayVector start
@@ -366,7 +363,7 @@ private:
 		}
 	};
 	TableSP table_;
-	long position_;
+	long position_{0};
 	int rows_, cols_;
 	ColumnPointer *column_;
 };

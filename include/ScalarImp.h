@@ -3,10 +3,11 @@
 #pragma once
 
 #include <climits>
+#include <utility>
 
 #include "Constant.h"
-#include "Util.h"
 #include "Guid.h"
+#include "Util.h"
 
 #if defined(_MSC_VER)
 #pragma warning( push )
@@ -23,7 +24,7 @@ namespace dolphindb {
 
 class Void: public Constant{
 public:
-	Void(bool explicitNull = false){setNothing(!explicitNull);}
+	explicit Void(bool explicitNull = false){setNothing(!explicitNull);}
 	ConstantSP getInstance() const override {return ConstantSP(new Void(!isNothing()));}
 	ConstantSP getValue() const override {return ConstantSP(new Void(!isNothing()));}
 	DATA_TYPE getType() const override {return DT_VOID;}
@@ -71,11 +72,11 @@ public:
 class Int128: public Constant{
 public:
 	Int128();
-	Int128(const unsigned char* data);
-	virtual ~Int128(){}
-	inline const unsigned char* bytes() const { return uuid_;}
+	explicit Int128(const unsigned char* data);
+	~Int128() override = default;
+	const unsigned char* bytes() const { return uuid_;}
 	std::string getString() const override { return toString(uuid_);}
-	const Guid getInt128() const override { return uuid_;}
+	Guid getInt128() const override { return Guid(uuid_);}
 	const unsigned char* getBinary() const override {return uuid_;}
 	bool isNull() const override;
 	void setNull() override;
@@ -121,11 +122,11 @@ protected:
 
 class Uuid : public Int128 {
 public:
-	Uuid(bool newUuid = false);
-	Uuid(const unsigned char* uuid);
+	explicit Uuid(bool newUuid = false);
+	explicit Uuid(const unsigned char* uuid);
 	Uuid(const char* uuid, size_t len);
 	Uuid(const Uuid& copy);
-	virtual ~Uuid(){}
+	~Uuid() override = default;
 	ConstantSP getInstance() const override {return new Uuid(false);}
 	ConstantSP getValue() const override {return new Uuid(uuid_);}
 	DATA_TYPE getType() const override {return DT_UUID;}
@@ -137,10 +138,10 @@ public:
 
 class IPAddr : public Int128 {
 public:
-	IPAddr();
+	IPAddr() = default;
 	IPAddr(const char* ip, int len);
-	IPAddr(const unsigned char* data);
-	virtual ~IPAddr(){}
+	explicit IPAddr(const unsigned char* data);
+	~IPAddr() override = default;
 	ConstantSP getInstance() const override {return new IPAddr();}
 	ConstantSP getValue() const override {return new IPAddr(uuid_);}
 	DATA_TYPE getType() const override {return DT_IP;}
@@ -157,14 +158,14 @@ private:
 
 class String: public Constant{
 public:
-	String(std::string val="", bool blob=false):val_(val), blob_(blob){
+	explicit String(std::string val="", bool blob=false):val_(std::move(val)), blob_(blob){
 		if(!blob_){
 			if(val_.find('\0') != std::string::npos){
 				throw RuntimeException("A String cannot contain the character '\\0'");
 			}
 		}
 	}
-	virtual ~String(){}
+	~String() override = default;
 	char getBool() const override {throw IncompatibleTypeException(DT_BOOL,DT_STRING);}
 	char getChar() const override {throw IncompatibleTypeException(DT_CHAR,DT_STRING);}
 	short getShort() const override {throw IncompatibleTypeException(DT_SHORT,DT_STRING);}
@@ -240,8 +241,8 @@ private:
 template <class T>
 class AbstractScalar: public Constant{
 public:
-	AbstractScalar(T val=0):val_(val){}
-	virtual ~AbstractScalar(){}
+	explicit AbstractScalar(T val=0):val_(val){}
+	~AbstractScalar() override = default;
 	char getBool() const override {return isNull()?CHAR_MIN:(bool)val_;}
 	char getChar() const override {return isNull() ? CHAR_MIN : static_cast<char>(val_);}
 	short getShort() const override {return isNull() ? SHRT_MIN : static_cast<short>(val_);}
@@ -251,23 +252,22 @@ public:
 	float getFloat() const override {return isNull() ? FLT_NMIN : static_cast<float>(val_);}
 	double getDouble() const override {return isNull() ? DBL_NMIN : static_cast<double>(val_);}
 
-	virtual void setBool(char val) override {if(val != CHAR_MIN) val_=(T)val; else setNull();}
-	virtual void setChar(char val) override {if(val != CHAR_MIN) val_=(T)val; else setNull();}
-	virtual void setShort(short val) override {if(val != SHRT_MIN) val_=(T)val; else setNull();}
-	virtual void setInt(int val) override {if(val != INT_MIN) val_=(T)val; else setNull();}
-	virtual void setLong(long long val) override {if(val != LLONG_MIN) val_=(T)val; else setNull();}
-	virtual void setIndex(INDEX val) override {if(val != INDEX_MIN) val_=(T)val; else setNull();}
-	virtual void setFloat(float val) override {if(val != FLT_NMIN) val_=(T)val; else setNull();}
-	virtual void setDouble(double val) override {if(val != DBL_NMIN) val_=(T)val; else setNull();}
-	virtual void setString(const std::string& val) override {}
+	void setBool(char val) override {if(val != CHAR_MIN) val_=(T)val; else setNull();}
+	void setChar(char val) override {if(val != CHAR_MIN) val_=(T)val; else setNull();}
+	void setShort(short val) override {if(val != SHRT_MIN) val_=(T)val; else setNull();}
+	void setInt(int val) override {if(val != INT_MIN) val_=(T)val; else setNull();}
+	void setLong(long long val) override {if(val != LLONG_MIN) val_=(T)val; else setNull();}
+	void setIndex(INDEX val) override {if(val != INDEX_MIN) val_=(T)val; else setNull();}
+	void setFloat(float val) override {if(val != FLT_NMIN) val_=(T)val; else setNull();}
+	void setDouble(double val) override {if(val != DBL_NMIN) val_=(T)val; else setNull();}
+	void setString(const std::string& val) override {}
 	bool isNull() const override = 0;
 	std::string getScript() const override {
 		if(isNull()){
 			std::string str("00");
 			return str.append(1, Util::getDataTypeSymbol(getType()));
 		}
-		else
-			return getString();
+		return getString();
 	}
 
 	void nullFill(const ConstantSP& val) override {
@@ -391,19 +391,17 @@ public:
 		int len = sizeof(T)-offset;
 		if(len < 0)
 			return -1;
-		else if(bufSize >= len){
+		if(bufSize >= len){
 			numElement = 1;
 			partial = 0;
 			memcpy(buf,((char*)&val_)+offset, len);
 			return len;
 		}
-		else{
-			len = bufSize;
-			numElement = 0;
-			partial = offset+bufSize;
-			memcpy(buf,((char*)&val_)+offset, len);
-			return len;
-		}
+		len = bufSize;
+		numElement = 0;
+		partial = offset + bufSize;
+		memcpy(buf, ((char *)&val_) + offset, len);
+		return len;
 	}
 
 	int32_t getDecimal32(INDEX index, int scale) const override {
@@ -453,10 +451,8 @@ public:
 			T val= (T)target->getDouble();
 			return val_==val?0:(val_<val?-1:1);
 		}
-		else{
-			T val= (T)target->getLong();
-			return val_==val?0:(val_<val?-1:1);
-		}
+		T val= (T)target->getLong();
+		return val_==val?0:(val_<val?-1:1);
 	}
 
 private:
@@ -468,8 +464,9 @@ protected:
 
 class Bool: public AbstractScalar<char>{
 public:
-	Bool(char val=0):AbstractScalar(val){}
-	virtual ~Bool(){}
+	explicit Bool(bool val = false): AbstractScalar(val) {}
+	explicit Bool(char val): AbstractScalar(val) {}
+	~Bool() override = default;
 	bool isNull() const override {return val_==CHAR_MIN;}
 	void setNull() override {val_= CHAR_MIN;}
 	void setBool(char val) override { val_ = val;}
@@ -486,17 +483,16 @@ public:
 	static std::string toString(char val){
 		if(val == CHAR_MIN)
 			return "";
-		else if(val)
+		if(val)
 			return "1";
-		else
-			return "0";
+		return "0";
 	}
 };
 
 class Char: public AbstractScalar<char>{
 public:
-	Char(char val=0):AbstractScalar(val){}
-	virtual ~Char(){}
+	explicit Char(char val=0):AbstractScalar(val){}
+	~Char() override = default;
 	bool isNull() const override {return val_==CHAR_MIN;}
 	void setNull() override {val_=CHAR_MIN;}
 	void setChar(char val) override { val_ = val;}
@@ -515,8 +511,8 @@ public:
 
 class Short: public AbstractScalar<short>{
 public:
-	Short(short val=0):AbstractScalar(val){}
-	virtual ~Short(){}
+	explicit Short(short val=0):AbstractScalar(val){}
+	~Short() override = default;
 	bool isNull() const override {return val_==SHRT_MIN;}
 	void setNull() override {val_=SHRT_MIN;}
 	void setShort(short val) override { val_ = val;}
@@ -534,8 +530,8 @@ public:
 
 class Int: public AbstractScalar<int>{
 public:
-	Int(int val=0):AbstractScalar(val){}
-	virtual ~Int(){}
+	explicit Int(int val=0):AbstractScalar(val){}
+	~Int() override = default;
 	bool isNull() const override {return val_==INT_MIN;}
 	void setNull() override {val_=INT_MIN;}
 	void setInt(int val) override { val_ = val;}
@@ -553,8 +549,8 @@ public:
 
 class EnumInt : public Int {
 public:
-	EnumInt(const std::string& desc, int val):Int(val), desc_(desc){}
-	virtual ~EnumInt(){}
+	EnumInt(std::string desc, int val):Int(val), desc_(std::move(desc)){}
+	~EnumInt() override = default;
 	std::string getScript() const override {return desc_;}
 	ConstantSP getValue() const override {return ConstantSP(new EnumInt(desc_, val_));}
 	ConstantSP getInstance() const override {return ConstantSP(new EnumInt(desc_, val_));}
@@ -566,8 +562,8 @@ private:
 
 class Long: public AbstractScalar<long long>{
 public:
-	Long(long long val=0):AbstractScalar(val){}
-	virtual ~Long(){}
+	explicit Long(long long val=0):AbstractScalar(val){}
+	~Long() override = default;
 	bool isNull() const override {return val_==LLONG_MIN;}
 	void setNull() override {val_=LLONG_MIN;}
 	void setLong(long long val) override { val_ = val;}
@@ -585,8 +581,8 @@ public:
 
 class Float: public AbstractScalar<float>{
 public:
-	Float(float val=0):AbstractScalar(val){}
-	virtual ~Float(){}
+	explicit Float(float val=0):AbstractScalar(val){}
+	~Float() override = default;
 	bool isNull() const override {return val_==FLT_NMIN;}
 	void setNull() override {val_=FLT_NMIN;}
 	void setFloat(float val) override { val_ = val;}
@@ -615,8 +611,8 @@ public:
 
 class Double: public AbstractScalar<double>{
 public:
-	Double(double val=0):AbstractScalar(val){}
-	virtual ~Double(){}
+	explicit Double(double val=0):AbstractScalar(val){}
+	~Double() override = default;
 	bool isNull() const override {return val_==DBL_NMIN;}
 	void setNull() override {val_=DBL_NMIN;}
 	void setDouble(double val) override { val_ = val;}
@@ -645,8 +641,8 @@ public:
 
 class EnumDouble : public Double {
 public:
-	EnumDouble(const std::string& desc, double val):Double(val), desc_(desc){}
-	virtual ~EnumDouble(){}
+	EnumDouble(std::string desc, double val):Double(val), desc_(std::move(desc)){}
+	~EnumDouble() override = default;
 	std::string getScript() const override {return desc_;}
 	ConstantSP getValue() const override {return ConstantSP(new EnumDouble(desc_, val_));}
 	ConstantSP getInstance() const override {return ConstantSP(new EnumDouble(desc_, val_));}
@@ -658,15 +654,15 @@ private:
 
 class TemporalScalar:public Int{
 public:
-	TemporalScalar(int val=0):Int(val){}
-	virtual ~TemporalScalar(){}
+	explicit TemporalScalar(int val=0):Int(val){}
+	~TemporalScalar() override = default;
 	DATA_CATEGORY getCategory() const override {return TEMPORAL;}
 };
 
 class Date:public TemporalScalar{
 public:
-	Date(int val=0):TemporalScalar(val){}
-	virtual ~Date(){}
+	explicit Date(int val=0):TemporalScalar(val){}
+	~Date() override = default;
 	Date(int year, int month, int day):TemporalScalar(Util::countDays(year,month,day)){}
 	DATA_TYPE getType() const override {return DT_DATE;}
 	ConstantSP getInstance() const override {return ConstantSP(new Date());}
@@ -679,10 +675,10 @@ public:
 
 class Month:public TemporalScalar{
 public:
-	Month():TemporalScalar(1999*12+11){}
-	Month(int val):TemporalScalar(val){}
-	Month(int year, int month):TemporalScalar(year*12+month-1){}
-	virtual ~Month(){}
+	Month():TemporalScalar((1999*12)+11){}
+	explicit Month(int val):TemporalScalar(val){}
+	Month(int year, int month):TemporalScalar((year*12)+month-1){}
+	~Month() override = default;
 	DATA_TYPE getType() const override {return DT_MONTH;}
 	ConstantSP getInstance() const override {return ConstantSP(new Month());}
 	ConstantSP getValue() const override {return ConstantSP(new Month(val_));}
@@ -694,9 +690,9 @@ public:
 
 class Time:public TemporalScalar{
 public:
-	Time(int val=0):TemporalScalar(val){}
-	Time(int hour, int minute, int second, int milliSecond):TemporalScalar(((hour*60+minute)*60+second)*1000+milliSecond){}
-	virtual ~Time(){}
+	explicit Time(int val=0):TemporalScalar(val){}
+	Time(int hour, int minute, int second, int milliSecond):TemporalScalar((((hour*60+minute)*60+second)*1000)+milliSecond){}
+	~Time() override = default;
 	DATA_TYPE getType() const override {return DT_TIME;}
 	ConstantSP getInstance() const override {return ConstantSP(new Time());}
 	ConstantSP getValue() const override {return ConstantSP(new Time(val_));}
@@ -709,9 +705,9 @@ public:
 
 class NanoTime:public Long{
 public:
-	NanoTime(long long val=0):Long(val){}
-	NanoTime(int hour, int minute, int second, int nanoSecond):Long(((hour*60+minute)*60+second)*1000000000ll+ nanoSecond){}
-	virtual ~NanoTime(){}
+	explicit NanoTime(long long val=0):Long(val){}
+	NanoTime(int hour, int minute, int second, int nanoSecond):Long((((hour*60+minute)*60+second)*1000000000LL)+ nanoSecond){}
+	~NanoTime() override = default;
 	DATA_TYPE getType() const override {return DT_NANOTIME;}
 	DATA_CATEGORY getCategory() const override {return TEMPORAL;}
 	ConstantSP castTemporal(DATA_TYPE expectType) override;
@@ -725,9 +721,9 @@ public:
 
 class Timestamp:public Long{
 public:
-	Timestamp(long long val=0):Long(val){}
+	explicit Timestamp(long long val=0):Long(val){}
 	Timestamp(int year, int month, int day,int hour, int minute, int second, int milliSecond);
-	virtual ~Timestamp(){}
+	~Timestamp() override = default;
 	DATA_TYPE getType() const override {return DT_TIMESTAMP;}
 	DATA_CATEGORY getCategory() const override {return TEMPORAL;}
 	ConstantSP castTemporal(DATA_TYPE expectType) override;
@@ -740,9 +736,9 @@ public:
 
 class NanoTimestamp:public Long{
 public:
-	NanoTimestamp(long long val=0):Long(val){}
+	explicit NanoTimestamp(long long val=0):Long(val){}
 	NanoTimestamp(int year, int month, int day,int hour, int minute, int second, int nanoSecond);
-	virtual ~NanoTimestamp(){}
+	~NanoTimestamp() override = default;
 	DATA_TYPE getType() const override {return DT_NANOTIMESTAMP;}
 	DATA_CATEGORY getCategory() const override {return TEMPORAL;}
 	ConstantSP castTemporal(DATA_TYPE expectType) override;
@@ -755,9 +751,9 @@ public:
 
 class Minute:public TemporalScalar{
 public:
-	Minute(int val=0):TemporalScalar(val){}
-	Minute(int hour, int minute):TemporalScalar(hour*60+minute){}
-	virtual ~Minute(){}
+	explicit Minute(int val=0):TemporalScalar(val){}
+	Minute(int hour, int minute):TemporalScalar((hour*60)+minute){}
+	~Minute() override = default;
 	DATA_TYPE getType() const override {return DT_MINUTE;}
 	ConstantSP getInstance() const override {return ConstantSP(new Minute());}
 	ConstantSP getValue() const override {return ConstantSP(new Minute(val_));}
@@ -770,9 +766,9 @@ public:
 
 class Second:public TemporalScalar{
 public:
-	Second(int val=0):TemporalScalar(val){}
-	Second(int hour, int minute,int second):TemporalScalar((hour*60+minute)*60+second){}
-	virtual ~Second(){}
+	explicit Second(int val=0):TemporalScalar(val){}
+	Second(int hour, int minute,int second):TemporalScalar(((hour*60+minute)*60)+second){}
+	~Second() override = default;
 	DATA_TYPE getType() const override {return DT_SECOND;}
 	ConstantSP getInstance() const override {return ConstantSP(new Second());}
 	ConstantSP getValue() const override {return ConstantSP(new Second(val_));}
@@ -785,9 +781,9 @@ public:
 
 class DateTime:public TemporalScalar{
 public:
-	DateTime(int val=0):TemporalScalar(val){}
+	explicit DateTime(int val=0):TemporalScalar(val){}
 	DateTime(int year, int month, int day, int hour, int minute,int second);
-	virtual ~DateTime(){}
+	~DateTime() override = default;
 	DATA_TYPE getType() const override {return DT_DATETIME;}
 	ConstantSP getInstance() const override {return ConstantSP(new DateTime());}
 	ConstantSP getValue() const override {return ConstantSP(new DateTime(val_));}
@@ -799,9 +795,9 @@ public:
 
 class DateHour:public TemporalScalar{
 public:
-    DateHour(int val=0):TemporalScalar(val){}
+    explicit DateHour(int val=0):TemporalScalar(val){}
     DateHour(int year, int month, int day, int hour);
-    virtual ~DateHour(){}
+    ~DateHour() override = default;
     DATA_TYPE getType() const override {return DT_DATEHOUR;}
     ConstantSP getInstance() const override {return ConstantSP(new DateHour());}
     ConstantSP getValue() const override {return ConstantSP(new DateHour(val_));}
@@ -811,7 +807,7 @@ public:
 	ConstantSP castTemporal(DATA_TYPE expectType) override;
 };
 
-}
+} // namespace dolphindb
 
 #if defined(_MSC_VER)
 #pragma warning( pop )

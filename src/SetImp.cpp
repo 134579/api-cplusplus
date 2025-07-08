@@ -6,14 +6,19 @@
  */
 
 #include "SetImp.h"
+#include "Constant.h"
+#include "Guid.h"
+#include "Types.h"
+#include "Util.h"
+
+#include <algorithm>
 #include <memory>
-using std::unordered_set;
 
 namespace dolphindb {
 
 void CharSet::contain(const ConstantSP& target, const ConstantSP& resultSP) const {
 	if(target->isScalar()){
-		resultSP->setBool(data_.find(target->getChar()) != data_.end());
+		resultSP->setBool(static_cast<char>(data_.find(target->getChar()) != data_.end()));
 	}
 	else{
 		ConstantSP source = (target->isSet() ? target->keys() : target);
@@ -26,13 +31,13 @@ void CharSet::contain(const ConstantSP& target, const ConstantSP& resultSP) cons
 		INDEX start=0;
 		int count;
 
-		unordered_set<char>::const_iterator end=data_.end();
+		auto end=data_.end();
 		while(start<len){
 			count=(std::min)(len-start,bufSize);
 			pbuf=source->getCharConst(start,count,buf);
 			pret=resultSP->getBoolBuffer(start,count,ret);
 			for(int i=0;i<count;++i)
-				pret[i]=data_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(data_.find(pbuf[i])!=end);
 			resultSP->setBool(start,count,pret);
 			start+=count;
 		}
@@ -44,8 +49,7 @@ bool CharSet::manipulate(const ConstantSP& value, bool deletion) {
 	if(form == DF_SCALAR){
 		if(deletion){
 			data_.erase(value->getChar());
-		}
-		else{
+		} else{
 			data_.insert(value->getChar());
 		}
 	}
@@ -84,12 +88,12 @@ bool CharSet::inverse(const ConstantSP& value){
 	INDEX start = 0;
 	int count;
 
-	unordered_set<char>::iterator end = data_.end();
+	auto end = data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getCharConst(start,count,buf);
 		for(int i=0; i<count; ++i){
-			unordered_set<char>::iterator  it = data_.find(pbuf[i]);
+			auto  it = data_.find(pbuf[i]);
 			if(it != end)
 				data_.erase(it);
 			else
@@ -109,7 +113,7 @@ bool CharSet::isSuperset(const ConstantSP& target) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<char>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getCharConst(start,count,buf);
@@ -123,7 +127,7 @@ bool CharSet::isSuperset(const ConstantSP& target) const {
 }
 
 ConstantSP CharSet::interaction(const ConstantSP& value) const {
-	CharSet* result = new CharSet(type_);
+	auto* result = new CharSet(type_);
 	ConstantSP resultSP(result);
 
 	ConstantSP source = (value->isSet() ? value->keys() : value);
@@ -134,7 +138,7 @@ ConstantSP CharSet::interaction(const ConstantSP& value) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<char>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getCharConst(start,count,buf);
@@ -148,7 +152,7 @@ ConstantSP CharSet::interaction(const ConstantSP& value) const {
 }
 
 ConstantSP CharSet::getSubVector(INDEX start, INDEX length) const {
-	unordered_set<char>::const_iterator it = data_.begin();
+	auto it = data_.begin();
 	for(int i=0; i<start; ++i) ++it;
 	ConstantSP result = Util::createVector(type_, length, 0,true);
 
@@ -172,7 +176,7 @@ ConstantSP CharSet::getSubVector(INDEX start, INDEX length) const {
 
 void ShortSet::contain(const ConstantSP& target, const ConstantSP& resultSP) const {
 	if(target->isScalar()){
-		resultSP->setBool(data_.find(target->getShort()) != data_.end());
+		resultSP->setBool(static_cast<char>(data_.find(target->getShort()) != data_.end()));
 	}
 	else{
 		ConstantSP source = (target->isSet() ? target->keys() : target);
@@ -185,13 +189,13 @@ void ShortSet::contain(const ConstantSP& target, const ConstantSP& resultSP) con
 		INDEX start=0;
 		int count;
 
-		unordered_set<short>::const_iterator end=data_.end();
+		auto end=data_.end();
 		while(start<len){
 			count=(std::min)(len-start,bufSize);
 			pbuf=source->getShortConst(start,count,buf);
 			pret=resultSP->getBoolBuffer(start,count,ret);
 			for(int i=0;i<count;++i)
-				pret[i]=data_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(data_.find(pbuf[i])!=end);
 			resultSP->setBool(start,count,pret);
 			start+=count;
 		}
@@ -203,8 +207,7 @@ bool ShortSet::manipulate(const ConstantSP& value, bool deletion) {
 	if(form == DF_SCALAR){
 		if(deletion){
 			data_.erase(value->getShort());
-		}
-		else{
+		} else{
 			data_.insert(value->getShort());
 		}
 	}
@@ -243,12 +246,12 @@ bool ShortSet::inverse(const ConstantSP& value){
 	INDEX start = 0;
 	int count;
 
-	unordered_set<short>::iterator end = data_.end();
+	auto end = data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getShortConst(start,count,buf);
 		for(int i=0; i<count; ++i){
-			unordered_set<short>::iterator  it = data_.find(pbuf[i]);
+			auto  it = data_.find(pbuf[i]);
 			if(it != end)
 				data_.erase(it);
 			else
@@ -268,7 +271,7 @@ bool ShortSet::isSuperset(const ConstantSP& target) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<short>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getShortConst(start,count,buf);
@@ -282,7 +285,7 @@ bool ShortSet::isSuperset(const ConstantSP& target) const {
 }
 
 ConstantSP ShortSet::interaction(const ConstantSP& value) const {
-	ShortSet* result = new ShortSet();
+	auto* result = new ShortSet();
 	ConstantSP resultSP(result);
 
 	ConstantSP source = (value->isSet() ? value->keys() : value);
@@ -293,7 +296,7 @@ ConstantSP ShortSet::interaction(const ConstantSP& value) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<short>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getShortConst(start,count,buf);
@@ -307,7 +310,7 @@ ConstantSP ShortSet::interaction(const ConstantSP& value) const {
 }
 
 ConstantSP ShortSet::getSubVector(INDEX start, INDEX length) const {
-	unordered_set<short>::const_iterator it = data_.begin();
+	auto it = data_.begin();
 	for(int i=0; i<start; ++i) ++it;
 	ConstantSP result = Util::createVector(type_, length, 0,true);
 
@@ -331,7 +334,7 @@ ConstantSP ShortSet::getSubVector(INDEX start, INDEX length) const {
 
 void IntSet::contain(const ConstantSP& target, const ConstantSP& resultSP) const {
 	if(target->isScalar()){
-		resultSP->setBool(data_.find(target->getInt()) != data_.end());
+		resultSP->setBool(static_cast<char>(data_.find(target->getInt()) != data_.end()));
 	}
 	else{
 		ConstantSP source = (target->isSet() ? target->keys() : target);
@@ -344,13 +347,13 @@ void IntSet::contain(const ConstantSP& target, const ConstantSP& resultSP) const
 		INDEX start=0;
 		int count;
 
-		unordered_set<int>::const_iterator end=data_.end();
+		auto end=data_.end();
 		while(start<len){
 			count=(std::min)(len-start,bufSize);
 			pbuf=source->getIntConst(start,count,buf);
 			pret=resultSP->getBoolBuffer(start,count,ret);
 			for(int i=0;i<count;++i)
-				pret[i]=data_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(data_.find(pbuf[i])!=end);
 			resultSP->setBool(start,count,pret);
 			start+=count;
 		}
@@ -362,8 +365,7 @@ bool IntSet::manipulate(const ConstantSP& value, bool deletion) {
 	if(form == DF_SCALAR){
 		if(deletion){
 			data_.erase(value->getInt());
-		}
-		else{
+		} else{
 			data_.insert(value->getInt());
 		}
 	}
@@ -402,12 +404,12 @@ bool IntSet::inverse(const ConstantSP& value){
 	INDEX start = 0;
 	int count;
 
-	unordered_set<int>::iterator end = data_.end();
+	auto end = data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getIntConst(start,count,buf);
 		for(int i=0; i<count; ++i){
-			unordered_set<int>::iterator  it = data_.find(pbuf[i]);
+			auto  it = data_.find(pbuf[i]);
 			if(it != end)
 				data_.erase(it);
 			else
@@ -427,7 +429,7 @@ bool IntSet::isSuperset(const ConstantSP& target) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<int>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getIntConst(start,count,buf);
@@ -441,7 +443,7 @@ bool IntSet::isSuperset(const ConstantSP& target) const {
 }
 
 ConstantSP IntSet::interaction(const ConstantSP& value) const {
-	IntSet* result = new IntSet(type_);
+	auto* result = new IntSet(type_);
 	ConstantSP resultSP(result);
 
 	ConstantSP source = (value->isSet() ? value->keys() : value);
@@ -452,7 +454,7 @@ ConstantSP IntSet::interaction(const ConstantSP& value) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<int>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getIntConst(start,count,buf);
@@ -466,7 +468,7 @@ ConstantSP IntSet::interaction(const ConstantSP& value) const {
 }
 
 ConstantSP IntSet::getSubVector(INDEX start, INDEX length) const {
-	unordered_set<int>::const_iterator it = data_.begin();
+	auto it = data_.begin();
 	for(int i=0; i<start; ++i) ++it;
 	ConstantSP result = Util::createVector(type_, length, 0,true);
 
@@ -490,7 +492,7 @@ ConstantSP IntSet::getSubVector(INDEX start, INDEX length) const {
 
 void LongSet::contain(const ConstantSP& target, const ConstantSP& resultSP) const {
 	if(target->isScalar()){
-		resultSP->setBool(data_.find(target->getLong()) != data_.end());
+		resultSP->setBool(static_cast<char>(data_.find(target->getLong()) != data_.end()));
 	}
 	else{
 		ConstantSP source = (target->isSet() ? target->keys() : target);
@@ -503,13 +505,13 @@ void LongSet::contain(const ConstantSP& target, const ConstantSP& resultSP) cons
 		INDEX start=0;
 		int count;
 
-		unordered_set<long long>::const_iterator end=data_.end();
+		auto end=data_.end();
 		while(start<len){
 			count=(std::min)(len-start,bufSize);
 			pbuf=source->getLongConst(start,count,buf);
 			pret=resultSP->getBoolBuffer(start,count,ret);
 			for(int i=0;i<count;++i)
-				pret[i]=data_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(data_.find(pbuf[i])!=end);
 			resultSP->setBool(start,count,pret);
 			start+=count;
 		}
@@ -521,8 +523,7 @@ bool LongSet::manipulate(const ConstantSP& value, bool deletion) {
 	if(form == DF_SCALAR){
 		if(deletion){
 			data_.erase(value->getLong());
-		}
-		else{
+		} else{
 			data_.insert(value->getLong());
 		}
 	}
@@ -561,12 +562,12 @@ bool LongSet::inverse(const ConstantSP& value){
 	INDEX start = 0;
 	int count;
 
-	unordered_set<long long>::iterator end = data_.end();
+	auto end = data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getLongConst(start,count,buf);
 		for(int i=0; i<count; ++i){
-			unordered_set<long long>::iterator  it = data_.find(pbuf[i]);
+			auto  it = data_.find(pbuf[i]);
 			if(it != end)
 				data_.erase(it);
 			else
@@ -586,7 +587,7 @@ bool LongSet::isSuperset(const ConstantSP& target) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<long long>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getLongConst(start,count,buf);
@@ -600,7 +601,7 @@ bool LongSet::isSuperset(const ConstantSP& target) const {
 }
 
 ConstantSP LongSet::interaction(const ConstantSP& value) const {
-	LongSet* result = new LongSet(type_);
+	auto* result = new LongSet(type_);
 	ConstantSP resultSP(result);
 
 	ConstantSP source = (value->isSet() ? value->keys() : value);
@@ -611,7 +612,7 @@ ConstantSP LongSet::interaction(const ConstantSP& value) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<long long>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getLongConst(start,count,buf);
@@ -625,7 +626,7 @@ ConstantSP LongSet::interaction(const ConstantSP& value) const {
 }
 
 ConstantSP LongSet::getSubVector(INDEX start, INDEX length) const {
-	unordered_set<long long>::const_iterator it = data_.begin();
+	auto it = data_.begin();
 	for(int i=0; i<start; ++i) ++it;
 	ConstantSP result = Util::createVector(type_, length, 0,true);
 
@@ -649,7 +650,7 @@ ConstantSP LongSet::getSubVector(INDEX start, INDEX length) const {
 
 void FloatSet::contain(const ConstantSP& target, const ConstantSP& resultSP) const {
 	if(target->isScalar()){
-		resultSP->setBool(data_.find(target->getFloat()) != data_.end());
+		resultSP->setBool(static_cast<char>(data_.find(target->getFloat()) != data_.end()));
 	}
 	else{
 		ConstantSP source = (target->isSet() ? target->keys() : target);
@@ -662,13 +663,13 @@ void FloatSet::contain(const ConstantSP& target, const ConstantSP& resultSP) con
 		INDEX start=0;
 		int count;
 
-		unordered_set<float>::const_iterator end=data_.end();
+		auto end=data_.end();
 		while(start<len){
 			count=(std::min)(len-start,bufSize);
 			pbuf=source->getFloatConst(start,count,buf);
 			pret=resultSP->getBoolBuffer(start,count,ret);
 			for(int i=0;i<count;++i)
-				pret[i]=data_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(data_.find(pbuf[i])!=end);
 			resultSP->setBool(start,count,pret);
 			start+=count;
 		}
@@ -680,8 +681,7 @@ bool FloatSet::manipulate(const ConstantSP& value, bool deletion) {
 	if(form == DF_SCALAR){
 		if(deletion){
 			data_.erase(value->getFloat());
-		}
-		else{
+		} else{
 			data_.insert(value->getFloat());
 		}
 	}
@@ -720,12 +720,12 @@ bool FloatSet::inverse(const ConstantSP& value){
 	INDEX start = 0;
 	int count;
 
-	unordered_set<float>::iterator end = data_.end();
+	auto end = data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getFloatConst(start,count,buf);
 		for(int i=0; i<count; ++i){
-			unordered_set<float>::iterator  it = data_.find(pbuf[i]);
+			auto  it = data_.find(pbuf[i]);
 			if(it != end)
 				data_.erase(it);
 			else
@@ -745,7 +745,7 @@ bool FloatSet::isSuperset(const ConstantSP& target) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<float>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getFloatConst(start,count,buf);
@@ -759,7 +759,7 @@ bool FloatSet::isSuperset(const ConstantSP& target) const {
 }
 
 ConstantSP FloatSet::interaction(const ConstantSP& value) const {
-	FloatSet* result = new FloatSet();
+	auto* result = new FloatSet();
 	ConstantSP resultSP(result);
 
 	ConstantSP source = (value->isSet() ? value->keys() : value);
@@ -770,7 +770,7 @@ ConstantSP FloatSet::interaction(const ConstantSP& value) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<float>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getFloatConst(start,count,buf);
@@ -784,7 +784,7 @@ ConstantSP FloatSet::interaction(const ConstantSP& value) const {
 }
 
 ConstantSP FloatSet::getSubVector(INDEX start, INDEX length) const {
-	unordered_set<float>::const_iterator it = data_.begin();
+	auto it = data_.begin();
 	for(int i=0; i<start; ++i) ++it;
 	ConstantSP result = Util::createVector(type_, length, 0,true);
 
@@ -808,7 +808,7 @@ ConstantSP FloatSet::getSubVector(INDEX start, INDEX length) const {
 
 void DoubleSet::contain(const ConstantSP& target, const ConstantSP& resultSP) const {
 	if(target->isScalar()){
-		resultSP->setBool(data_.find(target->getDouble()) != data_.end());
+		resultSP->setBool(static_cast<char>(data_.find(target->getDouble()) != data_.end()));
 	}
 	else{
 		ConstantSP source = (target->isSet() ? target->keys() : target);
@@ -821,13 +821,13 @@ void DoubleSet::contain(const ConstantSP& target, const ConstantSP& resultSP) co
 		INDEX start=0;
 		int count;
 
-		unordered_set<double>::const_iterator end=data_.end();
+		auto end=data_.end();
 		while(start<len){
 			count=(std::min)(len-start,bufSize);
 			pbuf=source->getDoubleConst(start,count,buf);
 			pret=resultSP->getBoolBuffer(start,count,ret);
 			for(int i=0;i<count;++i)
-				pret[i]=data_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(data_.find(pbuf[i])!=end);
 			resultSP->setBool(start,count,pret);
 			start+=count;
 		}
@@ -839,8 +839,7 @@ bool DoubleSet::manipulate(const ConstantSP& value, bool deletion) {
 	if(form == DF_SCALAR){
 		if(deletion){
 			data_.erase(value->getDouble());
-		}
-		else{
+		} else{
 			data_.insert(value->getDouble());
 		}
 	}
@@ -879,12 +878,12 @@ bool DoubleSet::inverse(const ConstantSP& value){
 	INDEX start = 0;
 	int count;
 
-	unordered_set<double>::iterator end = data_.end();
+	auto end = data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getDoubleConst(start,count,buf);
 		for(int i=0; i<count; ++i){
-			unordered_set<double>::iterator  it = data_.find(pbuf[i]);
+			auto  it = data_.find(pbuf[i]);
 			if(it != end)
 				data_.erase(it);
 			else
@@ -904,7 +903,7 @@ bool DoubleSet::isSuperset(const ConstantSP& target) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<double>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getDoubleConst(start,count,buf);
@@ -918,7 +917,7 @@ bool DoubleSet::isSuperset(const ConstantSP& target) const {
 }
 
 ConstantSP DoubleSet::interaction(const ConstantSP& value) const {
-	DoubleSet* result = new DoubleSet();
+	auto* result = new DoubleSet();
 	ConstantSP resultSP(result);
 
 	ConstantSP source = (value->isSet() ? value->keys() : value);
@@ -929,7 +928,7 @@ ConstantSP DoubleSet::interaction(const ConstantSP& value) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<double>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getDoubleConst(start,count,buf);
@@ -943,7 +942,7 @@ ConstantSP DoubleSet::interaction(const ConstantSP& value) const {
 }
 
 ConstantSP DoubleSet::getSubVector(INDEX start, INDEX length) const {
-	unordered_set<double>::const_iterator it = data_.begin();
+	auto it = data_.begin();
 	for(int i=0; i<start; ++i) ++it;
 	ConstantSP result = Util::createVector(type_, length, 0,true);
 
@@ -967,7 +966,7 @@ ConstantSP DoubleSet::getSubVector(INDEX start, INDEX length) const {
 
 void StringSet::contain(const ConstantSP& target, const ConstantSP& resultSP) const {
 	if(target->isScalar()){
-		resultSP->setBool(data_.find(target->getString()) != data_.end());
+		resultSP->setBool(static_cast<char>(data_.find(target->getString()) != data_.end()));
 	}
 	else{
 		ConstantSP source = (target->isSet() ? target->keys() : target);
@@ -980,13 +979,13 @@ void StringSet::contain(const ConstantSP& target, const ConstantSP& resultSP) co
 		INDEX start=0;
 		int count;
 
-		unordered_set<std::string>::const_iterator end=data_.end();
+		auto end=data_.end();
 		while(start<len){
 			count=(std::min)(len-start,bufSize);
 			pbuf=source->getStringConst(start,count,buf);
 			pret=resultSP->getBoolBuffer(start,count,ret);
 			for(int i=0;i<count;++i)
-				pret[i]=data_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(data_.find(pbuf[i])!=end);
 			resultSP->setBool(start,count,pret);
 			start+=count;
 		}
@@ -998,8 +997,7 @@ bool StringSet::manipulate(const ConstantSP& value, bool deletion) {
 	if(form == DF_SCALAR){
 		if(deletion){
 			data_.erase(value->getString());
-		}
-		else{
+		} else{
 			data_.insert(value->getString());
 		}
 	}
@@ -1038,12 +1036,12 @@ bool StringSet::inverse(const ConstantSP& value){
 	INDEX start = 0;
 	int count;
 
-	unordered_set<std::string>::iterator end = data_.end();
+	auto end = data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getStringConst(start,count,buf);
 		for(int i=0; i<count; ++i){
-			unordered_set<std::string>::iterator  it = data_.find(pbuf[i]);
+			auto  it = data_.find(pbuf[i]);
 			if(it != end)
 				data_.erase(it);
 			else
@@ -1063,7 +1061,7 @@ bool StringSet::isSuperset(const ConstantSP& target) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<std::string>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getStringConst(start,count,buf);
@@ -1077,7 +1075,7 @@ bool StringSet::isSuperset(const ConstantSP& target) const {
 }
 
 ConstantSP StringSet::interaction(const ConstantSP& value) const {
-	StringSet* result = new StringSet();
+	auto* result = new StringSet();
 	ConstantSP resultSP(result);
 
 	ConstantSP source = (value->isSet() ? value->keys() : value);
@@ -1088,7 +1086,7 @@ ConstantSP StringSet::interaction(const ConstantSP& value) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<std::string>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=(std::min)(len-start,bufSize);
 		pbuf=source->getStringConst(start,count,buf);
@@ -1102,7 +1100,7 @@ ConstantSP StringSet::interaction(const ConstantSP& value) const {
 }
 
 ConstantSP StringSet::getSubVector(INDEX start, INDEX length) const {
-	unordered_set<std::string>::const_iterator it = data_.begin();
+	auto it = data_.begin();
 	for(int i=0; i<start; ++i)
 		++it;
 	ConstantSP result = Util::createVector(type_, length, 0,true);
@@ -1124,7 +1122,7 @@ ConstantSP StringSet::getSubVector(INDEX start, INDEX length) const {
 
 void Int128Set::contain(const ConstantSP& target, const ConstantSP& resultSP) const {
 	if(target->isScalar()){
-		resultSP->setBool(data_.find(target->getInt128()) != data_.end());
+		resultSP->setBool(static_cast<char>(data_.find(target->getInt128()) != data_.end()));
 	}
 	else{
 		ConstantSP source = (target->isSet() ? target->keys() : target);
@@ -1137,13 +1135,13 @@ void Int128Set::contain(const ConstantSP& target, const ConstantSP& resultSP) co
 		INDEX start=0;
 		int count;
 
-		unordered_set<Guid>::const_iterator end=data_.end();
+		auto end=data_.end();
 		while(start<len){
 			count=std::min(len-start,bufSize);
 			pbuf=(const Guid*)source->getBinaryConst(start,count,16,buf.get());
 			pret=resultSP->getBoolBuffer(start,count,ret.get());
 			for(int i=0;i<count;++i)
-				pret[i]=data_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(data_.find(pbuf[i])!=end);
 			resultSP->setBool(start,count,pret);
 			start+=count;
 		}
@@ -1155,8 +1153,7 @@ bool Int128Set::manipulate(const ConstantSP& value, bool deletion) {
 	if(form == DF_SCALAR){
 		if(deletion){
 			data_.erase(value->getInt128());
-		}
-		else{
+		} else{
 			data_.insert(value->getInt128());
 		}
 	}
@@ -1195,12 +1192,12 @@ bool Int128Set::inverse(const ConstantSP& value){
 	INDEX start = 0;
 	int count;
 
-	unordered_set<Guid>::iterator end = data_.end();
+	auto end = data_.end();
 	while(start<len){
 		count=std::min(len-start,bufSize);
 		pbuf=(const Guid*)source->getBinaryConst(start,count,16,buf.get());
 		for(int i=0; i<count; ++i){
-			unordered_set<Guid>::iterator  it = data_.find(pbuf[i]);
+			auto  it = data_.find(pbuf[i]);
 			if(it != end)
 				data_.erase(it);
 			else
@@ -1220,7 +1217,7 @@ bool Int128Set::isSuperset(const ConstantSP& target) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<Guid>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=std::min(len-start,bufSize);
 		pbuf=(const Guid*)source->getBinaryConst(start,count,16,buf.get());
@@ -1234,7 +1231,7 @@ bool Int128Set::isSuperset(const ConstantSP& target) const {
 }
 
 ConstantSP Int128Set::interaction(const ConstantSP& value) const {
-	Int128Set* result = new Int128Set(type_);
+	auto* result = new Int128Set(type_);
 	ConstantSP resultSP(result);
 
 	ConstantSP source = (value->isSet() ? value->keys() : value);
@@ -1245,7 +1242,7 @@ ConstantSP Int128Set::interaction(const ConstantSP& value) const {
 	INDEX start=0;
 	int count;
 
-	unordered_set<Guid>::const_iterator end=data_.end();
+	auto end=data_.end();
 	while(start<len){
 		count=std::min(len-start,bufSize);
 		pbuf=(const Guid*)source->getBinaryConst(start,count,16,buf.get());
@@ -1259,7 +1256,7 @@ ConstantSP Int128Set::interaction(const ConstantSP& value) const {
 }
 
 ConstantSP Int128Set::getSubVector(INDEX start, INDEX length) const {
-	unordered_set<Guid>::const_iterator it = data_.begin();
+	auto it = data_.begin();
 	for(int i=0; i<start; ++i) ++it;
 	ConstantSP result = Util::createVector(type_, length, 0,true);
 
@@ -1281,4 +1278,4 @@ ConstantSP Int128Set::getSubVector(INDEX start, INDEX length) const {
 	return result;
 }
 
-}
+} // namespace dolphindb

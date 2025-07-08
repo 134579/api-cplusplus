@@ -15,11 +15,11 @@
 namespace dolphindb {
 
 class DataInputStream;
-typedef SmartPointer<DataInputStream> DataInputStreamSP;
+using DataInputStreamSP = SmartPointer<DataInputStream>;
 
 class EXPORT_DECL SymbolBase{
 public:
-    SymbolBase(int id):id_(id){}
+    explicit SymbolBase(int id):id_(id){}
 
     SymbolBase(int id, const DataInputStreamSP& in, IO_ERR& ret);
 
@@ -40,8 +40,8 @@ private:
     std::vector<std::string> syms_;
 };
 
-typedef SmartPointer<SymbolBase> SymbolBaseSP;
-}
+using SymbolBaseSP = SmartPointer<SymbolBase>;
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

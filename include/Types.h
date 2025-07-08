@@ -2,10 +2,10 @@
 // Copyright © 2018-2025 DolphinDB, Inc.
 #pragma once
 
-#include <cfloat>
-#include <string>
-#include <limits.h>
 #include "Exports.h"
+#include <cfloat>
+#include <climits>
+#include <string>
 
 namespace dolphindb {
 
@@ -56,91 +56,91 @@ const std::string mapreduceKeyword = "mapr";
 constexpr int ARRAY_TYPE_BASE = 64;
 
 enum DATA_TYPE {
-    DT_VOID,
-    DT_BOOL,
-    DT_CHAR,
-    DT_SHORT,
-    DT_INT,
-    DT_LONG,
-    DT_DATE,
-    DT_MONTH,
-    DT_TIME,
-    DT_MINUTE,
-    DT_SECOND,
-    DT_DATETIME,
-    DT_TIMESTAMP,
-    DT_NANOTIME,
-    DT_NANOTIMESTAMP,
-    DT_FLOAT,
-    DT_DOUBLE,
-    DT_SYMBOL,
-    DT_STRING,
-    DT_UUID,
-    DT_FUNCTIONDEF,
-    DT_HANDLE,
-    DT_CODE,
-    DT_DATASOURCE,
-    DT_RESOURCE,
-    DT_ANY,
-    DT_COMPRESS,
-    DT_DICTIONARY,
-    DT_DATEHOUR,
-    DT_DATEMINUTE,
-    DT_IP,
-    DT_INT128,
-    DT_BLOB,
-    DT_DECIMAL,
-    DT_COMPLEX,
-    DT_POINT,
-    DT_DURATION,
-    DT_DECIMAL32,
-    DT_DECIMAL64,
-    DT_DECIMAL128,
-    DT_OBJECT,
-    DT_IOTANY,              // not supported
-    DT_COUNT,               // Number of Types
+    DT_VOID = 0,
+    DT_BOOL = 1,
+    DT_CHAR = 2,
+    DT_SHORT = 3,
+    DT_INT = 4,
+    DT_LONG = 5,
+    DT_DATE = 6,
+    DT_MONTH = 7,
+    DT_TIME = 8,
+    DT_MINUTE = 9,
+    DT_SECOND = 10,
+    DT_DATETIME = 11,
+    DT_TIMESTAMP = 12,
+    DT_NANOTIME = 13,
+    DT_NANOTIMESTAMP = 14,
+    DT_FLOAT = 15,
+    DT_DOUBLE = 16,
+    DT_SYMBOL = 17,
+    DT_STRING = 18,
+    DT_UUID = 19,
+    DT_FUNCTIONDEF = 20,
+    DT_HANDLE = 21,
+    DT_CODE = 22,
+    DT_DATASOURCE = 23,
+    DT_RESOURCE = 24,
+    DT_ANY = 25,
+    DT_COMPRESS = 26,
+    DT_DICTIONARY = 27,
+    DT_DATEHOUR = 28,
+    DT_DATEMINUTE = 29,
+    DT_IP = 30,
+    DT_INT128 = 31,
+    DT_BLOB = 32,
+    DT_DECIMAL = 33,
+    DT_COMPLEX = 34,
+    DT_POINT = 35,
+    DT_DURATION = 36,
+    DT_DECIMAL32 = 37,
+    DT_DECIMAL64 = 38,
+    DT_DECIMAL128 = 39,
+    DT_OBJECT = 40,
+    DT_IOTANY = 41,              // not supported
+    DT_COUNT = 42,               // Number of Types
     DT_VOID_ARRAY = ARRAY_TYPE_BASE,
-    DT_BOOL_ARRAY,
-    DT_CHAR_ARRAY,
-    DT_SHORT_ARRAY,
-    DT_INT_ARRAY,
-    DT_LONG_ARRAY,
-    DT_DATE_ARRAY,
-    DT_MONTH_ARRAY,
-    DT_TIME_ARRAY,
-    DT_MINUTE_ARRAY,
-    DT_SECOND_ARRAY,
-    DT_DATETIME_ARRAY,
-    DT_TIMESTAMP_ARRAY,
-    DT_NANOTIME_ARRAY,
-    DT_NANOTIMESTAMP_ARRAY,
-    DT_FLOAT_ARRAY,
-    DT_DOUBLE_ARRAY,
-    DT_SYMBOL_ARRAY,
-    DT_STRING_ARRAY,
-    DT_UUID_ARRAY,
-    DT_FUNCTIONDEF_ARRAY,
-    DT_HANDLE_ARRAY,
-    DT_CODE_ARRAY,
-    DT_DATASOURCE_ARRAY,
-    DT_RESOURCE_ARRAY,
-    DT_ANY_ARRAY,
-    DT_COMPRESS_ARRAY,
-    DT_DICTIONARY_ARRAY,
-    DT_DATEHOUR_ARRAY,
-    DT_DATEMINUTE_ARRAY,
-    DT_IP_ARRAY,
-    DT_INT128_ARRAY,
-    DT_BLOB_ARRAY,
+    DT_BOOL_ARRAY = 65,
+    DT_CHAR_ARRAY = 66,
+    DT_SHORT_ARRAY = 67,
+    DT_INT_ARRAY = 68,
+    DT_LONG_ARRAY = 69,
+    DT_DATE_ARRAY = 70,
+    DT_MONTH_ARRAY = 71,
+    DT_TIME_ARRAY = 72,
+    DT_MINUTE_ARRAY = 73,
+    DT_SECOND_ARRAY = 74,
+    DT_DATETIME_ARRAY = 75,
+    DT_TIMESTAMP_ARRAY = 76,
+    DT_NANOTIME_ARRAY = 77,
+    DT_NANOTIMESTAMP_ARRAY = 78,
+    DT_FLOAT_ARRAY = 79,
+    DT_DOUBLE_ARRAY = 80,
+    DT_SYMBOL_ARRAY = 81,
+    DT_STRING_ARRAY = 82,
+    DT_UUID_ARRAY = 83,
+    DT_FUNCTIONDEF_ARRAY = 84,
+    DT_HANDLE_ARRAY = 85,
+    DT_CODE_ARRAY = 86,
+    DT_DATASOURCE_ARRAY = 87,
+    DT_RESOURCE_ARRAY = 88,
+    DT_ANY_ARRAY = 89,
+    DT_COMPRESS_ARRAY = 90,
+    DT_DICTIONARY_ARRAY = 91,
+    DT_DATEHOUR_ARRAY = 92,
+    DT_DATEMINUTE_ARRAY = 93,
+    DT_IP_ARRAY = 94,
+    DT_INT128_ARRAY = 95,
+    DT_BLOB_ARRAY = 96,
     // DT_DECIMAL_ARRAY,	not supported
     // DT_COMPLEX_ARRAY,	not supported
     // DT_POINT_ARRAY,		not supported
     // DT_DURATION_ARRAY,	not supported
     DT_DECIMAL32_ARRAY = 101,
-    DT_DECIMAL64_ARRAY,
-    DT_DECIMAL128_ARRAY,
-    DT_OBJECT_ARRAY,
-    DT_IOTANY_ARRAY,
+    DT_DECIMAL64_ARRAY = 102,
+    DT_DECIMAL128_ARRAY = 103,
+    DT_OBJECT_ARRAY = 104,
+    DT_IOTANY_ARRAY = 105,
 };
 
 EXPORT_DECL std::string getDataTypeName(DATA_TYPE type);
@@ -164,7 +164,7 @@ enum DATA_CATEGORY {
 };
 
 enum class VECTOR_TYPE {
-    ARRAY,
+    ARRAY = 0,
     ARRAYVECTOR = 6,
 };
 
@@ -191,7 +191,7 @@ enum DATA_FORM {
 enum OBJECT_TYPE { CONSTOBJ };
 
 enum TABLE_TYPE {
-    BASICTBL,
+    BASICTBL = 0,
     COMPRESSTBL = 8,
     IPCTBL = 15,    // this is different from server
 };
@@ -264,14 +264,14 @@ enum COMPRESS_METHOD {
     const long long INDEX_MIN = LLONG_MIN;
     const long long INDEX_MAX = LLONG_MAX;
 #else
-    typedef int INDEX;
-    typedef unsigned int UINDEX;
+    using INDEX = int;
+    using UINDEX = unsigned int;
     #define DT_INDEX DT_INT
     const int INDEX_MIN = INT_MIN;
     const int INDEX_MAX = INT_MAX;
 #endif
 
-typedef union {
+union U8 {
     long long longVal;
     int intVal;
     short shortVal;
@@ -279,6 +279,6 @@ typedef union {
     double doubleVal;
     float floatVal;
     char* pointer;
-} U8;
+};
 
-}
+} // namespace dolphindb

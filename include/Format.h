@@ -7,20 +7,18 @@
 
 #include "Types.h"
 
-using namespace std;
-
 namespace dolphindb {
 
 class TemporalFormat {
 public:
-    TemporalFormat(const string& format);
-    string format(long long nowtime, DATA_TYPE dtype) const;
-    static vector<pair<int, int> > initFormatMap();
+    explicit TemporalFormat(const std::string& format);
+    std::string format(long long nowtime, DATA_TYPE dtype) const;
+    static std::vector<std::pair<int, int> > initFormatMap();
 
 private:
-    void initialize(const string& format);
+    void initialize(const std::string& format);
 
-private:
+
     struct FormatSegment {
         int timeUnitIndex_;
         int maxLength_;
@@ -32,28 +30,28 @@ private:
             : timeUnitIndex_(timeUnitIndex), maxLength_(maxLength), startPos_(startPos), endPos_(endPos) {}
     };
 
-    string format_;
+    std::string format_;
     bool quickFormat_;
     int segmentCount_;
     FormatSegment segments_[12];
 
-    static vector<pair<int, int> > formatMap;  // first:timeUnitIndex_ second:timeUnit max length
-    static const string pmString;
-    static const string amString;
+    static std::vector<std::pair<int, int> > formatMap;  // first:timeUnitIndex_ second:timeUnit max length
+    static const std::string pmString;
+    static const std::string amString;
     static const char* monthName[12];
 };
 
 class NumberFormat {
 public:
-    NumberFormat(const string& format);
-    string format(double x) const;
-    static string toString(long long x);
+    explicit NumberFormat(const std::string& format);
+    std::string format(double x) const;
+    static std::string toString(long long x);
 
 private:
-	 void initialize(const string& format);
+	 void initialize(const std::string& format);
 	 static int printFraction(char* buf, int digitCount, bool optional, double& fraction);
 
-private:
+
     bool percent_;
     bool point_;
     int science_;
@@ -63,8 +61,8 @@ private:
     int fractionOptionalDigits_;
     int headSize_;
     int tailSize_;
-    string head_;
-	string tail_;
+    std::string head_;
+	std::string tail_;
 	double rounding_;
 
 	static const long long power10_[10];
@@ -74,13 +72,13 @@ private:
 
 class DecimalFormat {
 public:
-	DecimalFormat(const string& format);
+	explicit DecimalFormat(const std::string& format);
 	~DecimalFormat();
-	string format(double x) const;
+	std::string format(double x) const;
 
 private:
 	NumberFormat* format_;
 	NumberFormat* negFormat_;
 };
 
-}
+} // namespace dolphindb

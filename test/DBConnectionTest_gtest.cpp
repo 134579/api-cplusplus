@@ -1,45 +1,46 @@
+#include <gtest/gtest.h>
 #include "config.h"
 
 class DBConnectionTest : public testing::Test
 {
-protected:
-    // Suite
-    static void SetUpTestCase()
-    {
-        // DBConnection connReconn;
-        connReconn.initialize();
-        connReconn.connect(hostName, port, "admin", "123456", "", false, vector<string>(), 7200, true);
-    }
-    static void TearDownTestCase()
-    {
-        connReconn.close();
-    }
+    public:
+        static dolphindb::DBConnection conn;
+        // Suite
+        static void SetUpTestSuite()
+        {
+            bool ret = conn.connect(HOST, PORT, USER, PASSWD, "", false, std::vector<std::string>(), 7200, true);
+            if (!ret)
+            {
+                std::cout << "Failed to connect to the server" << std::endl;
+            }
+            else
+            {
+                std::cout << "connect to " + HOST + ":" + std::to_string(PORT) << std::endl;
+            }
+        }
+        static void TearDownTestSuite()
+        {
+            conn.close();
+        }
 
-    // Case
-    virtual void SetUp()
-    {
-        cout << "check connect...";
-        ConstantSP res = connReconn.run("1+1");
-        if (!(res->getBool()))
+    protected:
+        // Case
+        virtual void SetUp()
         {
-            cout << "Server not responed, please check." << endl;
+
         }
-        else
+        virtual void TearDown()
         {
-            cout << "ok" << endl;
-            CLEAR_ENV(connReconn);
+
         }
-    }
-    virtual void TearDown()
-    {
-        CLEAR_ENV(connReconn);
-    }
 };
 
-bool strToBool(string val)
+dolphindb::DBConnection DBConnectionTest::conn(false, false);
+
+bool strToBool(std::string val)
 {
     std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-    vector<string> falsevec = {"false", "f", "", "0"};
+    std::vector<std::string> falsevec = {"false", "f", "", "0"};
     for (auto &i : falsevec)
     {
         if (val == i)
@@ -50,76 +51,74 @@ bool strToBool(string val)
     return NULL;
 }
 
-void StopCurNode(string cur_node)
+void StopCurNode(std::string cur_node)
 {
-    DBConnection conn1(false, false);
-    conn1.connect(hostName, ctl_port, "admin", "123456");
+    dolphindb::DBConnection conn1(false, false);
+    conn1.connect(HOST_CLUSTER, PORT_CONTROLLER, USER_CLUSTER, PASSWD_CLUSTER);
 
     conn1.run("try{stopDataNode(\"" + cur_node + "\")}catch(ex){};");
-    cout << cur_node + " has stopped..." << endl;
-    Util::sleep(5000);
-    cout << "restarting " + cur_node + "..." << endl;
+    std::cout << cur_node + " has stopped..." << std::endl;
+    dolphindb::Util::sleep(5000);
+    std::cout << "restarting " + cur_node + "..." << std::endl;
     conn1.run("startDataNode(exec name from getClusterPerf() where mode !=1 and state != 1);go;"
     "do{sleep(1000);}while((exec distinct state from getClusterPerf()).size() !=1);");
 }
 
 bool assertUnConnect()
 {
-    Util::sleep(2000);
-    DBConnection conn2(false, false);
-    cout << "check if unconnected..." << endl;
-    return conn2.connect(hostName, port, "admin", "123456");
+    dolphindb::Util::sleep(2000);
+    dolphindb::DBConnection conn2(false, false);
+    std::cout << "check if unconnected..." << std::endl;
+    return conn2.connect(HOST, PORT_DNODE3, USER_CLUSTER, PASSWD_CLUSTER);
 }
 
 TEST_F(DBConnectionTest, test_connect_withErrUserid)
 {
-    DBConnection conn_demo(false, false);
-    EXPECT_FALSE(conn_demo.connect(hostName, port, "adminasdvvv", "123456"));
+    dolphindb::DBConnection conn_demo(false, false);
+    ASSERT_FALSE(conn_demo.connect(HOST, PORT, "adminasdvvv", PASSWD));
 }
 
 TEST_F(DBConnectionTest, test_connect_withErrPassword)
 {
-    DBConnection conn_demo(false, false);
-    EXPECT_FALSE(conn_demo.connect(hostName, port, "admin", "123456789"));
+    dolphindb::DBConnection conn_demo(false, false);
+    ASSERT_FALSE(conn_demo.connect(HOST, PORT, USER, "123456789"));
 }
 
 TEST_F(DBConnectionTest, test_connect_withStartupScript)
 {
-    string script = "tab=table(`1`2`3 as col1,4 5 6 as col2);share tab as startup_tab";
-    DBConnection conn_demo(false, false);
-    conn_demo.connect(hostName, port, "admin", "123456", script, false, vector<string>(), 7200, false);
+    std::string script = "startup_tab=table(`1`2`3 as col1,4 5 6 as col2)";
+    dolphindb::DBConnection conn_demo(false, false);
+    conn_demo.connect(HOST, PORT, USER, PASSWD, script, false, std::vector<std::string>(), 7200, false);
 
-    ConstantSP resVec = conn_demo.run("tab1=table(`1`2`3 as col1,4 5 6 as col2);each(eqObj,tab1.values(),startup_tab.values())");
+    dolphindb::ConstantSP resVec = conn_demo.run("tab1=table(`1`2`3 as col1,4 5 6 as col2);each(eqObj,tab1.values(),startup_tab.values())");
     for (auto i = 0; i < resVec->size(); i++)
-        EXPECT_TRUE(resVec->get(i)->getBool());
+        ASSERT_TRUE(resVec->get(i)->getBool());
 
-    string res = conn_demo.getInitScript();
-    EXPECT_EQ(script, res);
+    std::string res = conn_demo.getInitScript();
+    ASSERT_EQ(script, res);
     conn_demo.close();
 
-    string script2 = "tab=table(`1`2`3 as col1,4 5 6 as col2);share tab as startup_tab_2";
+    std::string script2 = "startup_tab_2=table(`1`2`3 as col1,4 5 6 as col2)";
     conn_demo.setInitScript(script2);
-    conn_demo.connect(hostName, port, "admin", "123456", script2, false, vector<string>(), 7200, false);
-    EXPECT_EQ(conn_demo.getInitScript(), script2);
-
-    conn_demo.run("undef(`startup_tab,SHARED);undef(`startup_tab_2,SHARED);");
+    conn_demo.connect(HOST, PORT, USER, PASSWD, script2, false, std::vector<std::string>(), 7200, false);
+    ASSERT_EQ(conn_demo.getInitScript(), script2);
     conn_demo.close();
 }
 
 TEST_F(DBConnectionTest, test_connection_enableSSL)
 {
-    DBConnection conn_demo(true);
-    conn_demo.connect(hostName, port);
-    conn_demo.login("admin", "123456", true);
+    dolphindb::DBConnection conn_demo(true);
+    conn_demo.connect(HOST, PORT);
+    conn_demo.login(USER, PASSWD, true);
     conn_demo.run("1+1");
     auto a = conn_demo.run("1 2 3 4");
     auto b = conn_demo.run("`APPL`MSFT`IBM`GOOG");
     auto c = conn_demo.run("2012.06.13 2012.06.14 2012.06.15 2012.06.16");
-    vector<ConstantSP> cols = {a, b, c};
-    vector<string> colNames = {"a", "b", "c"};
+    std::vector<dolphindb::ConstantSP> cols = {a, b, c};
+    std::vector<std::string> colNames = {"a", "b", "c"};
     conn_demo.upload(colNames, cols);
-    TableSP t = conn_demo.run("t = table(a as col1, b as col2, c as col3);t");
-    EXPECT_EQ(t->getString(), "col1 col2 col3      \n"
+    dolphindb::TableSP t = conn_demo.run("t = table(a as col1, b as col2, c as col3);t");
+    ASSERT_EQ(t->getString(), "col1 col2 col3      \n"
                               "---- ---- ----------\n"
                               "1    APPL 2012.06.13\n"
                               "2    MSFT 2012.06.14\n"
@@ -128,49 +127,43 @@ TEST_F(DBConnectionTest, test_connection_enableSSL)
     conn_demo.close();
 }
 
-#ifndef _WIN32
 TEST_F(DBConnectionTest, test_connection_asyncTask)
 {
-    connReconn.run("try{undef(`tab, SHARED);}catch(ex){}");
-    connReconn.run("t=table(`1`2`3 as col1, 1 2 3 as col2);"
-                   "share t as tab;"
+    std::string case_=getCaseName();
+    conn.run("t=table(`1`2`3 as col1, 1 2 3 as col2);"
+                   "share t as "+case_+";"
                    "records = [];");
-    DBConnection conn_demo(false, true);
-    conn_demo.connect(hostName, port, "admin", "123456");
-
-    conn_demo.run("for(i in 1..5){tableInsert(tab, string(i), i);sleep(1000)};");
-    cout << "async job is running";
+    dolphindb::DBConnection conn_demo(false, true);
+    conn_demo.connect(HOST, PORT, USER, PASSWD);
+    conn_demo.run("for(i in 1..5){tableInsert("+case_+", string(i), i);sleep(1000)};");
+    std::cout << "async job is running";
     do
     {
-        connReconn.run("records.append!(exec count(*) from tab)");
-        cout << ".";
-        Util::sleep(1000);
-    } while (connReconn.run("exec count(*) from tab")->getInt() != 8);
-    connReconn.run("records.append!(exec count(*) from tab)");
-
-    EXPECT_TRUE(connReconn.run("a=records.pop!();eqObj(a,8)")->getBool());
-
-    connReconn.run("undef(`tab, SHARED)");
+        conn.run("records.append!(exec count(*) from "+case_+")");
+        std::cout << ".";
+        dolphindb::Util::sleep(1000);
+    } while (conn.run("exec count(*) from "+case_+"")->getInt() != 8);
+    conn.run("records.append!(exec count(*) from "+case_+")");
+    ASSERT_TRUE(conn.run("a=records.pop!();eqObj(a,8)")->getBool());
     conn_demo.close();
 }
-#endif
 
 TEST_F(DBConnectionTest, test_connection_function_login)
 {
-    DBConnection conn_demo(false, false);
-    conn_demo.connect(hostName, port);
-    EXPECT_ANY_THROW(conn_demo.login("admin123123", "123456", false));
-    EXPECT_ANY_THROW(conn_demo.login("admin", "123456789", false));
+    dolphindb::DBConnection conn_demo(false, false);
+    conn_demo.connect(HOST, PORT);
+    ASSERT_ANY_THROW(conn_demo.login("admin123123", PASSWD, false));
+    ASSERT_ANY_THROW(conn_demo.login(USER, "123456789", false));
 
-    conn_demo.login("admin", "123456", false);
-    cout << conn_demo.run("getRecentJobs()")->getString();
+    conn_demo.login(USER, PASSWD, false);
+    std::cout << conn_demo.run("getRecentJobs()")->getString();
 
     conn_demo.close();
 }
 
 TEST_F(DBConnectionTest, test_connection_python_script)
 {
-    string script1 = "import dolphindb as ddb\n"
+    std::string script1 = "import dolphindb as ddb\n"
                         "def list_append(testtype):\n"
                         "\ta= [testtype(1),testtype(2),testtype(3)]\n"
                         "\ta.append(testtype(4))\n"
@@ -195,78 +188,68 @@ TEST_F(DBConnectionTest, test_connection_python_script)
                         "\treturn True;\n"
                         "test_list_append()\n"
                         "test_list_append_ipaddr_str_uuid()";
-    // cout<<script1<<endl;
-
-    DBConnectionSP conn300_demo = new DBConnection(false, false, 7200, false, true);
-    conn300_demo->connect(hostName, port300, "admin", "123456");
-    ConstantSP res = conn300_demo->run(script1);
-    // cout<< script1;
-    // cout<< res->getString();
-    EXPECT_EQ(res->getBool(), true);
-
+    dolphindb::DBConnectionSP conn300_demo = new dolphindb::DBConnection(false, false, 7200, false, true);
+    conn300_demo->connect(HOST, PORT, USER, PASSWD);
+    dolphindb::ConstantSP res = conn300_demo->run(script1);
+    ASSERT_EQ(res->getBool(), true);
     conn300_demo->close();
-
 }
 
 TEST_F(DBConnectionTest, test_connection_python_dataform)
 {
-    string script1 = "import dolphindb as ddb\n"
+    std::string script1 = "import dolphindb as ddb\n"
                         "a=[1,2,3]\n"
                         "b={1,2,3}\n"
                         "c={1:1,2:2}\n"
                         "d=(12,3,4)";
-    DBConnectionSP conn300_demo = new DBConnection(false, false, 7200, false, true);
-    conn300_demo->connect(hostName, port300, "admin", "123456");
+    dolphindb::DBConnectionSP conn300_demo = new dolphindb::DBConnection(false, false, 7200, false, true);
+    conn300_demo->connect(HOST, PORT, USER, PASSWD);
     conn300_demo->run(script1);
 
-    EXPECT_EQ(conn300_demo->run("type(a)")->getString(), "list");
-    EXPECT_EQ(conn300_demo->run("type(b)")->getString(), "set");
-    EXPECT_EQ(conn300_demo->run("type(c)")->getString(), "dict");
-    EXPECT_EQ(conn300_demo->run("type(d)")->getString(), "tuple");
+    ASSERT_EQ(conn300_demo->run("type(a)")->getString(), "list");
+    ASSERT_EQ(conn300_demo->run("type(b)")->getString(), "set");
+    ASSERT_EQ(conn300_demo->run("type(c)")->getString(), "dict");
+    ASSERT_EQ(conn300_demo->run("type(d)")->getString(), "std::tuple");
 
     conn300_demo->close();
 }
 
 TEST_F(DBConnectionTest, test_connection_python_setInitscriptAndgetInitscript)
 {
-    string script1 = "import dolphindb as ddb";
-    DBConnectionSP conn300_demo = new DBConnection(false, false, 7200, false, true);
-    conn300_demo->connect(hostName, port300, "admin", "123456", script1);
-    string res = conn300_demo->getInitScript();
-    // cout<< res;
-    EXPECT_EQ(res, script1);
-
+    std::string script1 = "import dolphindb as ddb";
+    dolphindb::DBConnectionSP conn300_demo = new dolphindb::DBConnection(false, false, 7200, false, true);
+    conn300_demo->connect(HOST, PORT, USER, PASSWD, script1);
+    std::string res = conn300_demo->getInitScript();
+    ASSERT_EQ(res, script1);
     conn300_demo->close();
 }
 
 TEST_F(DBConnectionTest, test_connection_python_upload)
 {
-    vector<string> colName = {"col1", "col2", "col3", "col4", "col5"};
-    vector<DATA_TYPE> colType = {DT_BOOL, DT_INT, DT_STRING, DT_DATE, DT_FLOAT};
-    TableSP t = Util::createTable(colName, colType, 5, 5);
+    std::vector<std::string> colName = {"col1", "col2", "col3", "col4", "col5"};
+    std::vector<dolphindb::DATA_TYPE> colType = {dolphindb::DT_BOOL, dolphindb::DT_INT, dolphindb::DT_STRING, dolphindb::DT_DATE, dolphindb::DT_FLOAT};
+    dolphindb::TableSP t = dolphindb::Util::createTable(colName, colType, 5, 5);
 
-    t->set(0, 0, Util::createBool(1));
-    t->set(1, 0, Util::createInt(1));
-    t->set(2, 0, Util::createString("abc"));
-    t->set(3, 0, Util::createDate(1));
-    t->set(4, 0, Util::createFloat(1.123));
+    t->set(0, 0, dolphindb::Util::createBool(true));
+    t->set(1, 0, dolphindb::Util::createInt(1));
+    t->set(2, 0, dolphindb::Util::createString("abc"));
+    t->set(3, 0, dolphindb::Util::createDate(1));
+    t->set(4, 0, dolphindb::Util::createFloat(1.123));
 
-    DBConnectionSP conn300_demo = new DBConnection(false, false, 7200, false, true);
-    conn300_demo->connect(hostName, port300, "admin", "123456");
+    dolphindb::DBConnectionSP conn300_demo = new dolphindb::DBConnection(false, false, 7200, false, true);
+    conn300_demo->connect(HOST, PORT, USER, PASSWD);
     conn300_demo->upload("t", {t});
-    TableSP t1 = conn300_demo->run("t");
-    EXPECT_EQ(t1->getString(), t->getString());
-
+    dolphindb::TableSP t1 = conn300_demo->run("t");
+    ASSERT_EQ(t1->getString(), t->getString());
     conn300_demo->close();
 }
 
-TEST_F(DBConnectionTest, test_connect_reconnect)
+TEST_F(DBConnectionTest, test_connect_reconnect_should_serial)
 {
-#ifdef _WIN32
-    GTEST_SKIP();
-#else
     bool res;
-    string cur_node = connReconn.run("getNodeAlias()")->getString();
+    dolphindb::DBConnection conn(false, false);
+    conn.connect(HOST_CLUSTER, PORT_DNODE3, USER_CLUSTER, PASSWD_CLUSTER, "", false, std::vector<std::string>(), 7200, true);
+    std::string cur_node = conn.run("getNodeAlias()")->getString();
 
     std::thread t1 = std::thread(StopCurNode, cur_node);
     std::thread t2 = std::thread([&]
@@ -275,114 +258,105 @@ TEST_F(DBConnectionTest, test_connect_reconnect)
     t1.join();
     t2.join();
 
-    Util::sleep(1000);
-    EXPECT_EQ(res, false);
-    cout << "check passed..." << endl;
-    cout << "check if reconnected..." << endl;
-    EXPECT_EQ(connReconn.run("1+1")->getInt(), 2);
-    cout << "check passed..." << endl;
-    // std::thread t1= std::thread(job);
-    // t1.join();
-#endif
+    dolphindb::Util::sleep(10000);
+    ASSERT_EQ(res, false);
+    std::cout << "check passed..." << std::endl;
+    std::cout << "check if reconnected..." << std::endl;
+    ASSERT_EQ(conn.run("1+1")->getInt(), 2);
+    std::cout << "check passed..." << std::endl;
 }
 
 TEST_F(DBConnectionTest, test_connectionPool_withErrUserid)
 {
-    EXPECT_ANY_THROW(DBConnectionPool pool_demo(hostName, port, 10, "adminasdccc", "123456"));
+    ASSERT_ANY_THROW(dolphindb::DBConnectionPool pool_demo(HOST, PORT, 10, "adminasdccc", PASSWD));
 }
 
 TEST_F(DBConnectionTest, test_connectionPool_withErrPassword)
 {
-    EXPECT_ANY_THROW(DBConnectionPool pool_demo(hostName, port, 10, "admin", "123456789"));
+    ASSERT_ANY_THROW(dolphindb::DBConnectionPool pool_demo(HOST, PORT, 10, USER, "123456789"));
 }
 
 
 TEST_F(DBConnectionTest, DISABLED_test_connectionPool_loadBalance)
 {
-    EXPECT_ANY_THROW(DBConnectionPool pool_demo(hostName, port, 10, "adminasdccc", "123456", true));
-    EXPECT_ANY_THROW(DBConnectionPool pool_demo(hostName, port, 10, "admin", "123456789", true));
-    DBConnectionPool pool_demo(hostName, port, 10, "admin", "123456", true);
-    DBConnection controller(false, false);
-    controller.connect(hostName, ctl_port, "admin", "123456");
-
-    connReconn.run("login(`admin,`123456);"
-                   "dbpath=\"dfs://test_dfs\";"
-                   "if(existsDatabase(dbpath)){dropDatabase(dbpath)};"
-                   "db=database(dbpath, VALUE, 2000.01.01..2000.12.20);"
-                   "t=table(100:0, `col1`col2`col3, [SYMBOL,INT,DATE]);"
-                   "db.createPartitionedTable(t,`dfs_tab,`col3);");
+    std::string case_=getCaseName();
+    std::string dbName="dfs://" + case_;
+    ASSERT_ANY_THROW(dolphindb::DBConnectionPool pool_demo(HOST, PORT, 10, "adminasdccc", PASSWD, true));
+    ASSERT_ANY_THROW(dolphindb::DBConnectionPool pool_demo(HOST, PORT, 10, USER, "123456789", true));
+    dolphindb::DBConnectionPool pool_demo(HOST, PORT, 10, USER, PASSWD, true);
+    dolphindb::DBConnection controller(false, false);
+    conn.run(
+        "dbpath=\""+dbName+"\";"
+        "if(existsDatabase(dbpath)){dropDatabase(dbpath)};"
+        "db=database(dbpath, VALUE, 2000.01.01..2000.12.20);"
+        "t=table(100:0, `col1`col2`col3, [SYMBOL,INT,DATE]);"
+        "db.createPartitionedTable(t,`dfs_tab,`col3);");
 
     pool_demo.run("t=table(100:0, `col1`col2`col3, [SYMBOL,INT,DATE]);"
                   "tableInsert(t,rand(`APPLE`YSL`BMW`HW`SAUM`TDB,1000), rand(1000,1000), take(2000.01.01..2000.12.20,1000));"
-                  "loadTable('dfs://test_dfs',`dfs_tab).append!(t);",
+                  "loadTable('"+dbName+"',`dfs_tab).append!(t);",
                   1000);
     while (!pool_demo.isFinished(1000))
     {
-        // cout<<controller.run(
-        //         "dnload=take(double(0),7);"
-        // 		"for (i in 0..6){"
-        // 		"nodeload =exec double(memoryUsed*0.3+connectionNum*0.4+cpuUsage*0.3) from  getClusterPerf() where name = \"datanode\"+string(i+1);"
-        // 		"dnload[i]=nodeload[0]};"
-        // 		"max(dnload)-min(dnload);")->getDouble()<<endl;
-        Util::sleep(100);
+        dolphindb::Util::sleep(100);
     };
 
-    TableSP ex_tab = connReconn.run("select * from loadTable('dfs://test_dfs',`dfs_tab)");
-    EXPECT_EQ(1000, ex_tab->rows());
-    EXPECT_FALSE(pool_demo.isShutDown());
+    dolphindb::TableSP ex_tab = conn.run("select * from loadTable(dbpath,`dfs_tab)");
+    ASSERT_EQ(1000, ex_tab->rows());
+    ASSERT_FALSE(pool_demo.isShutDown());
 
     pool_demo.shutDown();
-    controller.close();
 }
 
 TEST_F(DBConnectionTest, test_connectionPool_compress)
 {
-    DBConnectionPool pool_demo(hostName, port, 10, "admin", "123456", false, false, true);
+    std::string case_=getCaseName();
+    dolphindb::DBConnectionPool pool_demo(HOST, PORT, 10, USER, PASSWD, false, false, true);
     const int count = 1000;
     const int scale32 = rand() % 9, scale64 = rand() % 18;
 
-    vector<int> time(count);
-    vector<long long> value(count);
-    vector<float> cfloat(count);
-    vector<string> name(count);
-    vector<string> blob(count);
-    vector<string> ipaddr(count);
-    vector<double> decimal32(count);
-    vector<double> decimal64(count);
-    int basetime = Util::countDays(2012, 1, 1);
+    std::vector<int> time(count);
+    std::vector<long long> value(count);
+    std::vector<float> cfloat(count);
+    std::vector<std::string> name(count);
+    std::vector<std::string> blob(count);
+    std::vector<std::string> ipaddr(count);
+    std::vector<double> decimal32(count);
+    std::vector<double> decimal64(count);
+    int basetime = dolphindb::Util::countDays(2012, 1, 1);
     for (int i = 0; i < count; i++)
     {
         time[i] = basetime + (i % 15);
         value[i] = (i % 500 == 0) ? i : (long long)nullptr;
         cfloat[i] = float(i) + 0.1;
-        name[i] = to_string(i);
-        blob[i] = "fdsafsdfasd" + to_string(i % 32);
-        ipaddr[i] = "192.168.100." + to_string(i % 255);
+        name[i] = std::to_string(i);
+        blob[i] = "fdsafsdfasd" + std::to_string(i % 32);
+        ipaddr[i] = "192.168.100." + std::to_string(i % 255);
         decimal32[i] = 0.13566;
         decimal64[i] = 1.2245667899;
     }
 
-    VectorSP boolVector = Util::createVector(DT_BOOL, count, count);
-    VectorSP charVector = Util::createVector(DT_CHAR, count, count);
-    VectorSP shortVector = Util::createVector(DT_SHORT, count, count);
-    VectorSP intVector = Util::createVector(DT_INT, count, count);
-    VectorSP dateVector = Util::createVector(DT_DATE, count, count);
-    VectorSP monthVector = Util::createVector(DT_MONTH, count, count);
-    VectorSP timeVector = Util::createVector(DT_TIME, count, count);
-    VectorSP minuteVector = Util::createVector(DT_MINUTE, count, count);
-    VectorSP secondVector = Util::createVector(DT_SECOND, count, count);
-    VectorSP datetimeVector = Util::createVector(DT_DATETIME, count, count);
-    VectorSP timestampVector = Util::createVector(DT_TIMESTAMP, count, count);
-    VectorSP nanotimeVector = Util::createVector(DT_NANOTIME, count, count);
-    VectorSP nanotimestampVector = Util::createVector(DT_NANOTIMESTAMP, count, count);
-    VectorSP floatVector = Util::createVector(DT_FLOAT, count, count);
-    VectorSP doubleVector = Util::createVector(DT_DOUBLE, count, count);
-    VectorSP symbolVector = Util::createVector(DT_SYMBOL, count, count);
-    VectorSP stringVector = Util::createVector(DT_STRING, count, count);
-    VectorSP ipaddrVector = Util::createVector(DT_IP, count, count);
-    VectorSP blobVector = Util::createVector(DT_BLOB, count, count);
-    VectorSP decimal32Vector = Util::createVector(DT_DECIMAL32, count, count, true, scale32);
-    VectorSP decimal64Vector = Util::createVector(DT_DECIMAL64, count, count, true, scale64);
+    dolphindb::VectorSP boolVector = dolphindb::Util::createVector(dolphindb::DT_BOOL, count, count);
+    dolphindb::VectorSP charVector = dolphindb::Util::createVector(dolphindb::DT_CHAR, count, count);
+    dolphindb::VectorSP shortVector = dolphindb::Util::createVector(dolphindb::DT_SHORT, count, count);
+    dolphindb::VectorSP intVector = dolphindb::Util::createVector(dolphindb::DT_INT, count, count);
+    dolphindb::VectorSP dateVector = dolphindb::Util::createVector(dolphindb::DT_DATE, count, count);
+    dolphindb::VectorSP monthVector = dolphindb::Util::createVector(dolphindb::DT_MONTH, count, count);
+    dolphindb::VectorSP timeVector = dolphindb::Util::createVector(dolphindb::DT_TIME, count, count);
+    dolphindb::VectorSP minuteVector = dolphindb::Util::createVector(dolphindb::DT_MINUTE, count, count);
+    dolphindb::VectorSP secondVector = dolphindb::Util::createVector(dolphindb::DT_SECOND, count, count);
+    dolphindb::VectorSP datetimeVector = dolphindb::Util::createVector(dolphindb::DT_DATETIME, count, count);
+    dolphindb::VectorSP timestampVector = dolphindb::Util::createVector(dolphindb::DT_TIMESTAMP, count, count);
+    dolphindb::VectorSP nanotimeVector = dolphindb::Util::createVector(dolphindb::DT_NANOTIME, count, count);
+    dolphindb::VectorSP nanotimestampVector = dolphindb::Util::createVector(dolphindb::DT_NANOTIMESTAMP, count, count);
+    dolphindb::VectorSP floatVector = dolphindb::Util::createVector(dolphindb::DT_FLOAT, count, count);
+    dolphindb::VectorSP doubleVector = dolphindb::Util::createVector(dolphindb::DT_DOUBLE, count, count);
+    dolphindb::VectorSP symbolVector = dolphindb::Util::createVector(dolphindb::DT_SYMBOL, count, count);
+    dolphindb::VectorSP stringVector = dolphindb::Util::createVector(dolphindb::DT_STRING, count, count);
+    dolphindb::VectorSP ipaddrVector = dolphindb::Util::createVector(dolphindb::DT_IP, count, count);
+    dolphindb::VectorSP blobVector = dolphindb::Util::createVector(dolphindb::DT_BLOB, count, count);
+    dolphindb::VectorSP decimal32Vector = dolphindb::Util::createVector(dolphindb::DT_DECIMAL32, count, count, true, scale32);
+    dolphindb::VectorSP decimal64Vector = dolphindb::Util::createVector(dolphindb::DT_DECIMAL64, count, count, true, scale64);
 
     boolVector->setInt(0, count, time.data());
     charVector->setInt(0, count, time.data());
@@ -406,152 +380,147 @@ TEST_F(DBConnectionTest, test_connectionPool_compress)
     decimal32Vector->setDouble(0, count, decimal32.data());
     decimal64Vector->setDouble(0, count, decimal64.data());
 
-    vector<string> colName = {"cbool", "cchar", "cshort", "cint", "cdate", "cmonth", "ctime", "cminute", "csecond", "cdatetime", "ctimestamp", "cnanotime",
+    std::vector<std::string> colName = {"cbool", "cchar", "cshort", "cint", "cdate", "cmonth", "ctime", "cminute", "csecond", "cdatetime", "ctimestamp", "cnanotime",
                               "cnanotimestamp", "cfloat", "cdouble", "csymbol", "cstring", "cipaddr", "cblob", "cdecimal32", "cdecimal64"};
-    vector<ConstantSP> colVector{boolVector, charVector, shortVector, intVector, dateVector, monthVector, timeVector, minuteVector, secondVector,
+    std::vector<dolphindb::ConstantSP> colVector{boolVector, charVector, shortVector, intVector, dateVector, monthVector, timeVector, minuteVector, secondVector,
                                  datetimeVector, timestampVector, nanotimeVector, nanotimestampVector, floatVector, doubleVector, symbolVector, stringVector,
                                  ipaddrVector, blobVector, decimal32Vector, decimal64Vector};
-    TableSP table = Util::createTable(colName, colVector);
-    vector<COMPRESS_METHOD> typeVec{COMPRESS_LZ4, COMPRESS_LZ4, COMPRESS_LZ4, COMPRESS_DELTA,
-                                    COMPRESS_DELTA, COMPRESS_DELTA, COMPRESS_DELTA, COMPRESS_DELTA,
-                                    COMPRESS_DELTA, COMPRESS_DELTA, COMPRESS_DELTA, COMPRESS_DELTA,
-                                    COMPRESS_DELTA, COMPRESS_LZ4, COMPRESS_LZ4, COMPRESS_LZ4,
-                                    COMPRESS_LZ4, COMPRESS_LZ4, COMPRESS_LZ4, COMPRESS_LZ4, COMPRESS_LZ4};
+    dolphindb::TableSP table = dolphindb::Util::createTable(colName, colVector);
+    std::vector<dolphindb::COMPRESS_METHOD> typeVec{dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_DELTA,
+                                    dolphindb::COMPRESS_DELTA, dolphindb::COMPRESS_DELTA, dolphindb::COMPRESS_DELTA, dolphindb::COMPRESS_DELTA,
+                                    dolphindb::COMPRESS_DELTA, dolphindb::COMPRESS_DELTA, dolphindb::COMPRESS_DELTA, dolphindb::COMPRESS_DELTA,
+                                    dolphindb::COMPRESS_DELTA, dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_LZ4,
+                                    dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_LZ4, dolphindb::COMPRESS_LZ4};
     table->setColumnCompressMethods(typeVec);
-    connReconn.upload("table", table);
+    conn.upload("table", table);
 
-    vector<ConstantSP> args{table};
-    string script = "colName =  `cbool`cchar`cshort`cint`cdate`cmonth`ctime`cminute`csecond`cdatetime`ctimestamp`cnanotime`cnanotimestamp`cfloat`cdouble`csymbol`cstring`cipaddr`cblob`cdecimal32`cdecimal64;\n"
+    std::vector<dolphindb::ConstantSP> args{table};
+    std::string script = "colName =  `cbool`cchar`cshort`cint`cdate`cmonth`ctime`cminute`csecond`cdatetime`ctimestamp`cnanotime`cnanotimestamp`cfloat`cdouble`csymbol`cstring`cipaddr`cblob`cdecimal32`cdecimal64;\n"
                     "colType = [BOOL, CHAR, SHORT, INT, DATE, MONTH, TIME, MINUTE, SECOND, DATETIME, TIMESTAMP, NANOTIME, NANOTIMESTAMP, FLOAT, DOUBLE, SYMBOL, STRING,IPADDR,BLOB,DECIMAL32(" +
-                    to_string(scale32) + "),DECIMAL64(" + to_string(scale64) + ")];\n"
-                                                                               "share streamTable(1:0,colName,colType) as table1;";
-    connReconn.run(script);
+                    std::to_string(scale32) + "),DECIMAL64(" + std::to_string(scale64) + ")];\n"
+                    "share streamTable(1:0,colName,colType) as "+case_;
+    conn.run(script);
 
-    pool_demo.run("tableInsert{table1}", args, 1000);
+    pool_demo.run("tableInsert{"+case_+"}", args, 1000);
     while (!pool_demo.isFinished(1000))
     {
-        Util::sleep(1000);
+        dolphindb::Util::sleep(1000);
     };
 
-    EXPECT_EQ(pool_demo.getData(1000)->getInt(), count);
-    ConstantSP res = connReconn.run("each(eqObj,table.values(),table1.values())");
+    ASSERT_EQ(pool_demo.getData(1000)->getInt(), count);
+    dolphindb::ConstantSP res = conn.run("each(eqObj,table.values(),"+case_+".values())");
     for (int i = 0; i < res->size(); i++)
-        EXPECT_TRUE(res->get(i)->getBool());
-
-    connReconn.run("undef(`table1, SHARED)");
+        ASSERT_TRUE(res->get(i)->getBool());
     pool_demo.shutDown();
 }
 
 TEST_F(DBConnectionTest, test_DBconnectionPool)
 {
-    DBConnectionPool pool_demo(hostName, port, 10, "admin", "123456");
-    EXPECT_EQ(pool_demo.getConnectionCount(), 10);
-    vector<int> ids = {1, 10, 100, 1000};
-    string srcipt1 = "tb = table(100:0,`col1`col2`col3,[INT,INT,INT]);share tb as tmp;";
-    connReconn.run(srcipt1);
-    EXPECT_ANY_THROW(pool_demo.run("for(i in 1..100){tableInsert(tmp,rand(100,1),rand(100,1),rand(100,1));};select * from tmp", -1));
-    pool_demo.run("for(i in 1..100){tableInsert(tmp,rand(100,1),rand(100,1),rand(100,1));};select * from tmp", ids[0]);
+    std::string case_=getCaseName();
+    dolphindb::DBConnectionPool pool_demo(HOST, PORT, 10, USER, PASSWD);
+    ASSERT_EQ(pool_demo.getConnectionCount(), 10);
+    std::vector<int> ids = {1, 10, 100, 1000};
+    std::string srcipt1 = "tb = table(100:0,`col1`col2`col3,[INT,INT,INT]);share tb as "+case_;
+    conn.run(srcipt1);
+    ASSERT_ANY_THROW(pool_demo.run("for(i in 1..100){tableInsert("+case_+",rand(100,1),rand(100,1),rand(100,1));};select * from "+case_+"", -1));
+    pool_demo.run("for(i in 1..100){tableInsert("+case_+",rand(100,1),rand(100,1),rand(100,1));};select * from "+case_+"", ids[0]);
 
     while (!pool_demo.isFinished(ids[0]))
     {
-        Util::sleep(1000);
+        dolphindb::Util::sleep(1000);
     };
 
-    TableSP ex_tab = connReconn.run("tmp");
-    EXPECT_EQ(pool_demo.getData(ids[0])->getString(), ex_tab->getString());
-    EXPECT_FALSE(pool_demo.isShutDown());
+    dolphindb::TableSP ex_tab = conn.run(case_);
+    ASSERT_EQ(pool_demo.getData(ids[0])->getString(), ex_tab->getString());
+    ASSERT_FALSE(pool_demo.isShutDown());
 
-    vector<ConstantSP> args;
+    std::vector<dolphindb::ConstantSP> args;
     args.push_back(ex_tab);
-    pool_demo.run("tableInsert{tmp}", args, ids[1]);
+    pool_demo.run("tableInsert{"+case_+"}", args, ids[1]);
     while (!pool_demo.isFinished(ids[1]))
     {
-        Util::sleep(1000);
+        dolphindb::Util::sleep(1000);
     };
 
-    pool_demo.run("exec * from tmp", ids[2]);
+    pool_demo.run("exec * from "+case_+"", ids[2]);
     while (!pool_demo.isFinished(ids[2]))
     {
-        Util::sleep(1000);
+        dolphindb::Util::sleep(1000);
     };
-    ex_tab = connReconn.run("tmp");
-    EXPECT_EQ(pool_demo.getData(ids[2])->getString(), ex_tab->getString());
-    EXPECT_ANY_THROW(pool_demo.getData(ids[2])); // id can only be used once.
-    EXPECT_FALSE(pool_demo.isShutDown());
-
-    connReconn.run("undef(`tmp,SHARED);");
+    ex_tab = conn.run(""+case_+"");
+    ASSERT_EQ(pool_demo.getData(ids[2])->getString(), ex_tab->getString());
+    ASSERT_ANY_THROW(pool_demo.getData(ids[2])); // id can only be used once.
+    ASSERT_FALSE(pool_demo.isShutDown());
     pool_demo.shutDown();
 }
 
 TEST_F(DBConnectionTest, test_DBconnectionPoolwithFetchSize)
 {
-    DBConnectionPool pool_demo(hostName, port, 10, "admin", "123456");
-    EXPECT_EQ(pool_demo.getConnectionCount(), 10);
-    vector<int> ids = {1, 10, 100, 1000};
-    string dbpath = "dfs://test_"+getRandString(10);
-    string tab = "pt";
-    connReconn.run("dbpath = '" + dbpath +
-                   "';tab =`" + tab +
-                   ";if(existsDatabase(dbpath))"
+    std::string case_=getCaseName();
+    std::string dbName="dfs://" + case_;
+    dolphindb::DBConnectionPool pool_demo(HOST, PORT, 10, USER, PASSWD);
+    ASSERT_EQ(pool_demo.getConnectionCount(), 10);
+    std::vector<int> ids = {1, 10, 100, 1000};
+    std::string tab = "pt";
+    conn.run("dbpath = '" + dbName +
+                   "';if(existsDatabase(dbpath))"
                    "    {dropDatabase(dbpath)};"
-                   "t=table(1:0, `c1`c2`c3`c4`c5, [INT, SYMBOL, TIMESTAMP, DOUBLE, DOUBLE[]]);share t as res_t;"
+                   "t=table(1:0, `c1`c2`c3`c4`c5, [INT, SYMBOL, TIMESTAMP, DOUBLE, DOUBLE[]]);"
                    "db=database(dbpath, VALUE, 1..10, engine='TSDB');"
                    "pt=db.createPartitionedTable(t,'pt','c1',,`c1);");
 
-    string s = "rows = 20000;t=table(rand(1..100,20000) as c1, rand(`a`b`c`d`e`f`g, 20000) as c2, rand(timestamp(10001..50100), 20000) as c3, rand(100.0000, 20000) as c4, arrayVector(1..20000*3, rand(100.0000, 60000)) as c5);"
-               "loadTable('" + dbpath + "', `" + tab + ").append!(t);"
-               "go;select * from loadTable('" + dbpath + "', `" + tab + ")";
+    std::string s = "rows = 20000;t=table(rand(1..100,20000) as c1, rand(`a`b`c`d`e`f`g, 20000) as c2, rand(timestamp(10001..50100), 20000) as c3, rand(100.0000, 20000) as c4, arrayVector(1..20000*3, rand(100.0000, 60000)) as c5);"
+               "loadTable('" + dbName + "', `" + tab + ").append!(t);"
+               "go;select * from loadTable('" + dbName + "', `" + tab + ")";
     pool_demo.run(s, ids[1], 4, 2, 8192);
 
-    AutoFitTableAppender appender("", "res_t", connReconn);
+    dolphindb::AutoFitTableAppender appender("", "t", conn);
     while (!pool_demo.isFinished(ids[1]))
     {
-        Util::sleep(1000);
+        dolphindb::Util::sleep(1000);
     };
 
-    BlockReaderSP reader = pool_demo.getData(ids[1]);
+    dolphindb::BlockReaderSP reader = pool_demo.getData(ids[1]);
     int rows{0};
     while (reader->hasNext()) {
         auto res = reader->read();
         int upserts = appender.append(res);
-        EXPECT_EQ(upserts, res->rows());
-        EXPECT_EQ(res->getForm(), DF_TABLE);
+        ASSERT_EQ(upserts, res->rows());
+        ASSERT_EQ(res->getForm(), dolphindb::DF_TABLE);
         rows += res->rows();
     }
-    EXPECT_EQ(rows, 20000);
-    EXPECT_TRUE(connReconn.run(R"(
-        ex_t=select * from loadTable(dbpath,tab);
-        all(each(eqObj,ex_t.values(),res_t.values()))
-    )")->getBool());
-    connReconn.run("undef(`res_t,SHARED);dropDatabase(dbpath);go");
+    ASSERT_EQ(rows, 20000);
+    ASSERT_TRUE(conn.run(
+        "ex_t=select * from loadTable(dbpath,`"+tab+");"
+        "all(each(eqObj,ex_t.values(),t.values()))"
+    )->getBool());
     pool_demo.shutDown();
 }
 
-#ifndef _WIN32
 TEST_F(DBConnectionTest, test_connection_concurrent_insert_datas)
 {
+    std::string case_=getCaseName();
+    std::string dbName="dfs://" + case_;
     srand(time(NULL));
-    string dbpath = "dfs://test_concurrent";
-    string tab = "pt";
+    std::string tab = "pt";
 
-    connReconn.run("dbpath = '" + dbpath +
-                   "';tab =`" + tab +
-                   ";if(existsDatabase(dbpath))"
+    conn.run("dbpath = '" + dbName +
+                   "';if(existsDatabase(dbpath))"
                    "    {dropDatabase(dbpath)};"
                    "t=table(1:0, `c1`c2`c3, [INT, SYMBOL, TIMESTAMP]);"
                    "db=database(dbpath, VALUE, 1..10, chunkGranularity='TABLE');"
                    "pt=db.createPartitionedTable(t,'pt','c1');");
 
-    string s = "t=table(rand(1..100,10) as c1, rand(`a`b`c`d`e`f`g, 10) as c2, rand(timestamp(10001..10100), 10) as c3);"
+    std::string s = "t=table(rand(1..100,10) as c1, rand(`a`b`c`d`e`f`g, 10) as c2, rand(timestamp(10001..10100), 10) as c3);"
                "loadTable('" +
-               dbpath + "', `" + tab + ").append!(t);"
+               dbName + "', `" + tab + ").append!(t);"
                                        "go;"
                                        "exec count(*) from loadTable('" +
-               dbpath + "', `" + tab + ");";
+               dbName + "', `" + tab + ");";
     auto query = [&s]()
     {
-        DBConnection conn0(false, false);
-        conn0.connect(hostName, port, "admin", "123456");
+        dolphindb::DBConnection conn0(false, false);
+        conn0.connect(HOST, PORT, USER, PASSWD);
         bool success = false;
         while (!success)
         {
@@ -562,39 +531,38 @@ TEST_F(DBConnectionTest, test_connection_concurrent_insert_datas)
             }
             catch (const std::exception &e)
             {
-                string err = e.what();
-                cout << "err is " << err << endl;
+                std::string err = e.what();
+                std::cout << "err is " << err << std::endl;
                 ASSERT_TRUE(err.find("RefId:S00002") != std::string::npos || err.find("RefId:S01019") != std::string::npos);
             }
         }
         conn0.close();
     };
 
-    vector<thread> threads;
+    std::vector<std::thread> threads;
     for (int i = 0; i < 50; i++)
         threads.emplace_back(query);
 
     for (auto &thread : threads)
         thread.join();
 
-    EXPECT_EQ(connReconn.run("exec count(*) from loadTable('dfs://test_concurrent', `pt)")->getInt(), 500);
+    ASSERT_EQ(conn.run("exec count(*) from loadTable(dbpath, `pt)")->getInt(), 500);
 }
 
 TEST_F(DBConnectionTest, test_connectionPool_concurrent_insert_datas)
 {
     srand(time(NULL));
-    string dbpath = "dfs://test_concurrent";
-    string tab = "pt";
-    int maxConnections = connReconn.run("int(getConfig('maxConnections'))")->getInt();
-    connReconn.run("dbpath = '" + dbpath +
-                   "';tab =`" + tab +
-                   ";if(existsDatabase(dbpath))"
+    std::string dbpath = "dfs://test_connectionPool_concurrent_insert_datas";
+    std::string tab = "pt";
+    int maxConnections = conn.run("int(getConfig('maxConnections'))")->getInt();
+    conn.run("dbpath = '" + dbpath +
+                   "';if(existsDatabase(dbpath))"
                    "    {dropDatabase(dbpath)};"
                    "t=table(1:0, `c1`c2`c3, [INT, SYMBOL, TIMESTAMP]);"
                    "db=database(dbpath, VALUE, 1..10, chunkGranularity='TABLE');"
                    "pt=db.createPartitionedTable(t,'pt','c1');");
 
-    string s = "t=table(rand(1..100,100) as c1, rand(`a`b`c`d`e`f`g, 100) as c2, rand(timestamp(10001..10100), 100) as c3);"
+    std::string s = "t=table(rand(1..100,100) as c1, rand(`a`b`c`d`e`f`g, 100) as c2, rand(timestamp(10001..10100), 100) as c3);"
                "loadTable('" +
                dbpath + "', `" + tab + ").append!(t);"
                                        "go;"
@@ -602,7 +570,7 @@ TEST_F(DBConnectionTest, test_connectionPool_concurrent_insert_datas)
                dbpath + "', `" + tab + ");";
     auto query = [&s]()
     {
-        DBConnectionPool pool(hostName, port, 10, "admin", "123456");
+        dolphindb::DBConnectionPool pool(HOST, PORT, 10, USER, PASSWD);
         bool success = false;
         int id = rand() % 1000;
         while (!success)
@@ -612,212 +580,291 @@ TEST_F(DBConnectionTest, test_connectionPool_concurrent_insert_datas)
                 pool.run(s, id);
                 while (!pool.isFinished(id))
                 {
-                    Util::sleep(500);
+                    dolphindb::Util::sleep(500);
                 }
 
                 success = true;
             }
             catch (const std::exception &e)
             {
-                string err = e.what();
+                std::string err = e.what();
                 ASSERT_TRUE(err.find("RefId:S00002") != std::string::npos || err.find("RefId:S01019") != std::string::npos);
             }
         }
         pool.shutDown();
     };
 
-    vector<thread> threads;
+    std::vector<std::thread> threads;
     for (int i = 0; i < 5; i++)
         threads.emplace_back(query);
 
     for (auto &thread : threads)
         thread.join();
 
-    EXPECT_EQ(connReconn.run("exec count(*) from loadTable('dfs://test_concurrent', `pt)")->getInt(), 500);
+    ASSERT_EQ(conn.run("exec count(*) from loadTable('dfs://test_connectionPool_concurrent_insert_datas', `pt)")->getInt(), 500);
 }
-#endif
 
-class connection_insert_null : public DBConnectionTest, public testing::WithParamInterface<tuple<string, DATA_TYPE>>
+class connection_insert_null : public DBConnectionTest, public testing::WithParamInterface<std::tuple<std::string, dolphindb::DATA_TYPE>>
 {
 public:
-    static vector<tuple<string, DATA_TYPE>> data_prepare()
+    static std::vector<std::tuple<std::string, dolphindb::DATA_TYPE>> data_prepare()
     {
-        vector<string> testTypes = {"BOOL", "CHAR", "SHORT", "INT", "LONG", "DATE", "MONTH", "TIME", "MINUTE", "SECOND", "DATETIME", "TIMESTAMP", "NANOTIME", "NANOTIMESTAMP", "DATEHOUR", "FLOAT", "DOUBLE", "STRING", "SYMBOL", "BLOB", "IPADDR", "UUID", "INT128", "DECIMAL32(8)", "DECIMAL64(15)", "DECIMAL128(28)",
+        std::vector<std::string> testTypes = {"BOOL", "CHAR", "SHORT", "INT", "LONG", "DATE", "MONTH", "TIME", "MINUTE", "SECOND", "DATETIME", "TIMESTAMP", "NANOTIME", "NANOTIMESTAMP", "DATEHOUR", "FLOAT", "DOUBLE", "STRING", "SYMBOL", "BLOB", "IPADDR", "UUID", "INT128", "DECIMAL32(8)", "DECIMAL64(15)", "DECIMAL128(28)",
                                     "BOOL[]", "CHAR[]", "SHORT[]", "INT[]", "LONG[]", "DATE[]", "MONTH[]", "TIME[]", "MINUTE[]", "SECOND[]", "DATETIME[]", "TIMESTAMP[]", "NANOTIME[]", "NANOTIMESTAMP[]", "DATEHOUR[]", "FLOAT[]", "DOUBLE[]", "IPADDR[]", "UUID[]", "INT128[]", "DECIMAL32(8)[]", "DECIMAL64(15)[]", "DECIMAL128(25)[]"};
-        vector<DATA_TYPE> dataTypes = {DT_BOOL, DT_CHAR, DT_SHORT, DT_INT, DT_LONG, DT_DATE, DT_MONTH, DT_TIME, DT_MINUTE, DT_SECOND, DT_DATETIME, DT_TIMESTAMP, DT_NANOTIME, DT_NANOTIMESTAMP, DT_DATEHOUR, DT_FLOAT, DT_DOUBLE, DT_STRING, DT_SYMBOL, DT_BLOB, DT_IP, DT_UUID, DT_INT128, DT_DECIMAL32, DT_DECIMAL64, DT_DECIMAL128,
-                                       DT_BOOL_ARRAY, DT_CHAR_ARRAY, DT_SHORT_ARRAY, DT_INT_ARRAY, DT_LONG_ARRAY, DT_DATE_ARRAY, DT_MONTH_ARRAY, DT_TIME_ARRAY, DT_MINUTE_ARRAY, DT_SECOND_ARRAY, DT_DATETIME_ARRAY, DT_TIMESTAMP_ARRAY, DT_NANOTIME_ARRAY, DT_NANOTIMESTAMP_ARRAY, DT_DATEHOUR_ARRAY, DT_FLOAT_ARRAY, DT_DOUBLE_ARRAY, DT_IP_ARRAY, DT_UUID_ARRAY, DT_INT128_ARRAY, DT_DECIMAL32_ARRAY, DT_DECIMAL64_ARRAY, DT_DECIMAL128_ARRAY};
-        vector<tuple<string, DATA_TYPE>> data;
+        std::vector<dolphindb::DATA_TYPE> dataTypes = {dolphindb::DT_BOOL, dolphindb::DT_CHAR, dolphindb::DT_SHORT, dolphindb::DT_INT, dolphindb::DT_LONG, dolphindb::DT_DATE, dolphindb::DT_MONTH, dolphindb::DT_TIME, dolphindb::DT_MINUTE, dolphindb::DT_SECOND, dolphindb::DT_DATETIME, dolphindb::DT_TIMESTAMP, dolphindb::DT_NANOTIME, dolphindb::DT_NANOTIMESTAMP, dolphindb::DT_DATEHOUR, dolphindb::DT_FLOAT, dolphindb::DT_DOUBLE, dolphindb::DT_STRING, dolphindb::DT_SYMBOL, dolphindb::DT_BLOB, dolphindb::DT_IP, dolphindb::DT_UUID, dolphindb::DT_INT128, dolphindb::DT_DECIMAL32, dolphindb::DT_DECIMAL64, dolphindb::DT_DECIMAL128,
+                                       dolphindb::DT_BOOL_ARRAY, dolphindb::DT_CHAR_ARRAY, dolphindb::DT_SHORT_ARRAY, dolphindb::DT_INT_ARRAY, dolphindb::DT_LONG_ARRAY, dolphindb::DT_DATE_ARRAY, dolphindb::DT_MONTH_ARRAY, dolphindb::DT_TIME_ARRAY, dolphindb::DT_MINUTE_ARRAY, dolphindb::DT_SECOND_ARRAY, dolphindb::DT_DATETIME_ARRAY, dolphindb::DT_TIMESTAMP_ARRAY, dolphindb::DT_NANOTIME_ARRAY, dolphindb::DT_NANOTIMESTAMP_ARRAY, dolphindb::DT_DATEHOUR_ARRAY, dolphindb::DT_FLOAT_ARRAY, dolphindb::DT_DOUBLE_ARRAY, dolphindb::DT_IP_ARRAY, dolphindb::DT_UUID_ARRAY, dolphindb::DT_INT128_ARRAY, dolphindb::DT_DECIMAL32_ARRAY, dolphindb::DT_DECIMAL64_ARRAY, dolphindb::DT_DECIMAL128_ARRAY};
+        std::vector<std::tuple<std::string, dolphindb::DATA_TYPE>> data;
         for (auto i = 0; i < testTypes.size(); i++)
             data.push_back(make_tuple(testTypes[i], dataTypes[i]));
         return data;
     }
 };
-INSTANTIATE_TEST_SUITE_P(, connection_insert_null, testing::ValuesIn(connection_insert_null::data_prepare()));
 
+INSTANTIATE_TEST_SUITE_P(, connection_insert_null, testing::ValuesIn(connection_insert_null::data_prepare()));
 TEST_P(connection_insert_null, test_append_empty_table)
 {
-    string type = std::get<0>(GetParam());
-    DATA_TYPE dataType = std::get<1>(GetParam());
-    cout << "test type: " << type << endl;
-    string colName = "c1";
-    string script1 =
+    std::string case_=getCaseName();
+    std::string type = std::get<0>(GetParam());
+    dolphindb::DATA_TYPE dataType = std::get<1>(GetParam());
+    std::string colName = "c1";
+    std::string table = case_;
+    std::string script1 =
         "colName = [`" + colName + "];"
                                    "colType = [" +
         type + "];"
-               "share table(1:0, colName, colType) as att;";
+               "share table(1:0, colName, colType) as "+table+";";
 
-    connReconn.run(script1);
-    VectorSP col1 = Util::createVector(dataType, 0);
-    vector<string> colNames = {"c1"};
-    vector<ConstantSP> cols = {col1};
-    TableSP empty2 = Util::createTable(colNames, cols);
+    conn.run(script1);
+    dolphindb::VectorSP col1 = dolphindb::Util::createVector(dataType, 0);
+    std::vector<std::string> colNames = {"c1"};
+    std::vector<dolphindb::ConstantSP> cols = {col1};
+    dolphindb::TableSP empty2 = dolphindb::Util::createTable(colNames, cols);
 
-    connReconn.upload("empty", empty2);
-    auto res = connReconn.run("each(eqObj, att.values(), empty.values())");
-    EXPECT_EQ(res->getString(), "[1]");
+    conn.upload("empty", empty2);
+    auto res = conn.run("each(eqObj, "+table+".values(), empty.values())");
+    ASSERT_EQ(res->getString(), "[1]");
 
-    vector<ConstantSP> args = {empty2};
-    auto t = connReconn.run("append!{att}", args);
-    EXPECT_EQ(connReconn.run("exec count(*) from att")->getInt(), 0);
-    EXPECT_EQ(t->rows(), 0);
-    connReconn.run("undef(`att, SHARED)");
-    EXPECT_ANY_THROW(connReconn.run("append!{att}", args));
+    std::vector<dolphindb::ConstantSP> args = {empty2};
+    auto t = conn.run("append!{"+table+"}", args);
+    ASSERT_EQ(conn.run("exec count(*) from "+table)->getInt(), 0);
+    ASSERT_EQ(t->rows(), 0);
 }
-
 
 TEST_F(DBConnectionTest, test_connection_parallel)
 {
-    connReconn.run("login(`admin,`123456);try{createUser(`test1, `123456)}catch(ex){};go;setMaxJobParallelism(`test1, 10);");
+    std::string userName=getRandString(20);
+    conn.run(
+        "userName='"+userName+"';"
+        "try{createUser(userName, `123456)}catch(ex){};go;setMaxJobParallelism(userName, 10);"
+    );
     { // TestConnectionParallel_lt_MaxJobParallelism
         int priority = 3;
         int parallel = 1;
-        DBConnectionSP _tmpC = new DBConnection(false, false);
-        _tmpC->connect(hostName, port, "test1", "123456");
-        TableSP res = _tmpC->run("getConsoleJobs()", priority, parallel);
-        EXPECT_EQ(res->getColumn(5)->get(0)->getInt(), 3);
-        EXPECT_EQ(res->getColumn(6)->get(0)->getInt(), 1);
+        dolphindb::DBConnectionSP _tmpC = new dolphindb::DBConnection(false, false);
+        _tmpC->connect(HOST, PORT, userName, "123456");
+        dolphindb::TableSP res = _tmpC->run("select * from getConsoleJobs() where userID=`"+userName, priority, parallel);
+        ASSERT_EQ(res->getColumn(5)->get(0)->getInt(), 3);
+        ASSERT_EQ(res->getColumn(6)->get(0)->getInt(), 1);
 
     }
     { // TestConnectionParallel_gt_MaxJobParallelism
         int priority = 1;
         int parallel = 12;
-        DBConnectionSP _tmpC = new DBConnection(false, false);
-        _tmpC->connect(hostName, port, "test1", "123456");
-        TableSP res = _tmpC->run("getConsoleJobs()", priority, parallel);
-        EXPECT_EQ(res->getColumn(5)->get(0)->getInt(), 1);
-        EXPECT_EQ(res->getColumn(6)->get(0)->getInt(), 10);
+        dolphindb::DBConnectionSP _tmpC = new dolphindb::DBConnection(false, false);
+        _tmpC->connect(HOST, PORT, userName, "123456");
+        dolphindb::TableSP res = _tmpC->run("select * from getConsoleJobs() where userID=`"+userName, priority, parallel);
+        ASSERT_EQ(res->getColumn(5)->get(0)->getInt(), 1);
+        ASSERT_EQ(res->getColumn(6)->get(0)->getInt(), 10);
     }
     { // TestConnectionParallel_default
-        DBConnectionSP _tmpC = new DBConnection(false, false);
-        _tmpC->connect(hostName, port, "test1", "123456");
-        TableSP res = _tmpC->run("getConsoleJobs()");
-        EXPECT_EQ(res->getColumn(5)->get(0)->getInt(), 4);
-        EXPECT_EQ(res->getColumn(6)->get(0)->getInt(), 10);
+        dolphindb::DBConnectionSP _tmpC = new dolphindb::DBConnection(false, false);
+        _tmpC->connect(HOST, PORT, userName, "123456");
+        dolphindb::TableSP res = _tmpC->run("select * from getConsoleJobs() where userID=`"+userName);
+        ASSERT_EQ(res->getColumn(5)->get(0)->getInt(), 4);
+        ASSERT_EQ(res->getColumn(6)->get(0)->getInt(), 10);
     }
-
 }
-
 
 TEST_F(DBConnectionTest, test_connectionPool_parallel)
 {
-    connReconn.run("login(`admin,`123456);try{createUser(`test1, `123456)}catch(ex){};go;setMaxJobParallelism(`test1, 10);");
+    std::string userName=getRandString(20);
+    conn.run(
+        "userName='"+userName+"';"
+        "try{createUser(userName, `123456)}catch(ex){};go;setMaxJobParallelism(userName, 10);"
+    );
     { // TestConnectionParallel_lt_MaxJobParallelism
         int priority = 3;
         int parallel = rand() % 10 + 1;
-        DBConnectionPoolSP _tmpP = new DBConnectionPool(hostName, port, 10, "test1", "123456");
+        dolphindb::DBConnectionPoolSP _tmpP = new dolphindb::DBConnectionPool(HOST, PORT, 10, userName, "123456");
         int id = rand() % 1000;
-        EXPECT_ANY_THROW(_tmpP->run("getConsoleJobs()", id, priority, 0));
-        _tmpP->run("getConsoleJobs()", id, priority, parallel);
+        ASSERT_ANY_THROW(_tmpP->run("select * from getConsoleJobs() where userID=`"+userName+"", id, priority, 0));
+        _tmpP->run("select * from getConsoleJobs() where userID=`"+userName+"", id, priority, parallel);
         while (!_tmpP->isFinished(id))
         {
-            Util::sleep(500);
+            dolphindb::Util::sleep(500);
         }
-        TableSP res = _tmpP->getData(id);
-        EXPECT_EQ(res->getColumn(5)->get(0)->getInt(), priority);
-        EXPECT_EQ(res->getColumn(6)->get(0)->getInt(), parallel);
+        dolphindb::TableSP res = _tmpP->getData(id);
+        ASSERT_EQ(res->getColumn(5)->get(0)->getInt(), priority);
+        ASSERT_EQ(res->getColumn(6)->get(0)->getInt(), parallel);
 
     }
     { // TestConnectionParallel_gt_MaxJobParallelism
         int priority = 1;
         int parallel = rand() % 64 + 11;
-        DBConnectionPoolSP _tmpP = new DBConnectionPool(hostName, port, 10, "test1", "123456");
+        dolphindb::DBConnectionPoolSP _tmpP = new dolphindb::DBConnectionPool(HOST, PORT, 10, userName, "123456");
         int id = rand() % 1000;
-        _tmpP->run("getConsoleJobs()", id, priority, parallel);
+        _tmpP->run("select * from getConsoleJobs() where userID=`"+userName+"", id, priority, parallel);
         while (!_tmpP->isFinished(id))
         {
-            Util::sleep(500);
+            dolphindb::Util::sleep(500);
         }
-        TableSP res = _tmpP->getData(id);
-        EXPECT_EQ(res->getColumn(5)->get(0)->getInt(), priority);
-        EXPECT_EQ(res->getColumn(6)->get(0)->getInt(), 10);
+        dolphindb::TableSP res = _tmpP->getData(id);
+        ASSERT_EQ(res->getColumn(5)->get(0)->getInt(), priority);
+        ASSERT_EQ(res->getColumn(6)->get(0)->getInt(), 10);
     }
     { // TestConnectionParallel_default
-        DBConnectionPoolSP _tmpP = new DBConnectionPool(hostName, port, 10, "test1", "123456");
+        dolphindb::DBConnectionPoolSP _tmpP = new dolphindb::DBConnectionPool(HOST, PORT, 10, userName, "123456");
         int id = rand() % 1000;
-        _tmpP->run("getConsoleJobs()", id);
+        _tmpP->run("select * from getConsoleJobs() where userID=`"+userName+"", id);
         while (!_tmpP->isFinished(id))
         {
-            Util::sleep(500);
+            dolphindb::Util::sleep(500);
         }
-        TableSP res = _tmpP->getData(id);
-        EXPECT_EQ(res->getColumn(5)->get(0)->getInt(), 4);
-        EXPECT_EQ(res->getColumn(6)->get(0)->getInt(), 10);
+        dolphindb::TableSP res = _tmpP->getData(id);
+        ASSERT_EQ(res->getColumn(5)->get(0)->getInt(), 4);
+        ASSERT_EQ(res->getColumn(6)->get(0)->getInt(), 10);
     }
+}
 
+TEST_F(DBConnectionTest, test_connectionPool_run_script)
+{
+    dolphindb::DBConnectionPool pool(HOST, PORT, 8, USER, PASSWD);
+    int id_1 = pool.run("sleep(3000);1");
+    while (!pool.isFinished(id_1)){
+        dolphindb::Util::sleep(500);
+    }
+    ASSERT_EQ(pool.getData(id_1)->getString(), "1");
+}
+
+TEST_F(DBConnectionTest, test_connectionPool_condition_variable_run_script)
+{
+    auto cv = std::make_shared<std::condition_variable>();
+    std::mutex cv_m;
+    std::unique_lock<std::mutex> lk(cv_m);
+    dolphindb::DBConnectionPool pool(HOST, PORT, 8, USER, PASSWD);
+    int id_1 = pool.run("sleep(3000);1", cv);
+    int id_2 = pool.run("sleep(3000);2", cv);
+    int id_3 = pool.run("sleep(3000);3", cv);
+    int id_4 = pool.run("sleep(3000);4", cv);
+    cv->wait(lk, [id_1, &pool]{
+        return pool.isFinished(id_1);
+    });
+    cv->wait(lk, [id_2, &pool]{
+        return pool.isFinished(id_2);
+    });
+    cv->wait(lk, [id_3, &pool]{
+        return pool.isFinished(id_3);
+    });
+    cv->wait(lk, [id_4, &pool]{
+        return pool.isFinished(id_4);
+    });
+    ASSERT_EQ(pool.getData(id_1)->getString(), "1");
+    ASSERT_EQ(pool.getData(id_2)->getString(), "2");
+    ASSERT_EQ(pool.getData(id_3)->getString(), "3");
+    ASSERT_EQ(pool.getData(id_4)->getString(), "4");
+}
+
+TEST_F(DBConnectionTest, test_connectionPool_run_function)
+{
+    dolphindb::DBConnectionPool pool(HOST, PORT, 8, USER, PASSWD);
+    std::vector<dolphindb::ConstantSP> args;
+    args.emplace_back(dolphindb::Util::createInt(1));
+    args.emplace_back(dolphindb::Util::createInt(2));
+    int id_1 = pool.run("add", args);
+    while (!pool.isFinished(id_1)){
+        dolphindb::Util::sleep(500);
+    }
+    ASSERT_EQ(pool.getData(id_1)->getString(), "3");
+}
+
+TEST_F(DBConnectionTest, test_connectionPool_condition_variable_run_function)
+{
+    auto cv = std::make_shared<std::condition_variable>();
+    std::mutex cv_m;
+    std::unique_lock<std::mutex> lk(cv_m);
+    dolphindb::DBConnectionPool pool(HOST, PORT, 8, USER, PASSWD);
+    std::vector<dolphindb::ConstantSP> args;
+    args.emplace_back(dolphindb::Util::createInt(1));
+    args.emplace_back(dolphindb::Util::createInt(2));
+    int id_1 = pool.run("add", args, cv);
+    int id_2 = pool.run("add", args, cv);
+    int id_3 = pool.run("add", args, cv);
+    int id_4 = pool.run("add", args, cv);
+    cv->wait(lk, [id_1, &pool]{
+        return pool.isFinished(id_1);
+    });
+    cv->wait(lk, [id_2, &pool]{
+        return pool.isFinished(id_2);
+    });
+    cv->wait(lk, [id_3, &pool]{
+        return pool.isFinished(id_3);
+    });
+    cv->wait(lk, [id_4, &pool]{
+        return pool.isFinished(id_4);
+    });
+    ASSERT_EQ(pool.getData(id_1)->getString(), "3");
+    ASSERT_EQ(pool.getData(id_2)->getString(), "3");
+    ASSERT_EQ(pool.getData(id_3)->getString(), "3");
+    ASSERT_EQ(pool.getData(id_4)->getString(), "3");
 }
 
 TEST_F(DBConnectionTest, test_connection_login_encrypt){
-    DBConnectionSP _c = new DBConnection(false, false);
-    _c->connect(hostName, port);
-    #ifdef TEST_OPENSSL
-        _c->login("admin", "123456", true);
-        ConstantSP res = _c->run("1+1");
-        EXPECT_EQ(res->getInt(), 2);
-    #else
-        EXPECT_ANY_THROW(_c->login("admin", "123456", true));
-    #endif
+    dolphindb::DBConnectionSP _c = new dolphindb::DBConnection(false, false);
+    _c->connect(HOST, PORT);
+    _c->login(USER, PASSWD, true);
+    dolphindb::ConstantSP res = _c->run("1+1");
+    ASSERT_EQ(res->getInt(), 2);
     _c->close();
 }
 
-
 TEST_F(DBConnectionTest, test_connection_login_ban_guest){
     {
-        DBConnectionSP _c = new DBConnection(false, false);
-        _c->connect(hostName, port);
-        _c->login("admin", "123456", false);
+        dolphindb::DBConnectionSP _c = new dolphindb::DBConnection(false, false);
+        _c->connect(HOST, PORT);
+        _c->login(USER, PASSWD, false);
         bool res = _c->run("bool(getConfig(`enableClientAuth))")->getBool();
-        EXPECT_TRUE(res);
+        ASSERT_TRUE(res);
         _c->close();
     }
     {
-        DBConnectionSP _c = new DBConnection(false, false);
-        _c->connect(hostName, port);
-        EXPECT_ANY_THROW(_c->run("bool(getConfig(`enableClientAuth))")); // guest user is banned
+        dolphindb::DBConnectionSP _c = new dolphindb::DBConnection(false, false);
+        _c->connect(HOST, PORT);
+        ASSERT_ANY_THROW(_c->run("bool(getConfig(`enableClientAuth))")); // guest user is banned
         _c->close();
     }
     {
-        DBConnectionPoolSP _p = new DBConnectionPool(hostName, port, 10, "admin", "123456");
+        dolphindb::DBConnectionPoolSP _p = new dolphindb::DBConnectionPool(HOST, PORT, 10, USER, PASSWD);
         int id = rand() % 1000;
         _p->run("bool(getConfig(`enableClientAuth))", id);
         while (!_p->isFinished(id))
         {
-            Util::sleep(500);
+            dolphindb::Util::sleep(500);
         }
         bool res = _p->getData(id)->getBool();
-        EXPECT_TRUE(res);
+        ASSERT_TRUE(res);
         _p->shutDown();
     }
     {
-        DBConnectionPoolSP _p = new DBConnectionPool(hostName, port, 10);
+        dolphindb::DBConnectionPoolSP _p = new dolphindb::DBConnectionPool(HOST, PORT, 10);
         int id = rand() % 1000;
         try{
             _p->run("bool(getConfig(`enableClientAuth))", id);
             while (!_p->isFinished(id))
             {
-                Util::sleep(500);
+                dolphindb::Util::sleep(500);
             }
         }catch(const std::exception& e){
-            EXPECT_PRED_FORMAT2(testing::IsSubstring, "RefId: S04009", e.what());
+            ASSERT_PRED_FORMAT2(testing::IsSubstring, "RefId: S04009", e.what());
         }
   
         _p->shutDown();
@@ -826,57 +873,61 @@ TEST_F(DBConnectionTest, test_connection_login_ban_guest){
 }
 
 TEST_F(DBConnectionTest, test_connection_SCRAM){
+    std::string case_=getRandString(20);
     try{
-        connReconn.run("try{deleteUser('scramUser')}catch(ex){};go;createUser(`scramUser, `123456, authMode='scram')");
+        conn.run(
+            "userName='"+case_+"';"
+            "try{deleteUser(userName)}catch(ex){};go;createUser(userName, `123456, authMode='scram')"
+        );
     }catch(const std::exception& e){
         GTEST_SKIP() << e.what();
     }
     {
-        DBConnectionSP _c = new DBConnection(false, false, 7200, false, false, false, true);
-        _c->connect(hostName, port);
-        _c->login("scramUser", "123456", true);
-        ConstantSP res = _c->run("getCurrentSessionAndUser()[1]");
-        EXPECT_EQ(res->getString(), "scramUser");
+        dolphindb::DBConnectionSP _c = new dolphindb::DBConnection(false, false, 7200, false, false, false, true);
+        _c->connect(HOST, PORT);
+        _c->login(case_, "123456", true);
+        dolphindb::ConstantSP res = _c->run("getCurrentSessionAndUser()[1]");
+        ASSERT_EQ(res->getString(), case_);
         _c->close();
-        cout << "test_connection_SCRAM1 passed" << endl;
+        std::cout << "test_connection_SCRAM1 passed" << std::endl;
     }
     {
-        DBConnection _c = DBConnection(false, false, 7200, false, false, false, true);
-        _c.connect(hostName, port, "scramUser", "123456");
-        ConstantSP res = _c.run("getCurrentSessionAndUser()[1]");
-        EXPECT_EQ(res->getString(), "scramUser");
+        dolphindb::DBConnection _c = dolphindb::DBConnection(false, false, 7200, false, false, false, true);
+        _c.connect(HOST, PORT, case_, "123456");
+        dolphindb::ConstantSP res = _c.run("getCurrentSessionAndUser()[1]");
+        ASSERT_EQ(res->getString(), case_);
         _c.close();
-        cout << "test_connection_SCRAM2 passed" << endl;
+        std::cout << "test_connection_SCRAM2 passed" << std::endl;
     }
     { // login with no scram auth user admin
-        DBConnection _c = DBConnection(false, false, 7200, false, false, false, true);
-        _c.connect(hostName, port, "admin", "123456"); // stdout: [debug] [140591328847872] : user 'admin' doesn't support scram authMode.
+        dolphindb::DBConnection _c = dolphindb::DBConnection(false, false, 7200, false, false, false, true);
+        _c.connect(HOST, PORT, USER, PASSWD); // stdout: [debug] [140591328847872] : user 'admin' doesn't support scram authMode.
     }
     { // enableEncryption with scram user
-        DBConnection _c = DBConnection(hostName, port);
+        dolphindb::DBConnection _c = dolphindb::DBConnection(HOST, PORT);
         _c.connect();
-        _c.login("scramUser", "123456", true);
-        ConstantSP res = _c.run("getCurrentSessionAndUser()[1]");
-        EXPECT_EQ(res->getString(), "scramUser");
+        _c.login(case_, "123456", true);
+        dolphindb::ConstantSP res = _c.run("getCurrentSessionAndUser()[1]");
+        ASSERT_EQ(res->getString(), case_);
         _c.close();
     }
     { // async login with scram user
-        EXPECT_ANY_THROW(DBConnection(false, true, 7200, false, false, false, true));
+        ASSERT_ANY_THROW(dolphindb::DBConnection(false, true, 7200, false, false, false, true));
     }
 }
 
 TEST_F(DBConnectionTest, test_connectionPool_SCRAM){
-    try{
-        connReconn.run("try{deleteUser('scramUser')}catch(ex){};go;createUser(`scramUser, `123456, authMode='scram')");
-    }catch(const std::exception& e){
-        GTEST_SKIP() << e.what();
-    }
-    DBConnectionPoolSP _p = new DBConnectionPool(hostName, port, 10, "scramUser", "123456");
+    std::string userName=getRandString(20);
+    conn.run(
+        "userName='"+userName+"';"
+        "try{deleteUser(userName)}catch(ex){};go;createUser(userName, `123456, authMode='scram')"
+    );
+    dolphindb::DBConnectionPoolSP _p = new dolphindb::DBConnectionPool(HOST, PORT, 10, userName, "123456");
     _p->run("getCurrentSessionAndUser()[1]", 0);
     while (!_p->isFinished(0)){
-        Util::sleep(500);
+        dolphindb::Util::sleep(500);
     }
-    EXPECT_EQ(_p->getData(0)->getString(), "scramUser");
+    ASSERT_EQ(_p->getData(0)->getString(), userName);
     _p->shutDown();
-    cout << "test_connectionPool_SCRAM passed" << endl;
+    std::cout << "test_connectionPool_SCRAM passed" << std::endl;
 }

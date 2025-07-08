@@ -21,11 +21,11 @@ namespace dolphindb {
 class EXPORT_DECL Vector:public Constant{
 public:
     Vector(): Constant(259){}
-    virtual ~Vector(){}
-    virtual ConstantSP getColumnLabel() const;
+    ~Vector() override = default;
+    ConstantSP getColumnLabel() const override;
     const std::string& getName() const {return name_;}
     void setName(const std::string& name){name_=name;}
-    virtual bool isLargeConstant() const { return isMatrix() || size()>1024; }
+    bool isLargeConstant() const override { return isMatrix() || size()>1024; }
     virtual void initialize(){}
     virtual INDEX getCapacity() const = 0;
     virtual	INDEX reserve(INDEX capacity) {throw RuntimeException("Vector::reserve method not supported");}
@@ -48,18 +48,18 @@ public:
     virtual bool appendDouble(double* buf, int len){return false;}
     virtual bool appendString(std::string* buf, int len){return false;}
     virtual bool appendString(char** buf, int len){return false;}
-    virtual std::string getString() const;
-    virtual std::string getScript() const;
-    virtual std::string getString(INDEX index) const = 0;
+    std::string getString() const override;
+    std::string getScript() const override;
+    std::string getString(INDEX index) const override = 0;
     virtual VECTOR_TYPE getVectorType() const{return VECTOR_TYPE::ARRAY;}
     virtual bool isSorted(bool asc, bool strict = false) const {throw RuntimeException("Vector::isSorted method not supported");}
-    virtual ConstantSP getInstance() const {return getInstance(size());}
+    ConstantSP getInstance() const override {return getInstance(size());}
     virtual ConstantSP getInstance(INDEX size) const = 0;
     using Constant::getValue;
     virtual ConstantSP getValue(INDEX capacity) const {throw RuntimeException("Vector::getValue method not supported");}
-    virtual ConstantSP get(INDEX column, INDEX rowStart,INDEX rowEnd) const {return getSubVector(column*rows()+rowStart,rowEnd-rowStart);}
-    virtual ConstantSP get(INDEX index) const = 0;
-    virtual ConstantSP getWindow(INDEX colStart, int colLength, INDEX rowStart, int rowLength) const {return getSubVector(rowStart,rowLength);}
+    virtual ConstantSP get(INDEX column, INDEX rowStart,INDEX rowEnd) const {return getSubVector((column*rows())+rowStart,rowEnd-rowStart);}
+    ConstantSP get(INDEX index) const override = 0;
+    ConstantSP getWindow(INDEX colStart, int colLength, INDEX rowStart, int rowLength) const override {return getSubVector(rowStart,rowLength);}
     virtual ConstantSP getSubVector(INDEX start, INDEX length) const { throw RuntimeException("getSubVector method not supported");}
     virtual ConstantSP getSubVector(INDEX start, INDEX length, INDEX capacity) const { return getSubVector(start, length);}
     virtual void fill(INDEX start, INDEX length, const ConstantSP& value)=0;
@@ -79,7 +79,7 @@ public:
     using Constant::getAllocatedMemory;
     virtual long long getAllocatedMemory(INDEX sz) const {return Constant::getAllocatedMemory();}
     virtual int asof(const ConstantSP& value) const {throw RuntimeException("asof not supported.");}
-    virtual ConstantSP castTemporal(DATA_TYPE expectType){throw RuntimeException("castTemporal not supported");}
+    ConstantSP castTemporal(DATA_TYPE expectType) override{throw RuntimeException("castTemporal not supported");}
 
 protected:
     using Constant::get;
@@ -87,8 +87,8 @@ protected:
 private:
     std::string name_;
 };
-typedef SmartPointer<Vector> VectorSP;
-}
+using VectorSP = SmartPointer<Vector>;
+} // namespace dolphindb
 
 #if defined(_MSC_VER)
 #pragma warning( pop )

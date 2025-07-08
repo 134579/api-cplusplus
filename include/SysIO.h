@@ -7,22 +7,21 @@
 #pragma warning( disable : 4251 )
 #endif
 
-#include <iostream>
-#include <string>
 #include "SmartPointer.h"
-#include "Types.h"
 #include "Concurrent.h"
 #include "Platform.h"
+#include "Types.h"
+#include <iostream>
+#include <string>
 
 #ifdef USE_OPENSSL
 
 #include <openssl/err.h>
-#include <openssl/ssl.h>
 
 #endif
 
 #ifdef __linux__
-typedef int SOCKET;
+using SOCKET = int;
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR   -1
 #endif
@@ -34,10 +33,10 @@ class DataInputStream;
 class DataOutputStream;
 class DataStream;
 class DataBlock;
-typedef SmartPointer<DataInputStream> DataInputStreamSP;
-typedef SmartPointer<DataOutputStream> DataOutputStreamSP;
-typedef SmartPointer<DataStream> DataStreamSP;
-typedef SmartPointer<BlockingQueue<DataBlock>> DataQueueSP;
+using DataInputStreamSP = SmartPointer<DataInputStream>;
+using DataOutputStreamSP = SmartPointer<DataOutputStream>;
+using DataStreamSP = SmartPointer<DataStream>;
+using DataQueueSP = SmartPointer<BlockingQueue<DataBlock>>;
 
 class EXPORT_DECL Socket{
 public:
@@ -74,10 +73,10 @@ private:
 	bool sslInit();
 	IO_ERR sslConnect();
 	void showCerts(void* ssl);
-private:
+
 	std::string host_;
 	int port_;
-	SOCKET handle_;
+	SOCKET handle_{INVALID_SOCKET};
 	bool blocking_;
 	bool autoClose_;
 	bool enableSSL_;
@@ -86,7 +85,7 @@ private:
 	int keepAliveTime_;
 };
 
-typedef SmartPointer<Socket> SocketSP;
+using SocketSP = SmartPointer<Socket>;
 
 class DataBlock{
 public:
@@ -101,11 +100,11 @@ private:
 
 class EXPORT_DECL DataInputStream{
 public:
-	DataInputStream(STREAM_TYPE type, std::size_t bufSize = 2048);
+	explicit DataInputStream(STREAM_TYPE type, std::size_t bufSize = 2048);
 	DataInputStream(const char* data, std::size_t size, bool copy = true);
-	DataInputStream(const SocketSP& socket, std::size_t bufSize = 2048);
-	DataInputStream(FILE* file, std::size_t bufSize = 2048);
-	DataInputStream(DataQueueSP dataQueue);
+	explicit DataInputStream(const SocketSP& socket, std::size_t bufSize = 2048);
+	explicit DataInputStream(FILE* file, std::size_t bufSize = 2048);
+	explicit DataInputStream(const DataQueueSP& dataQueue);
 	virtual ~DataInputStream();
 	IO_ERR close();
 	void enableReverseIntegerByteOrder() { reverseOrder_ = true;}
@@ -126,6 +125,7 @@ public:
 	IO_ERR readChar(char& value);
 	IO_ERR readUnsignedChar(unsigned char& value);
 	IO_ERR readShort(short& value);
+	IO_ERR readShort(uint16_t& value);
 	IO_ERR readUnsignedShort(unsigned short& value);
 	IO_ERR readInt(int& value);
 	IO_ERR readUnsignedInt(unsigned int& value);
@@ -145,28 +145,15 @@ public:
 	IO_ERR peekBuffer(char* buf, size_t size);
 	IO_ERR peekLine(std::string& value);
 
-	inline bool isSocketStream() const {return source_ == SOCKET_STREAM;}
-	inline bool isFileStream() const { return source_ == FILE_STREAM;}
-	inline bool isArrayStream() const {return source_ == ARRAY_STREAM;}
-	inline STREAM_TYPE getStreamType() const {return source_;}
+	bool isSocketStream() const {return source_ == SOCKET_STREAM;}
+	bool isFileStream() const { return source_ == FILE_STREAM;}
+	bool isArrayStream() const {return source_ == ARRAY_STREAM;}
+	STREAM_TYPE getStreamType() const {return source_;}
 	SocketSP getSocket() const { return socket_;}
 	FILE* getFileHandle() const { return file_;}
 
-	/**
-	 * The position of the cursor in the file or buffer after last read. This function works for the case of file input or
-	 * buffer input. It always return zero for socket input.
-	 */
-	long long getPosition() const;
-
-
 	std::size_t getDataSizeInArray() const { return size_;}
 	bool isIntegerReversed() const {return reverseOrder_;}
-
-	/**
-	 * Move to the given position of a file.It always returns false for other type of stream.
-	 * The internal buffer will be cleared if the file position is moved successfully.
-	 */
-	bool moveToPosition(long long offset);
 
 	/**
 	 * Reset the size of an external buffer. The cursor moves to the beginning of the buffer.
@@ -196,26 +183,26 @@ protected:
 
 class EXPORT_DECL DataOutputStream {
 public:
-	DataOutputStream(const SocketSP& socket, size_t flushThreshold = 4096);
-	DataOutputStream(FILE* file, bool autoClose = false);
-	DataOutputStream(size_t capacity = 1024) ;
-	DataOutputStream(STREAM_TYPE source) ;
-	DataOutputStream(DataQueueSP dataQueue);
+	explicit DataOutputStream(const SocketSP& socket, size_t flushThreshold = 4096);
+	explicit DataOutputStream(FILE* file, bool autoClose = false);
+	explicit DataOutputStream(size_t capacity = 1024) ;
+	explicit DataOutputStream(STREAM_TYPE source) ;
+	explicit DataOutputStream(const DataQueueSP& dataQueue);
 	virtual ~DataOutputStream();
 	IO_ERR write(const char* buffer, size_t length, size_t& actualWritten);
 	IO_ERR write(const char* buffer, size_t length);
 	IO_ERR resume();
-	inline IO_ERR start(const char* buffer, size_t length){return write(buffer, length);}
-	inline IO_ERR write(const std::string& buffer){ return write(buffer.c_str(), buffer.length() + 1);}
-	inline IO_ERR writeData(const std::string& buffer){ return write(buffer.data(), buffer.length());}
-	inline IO_ERR write(bool val){ return write((const char*)&val, 1);}
-	inline IO_ERR write(char val){ return write(&val, 1);}
-	inline IO_ERR write(short val){ return write((const char*)&val, 2);}
-	inline IO_ERR write(unsigned short val){ return write((const char*)&val, 2);}
-	inline IO_ERR write(int val){ return write((const char*)&val, 4);}
-	inline IO_ERR write(long long val){ return write((const char*)&val, 8);}
-	inline IO_ERR write(float val){ return write((const char*)&val, 4);}
-	inline IO_ERR write(double val){ return write((const char*)&val, 8);}
+	IO_ERR start(const char* buffer, size_t length){return write(buffer, length);}
+	IO_ERR write(const std::string& buffer){ return write(buffer.c_str(), buffer.length() + 1);}
+	IO_ERR writeData(const std::string& buffer){ return write(buffer.data(), buffer.length());}
+	IO_ERR write(bool val){ return write((const char*)&val, 1);}
+	IO_ERR write(char val){ return write(&val, 1);}
+	IO_ERR write(short val){ return write((const char*)&val, 2);}
+	IO_ERR write(unsigned short val){ return write((const char*)&val, 2);}
+	IO_ERR write(int val){ return write((const char*)&val, 4);}
+	IO_ERR write(long long val){ return write((const char*)&val, 8);}
+	IO_ERR write(float val){ return write((const char*)&val, 4);}
+	IO_ERR write(double val){ return write((const char*)&val, 8);}
 	SocketSP getSocket() const { return socket_;}
 	FILE* getFile() const { return file_;}
 	const char * getBuffer() const { return buf_;}
@@ -237,23 +224,23 @@ protected:
 
 class EXPORT_DECL Buffer {
 public:
-	Buffer(size_t cap) : buf_(new char[cap]), capacity_(cap), size_(0), external_(false){}
+	explicit Buffer(size_t cap) : buf_(new char[cap]), capacity_(cap), size_(0), external_(false){}
 	Buffer() : buf_(new char[256]), capacity_(256), size_(0), external_(false){}
 	Buffer(char* buf, size_t cap) : buf_(buf), capacity_(cap), size_(0), external_(true){}
 	Buffer(char* buf, size_t offset, size_t cap, bool external = true) : buf_(buf), capacity_(cap), size_(offset), external_(external){}
 	~Buffer() { if(!external_) delete[] buf_;}
 	IO_ERR write(const char* buffer, size_t length, size_t& actualLength);
 	IO_ERR write(const char* buffer, size_t length);
-	inline IO_ERR write(const std::string& buffer){ return write(buffer.c_str(), buffer.length() + 1);}
-	inline IO_ERR writeData(const std::string& buffer){ return write(buffer.data(), buffer.length());}
-	inline IO_ERR write(bool val){ return write((const char*)&val, 1);}
-	inline IO_ERR write(char val){ return write(&val, 1);}
-	inline IO_ERR write(short val){ return write((const char*)&val, 2);}
-	inline IO_ERR write(unsigned short val){ return write((const char*)&val, 2);}
-	inline IO_ERR write(int val){ return write((const char*)&val, 4);}
-	inline IO_ERR write(long long val){ return write((const char*)&val, 8);}
-	inline IO_ERR write(float val){ return write((const char*)&val, 4);}
-	inline IO_ERR write(double val){ return write((const char*)&val, 8);}
+	IO_ERR write(const std::string& buffer){ return write(buffer.c_str(), buffer.length() + 1);}
+	IO_ERR writeData(const std::string& buffer){ return write(buffer.data(), buffer.length());}
+	IO_ERR write(bool val){ return write((const char*)&val, 1);}
+	IO_ERR write(char val){ return write(&val, 1);}
+	IO_ERR write(short val){ return write((const char*)&val, 2);}
+	IO_ERR write(unsigned short val){ return write((const char*)&val, 2);}
+	IO_ERR write(int val){ return write((const char*)&val, 4);}
+	IO_ERR write(long long val){ return write((const char*)&val, 8);}
+	IO_ERR write(float val){ return write((const char*)&val, 4);}
+	IO_ERR write(double val){ return write((const char*)&val, 8);}
 	size_t size() const { return size_;}
 	size_t capacity() const { return capacity_;}
 	const char * getBuffer() const { return buf_;}
@@ -269,7 +256,7 @@ private:
 template<class T>
 class EXPORT_DECL BufferWriter{
 public:
-	BufferWriter(const T& out) : out_(out), buffer_(0), size_(0){}
+	explicit BufferWriter(const T& out) : out_(out) {}
 
 	IO_ERR start(const char* buffer, size_t length){
 		IO_ERR ret = OK;
@@ -284,8 +271,7 @@ public:
 		if(ret == NOSPACE){
 			buffer_ += actualWritten;
 			size_ -= actualWritten;
-		}
-		else
+		} else
 			size_ = 0;
 		return ret;
 	}
@@ -301,27 +287,26 @@ public:
 		if(ret == NOSPACE){
 			buffer_ += actualWritten;
 			size_ -= actualWritten;
-		}
-		else
+		} else
 			size_ = 0;
 		return ret;
 	}
 
-	inline size_t size() const { return size_;}
-	inline T getDataOutputStream() const { return out_;}
+	size_t size() const { return size_;}
+	T getDataOutputStream() const { return out_;}
 
 private:
 	T out_;
-	char* buffer_;
-	size_t size_;
+	char* buffer_{nullptr};
+	size_t size_{0};
 };
 
 class EXPORT_DECL DataStream : public DataInputStream{
 public:
-	DataStream(const char* data, int size) : DataInputStream(data, size), flag_(1), outBuf_(0) {}
-	DataStream(const SocketSP& socket) : DataInputStream(socket), flag_(3), outBuf_(new char[2048]) {}
+	DataStream(const char* data, int size) : DataInputStream(data, size), flag_(1), outBuf_(nullptr) {}
+	explicit DataStream(const SocketSP& socket) : DataInputStream(socket), flag_(3), outBuf_(new char[2048]) {}
 	DataStream(FILE* file, bool readable, bool writable);
-	virtual ~DataStream();
+	~DataStream() override;
 	bool isReadable() const;
 	void isReadable(bool option);
 	bool isWritable() const;
@@ -333,7 +318,7 @@ public:
 	std::string getDescription() const;
 
 private:
-	char flag_; // bit0: readable bit1: writable
+	uint8_t flag_; // bit0: readable bit1: writable
 	char* outBuf_;
 };
 
@@ -345,7 +330,7 @@ struct EXPORT_DECL FileAttributes{
 	long long lastAccessed; //epoch time in milliseconds
 };
 
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )

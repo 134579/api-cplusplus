@@ -1,105 +1,103 @@
+#include <gtest/gtest.h>
 #include "config.h"
+#include "SysIO.h"
+#include "ConstantMarshall.h"
+#include "fstream"
 
 class SysIOTest:public testing::Test
 {
-protected:
-    //Suite
-    static void SetUpTestCase() {
-        //DBConnection conn;
-		conn.initialize();
-        bool ret = conn.connect(hostName, port, "admin", "123456");
-        if (!ret) {
-            cout << "Failed to connect to the server" << endl;
+    public:
+        static dolphindb::DBConnection conn;
+        // Suite
+        static void SetUpTestSuite()
+        {
+            bool ret = conn.connect(HOST, PORT, USER, PASSWD);
+            if (!ret)
+            {
+                std::cout << "Failed to connect to the server" << std::endl;
+            }
+            else
+            {
+                std::cout << "connect to " + HOST + ":" + std::to_string(PORT) << std::endl;
+            }
         }
-        else {
-            cout << "connect to " + hostName + ":" + std::to_string(port)<< endl;
+        static void TearDownTestSuite()
+        {
+            conn.close();
         }
-    }
-    static void TearDownTestCase(){
-        conn.close();
-    }
 
-    //Case
-    virtual void SetUp()
-    {
-        cout<<"check connect...";
-		try
-		{
-			ConstantSP res = conn.run("1+1");
-		}
-		catch(const std::exception& e)
-		{
-			conn.connect(hostName, port, "admin", "123456");
-		}
+    protected:
+        // Case
+        virtual void SetUp()
+        {
 
-        cout<<"ok"<<endl;
-		CLEAR_ENV(conn);
-    }
-    virtual void TearDown()
-    {
-		CLEAR_ENV(conn);
-    }
+        }
+        virtual void TearDown()
+        {
+
+        }
 };
+dolphindb::DBConnection SysIOTest::conn(false, false);
 
-class SysIOTest_Parameterized: public::testing::TestWithParam<DATA_TYPE>{
+class SysIOTest_Parameterized: public::testing::TestWithParam<dolphindb::DATA_TYPE>{
 
 };
 
 TEST_F(SysIOTest, test_Socket_No_Parameter){
-    Socket s1 = Socket();
-    EXPECT_TRUE(s1.isValid());
-    s1.connect(hostName, port, false, 7200);
-    EXPECT_EQ(s1.getHost(),hostName);
-    EXPECT_EQ(s1.getPort(),port);
-    Socket s2 = Socket(s1.getHandle(), true, 7200);
+    dolphindb::Socket s1 = dolphindb::Socket();
+    ASSERT_TRUE(s1.isValid());
+    s1.connect(HOST, PORT, false, 7200);
+    ASSERT_EQ(s1.getHost(),HOST);
+    ASSERT_EQ(s1.getPort(),PORT);
+    dolphindb::Socket s2 = dolphindb::Socket(s1.getHandle(), true, 7200);
 
     char *val = (char *)"aksdjopqweknmg812378195;'']=-_1!";
     size_t actualLength = 1;
 
     for(auto i=0;i<10;i++){
-        IO_ERR res = s1.write(val, 6, actualLength);
-        EXPECT_EQ(res, OK);
+        dolphindb::IO_ERR res = s1.write(val, 6, actualLength);
+        ASSERT_EQ(res, dolphindb::OK);
     }
-    EXPECT_EQ(s1.read(val,6,actualLength), NODATA); // when send tcp-data to connected socket(host:port), it can read datas;
-    EXPECT_EQ(s2.read(val,6,actualLength), NODATA);
+    ASSERT_EQ(s1.read(val,6,actualLength), dolphindb::NODATA); // when send tcp-data to connected socket(host:port), it can read datas;
+    ASSERT_EQ(s2.read(val,6,actualLength), dolphindb::NODATA);
 
     s1.enableTcpNoDelay(true);
-    EXPECT_TRUE(s1.ENABLE_TCP_NODELAY);
+    ASSERT_TRUE(s1.ENABLE_TCP_NODELAY);
 
-    EXPECT_TRUE(s1.skipAll());
-    EXPECT_TRUE(s2.skipAll());
+    ASSERT_TRUE(s1.skipAll());
+    ASSERT_TRUE(s2.skipAll());
 
     s1.close();
     s2.close();
-    EXPECT_EQ(s1.write(val,7, actualLength),DISCONNECTED);
-    EXPECT_FALSE(s1.isValid());
+    ASSERT_EQ(s1.write(val,7, actualLength),dolphindb::DISCONNECTED);
+    ASSERT_FALSE(s1.isValid());
 }
 
 TEST_F(SysIOTest, test_Socket_with_Parameter){
-    Socket s1 = Socket(hostName, port, true, 7200);
-    EXPECT_TRUE(s1.isValid());
-    EXPECT_EQ(s1.getHost(), hostName);
-    EXPECT_EQ(s1.getPort(), port);
-    cout<<"now get socket handle: "<<s1.getHandle()<<endl;
+    dolphindb::Socket s1 = dolphindb::Socket(HOST, PORT, true, 7200);
+    ASSERT_FALSE(s1.isValid());
+    ASSERT_EQ(s1.getHost(), HOST);
+    ASSERT_EQ(s1.getPort(), PORT);
+    std::cout<<"now get socket handle: "<<s1.getHandle()<<std::endl;
 
     char *val = (char *)"ccc579";
     size_t actualLength = 1;
     for(auto i=0;i<10;i++){
-        IO_ERR res = s1.write(val,10, actualLength);
-        cout<<res<<endl;
-        // EXPECT_EQ(res, OK);
-        Util::sleep(100);
+        dolphindb::IO_ERR res = s1.write(val,10, actualLength);
+        std::cout<<res<<std::endl;
+        // ASSERT_EQ(res, OK);
+        dolphindb::Util::sleep(100);
     }
-    EXPECT_EQ(s1.read(val,10,actualLength), OTHERERR);
+    ASSERT_EQ(s1.read(val,10,actualLength), dolphindb::OTHERERR);
 
     s1.enableTcpNoDelay(true);
-    EXPECT_TRUE(s1.ENABLE_TCP_NODELAY);
+    ASSERT_TRUE(s1.ENABLE_TCP_NODELAY);
 
-    EXPECT_TRUE(s1.skipAll());
+    ASSERT_TRUE(s1.skipAll());
 
     s1.close();
-    EXPECT_EQ(s1.write(val,7, actualLength),DISCONNECTED);
-    EXPECT_FALSE(s1.isValid());
+    ASSERT_EQ(s1.write(val,7, actualLength),dolphindb::DISCONNECTED);
+    ASSERT_FALSE(s1.isValid());
 }
 
 TEST_F(SysIOTest, test_DataStream_scalar_int)
@@ -109,11 +107,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_int)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createInt(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createInt(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -121,15 +119,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_int)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getInt(), test_val);
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getInt(), test_val);
 
         unmarshall->reset();
         inputStream->close();
@@ -139,7 +137,7 @@ TEST_F(SysIOTest, test_DataStream_scalar_int)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
 
         outStream->write(test_val);
         outSize = outStream->size();
@@ -147,10 +145,10 @@ TEST_F(SysIOTest, test_DataStream_scalar_int)
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         int readValue;
         inputStream->readInt(readValue);
-        EXPECT_EQ(readValue, test_val);
+        ASSERT_EQ(readValue, test_val);
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
     }
@@ -163,11 +161,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_intNull)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createNullConstant(DT_INT);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createNullConstant(dolphindb::DT_INT);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -175,15 +173,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_intNull)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getInt(), object->getInt());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getInt(), object->getInt());
 
         unmarshall->reset();
         inputStream->close();
@@ -193,7 +191,7 @@ TEST_F(SysIOTest, test_DataStream_scalar_intNull)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
 
         outStream->write(int(NULL));
         outSize = outStream->size();
@@ -201,10 +199,10 @@ TEST_F(SysIOTest, test_DataStream_scalar_intNull)
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         int readValue;
         inputStream->readInt(readValue);
-        EXPECT_EQ(readValue, int(NULL));
+        ASSERT_EQ(readValue, int(NULL));
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
     }
@@ -218,11 +216,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_bool)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createBool(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createBool(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -230,15 +228,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_bool)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getInt(), test_val);
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getInt(), test_val);
 
         unmarshall->reset();
         inputStream->close();
@@ -248,7 +246,7 @@ TEST_F(SysIOTest, test_DataStream_scalar_bool)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
 
         outStream->write(test_val);
         outSize = outStream->size();
@@ -256,10 +254,10 @@ TEST_F(SysIOTest, test_DataStream_scalar_bool)
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         bool readValue;
         inputStream->readBool(readValue);
-        EXPECT_EQ(readValue, test_val);
+        ASSERT_EQ(readValue, test_val);
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
     }
@@ -272,11 +270,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_boolNull)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createNullConstant(DT_BOOL);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createNullConstant(dolphindb::DT_BOOL);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -284,15 +282,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_boolNull)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getBool(), object->getBool());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getBool(), object->getBool());
 
         unmarshall->reset();
         inputStream->close();
@@ -302,7 +300,7 @@ TEST_F(SysIOTest, test_DataStream_scalar_boolNull)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
 
         outStream->write(bool(NULL));
         outSize = outStream->size();
@@ -310,10 +308,10 @@ TEST_F(SysIOTest, test_DataStream_scalar_boolNull)
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         bool readValue;
         inputStream->readBool(readValue);
-        EXPECT_EQ(readValue, bool(NULL));
+        ASSERT_EQ(readValue, bool(NULL));
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
     }
@@ -323,15 +321,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_boolNull)
 TEST_F(SysIOTest, test_DataStream_scalar_INDEX)
 {
     srand(time(NULL));
-    INDEX test_val = (INDEX)rand() % INDEX_MAX;
+    dolphindb::INDEX test_val = (dolphindb::INDEX)rand() % dolphindb::INDEX_MAX;
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createInt(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createInt(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -339,15 +337,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_INDEX)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getIndex(), test_val);
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getIndex(), test_val);
 
         unmarshall->reset();
         inputStream->close();
@@ -357,7 +355,7 @@ TEST_F(SysIOTest, test_DataStream_scalar_INDEX)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
 
         outStream->write(test_val);
         outSize = outStream->size();
@@ -365,12 +363,12 @@ TEST_F(SysIOTest, test_DataStream_scalar_INDEX)
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
-        INDEX readValue;
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
+        dolphindb::INDEX readValue;
         inputStream->readIndex(readValue);
-        EXPECT_EQ(readValue, test_val);
+        ASSERT_EQ(readValue, test_val);
         inputStream->close();
-        // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
+        // delete[] pOutbuf; // when copy == false, pOutbuf can snot be delete[].
     }
 
 }
@@ -382,11 +380,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_float)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createFloat(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createFloat(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -394,15 +392,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_float)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getFloat(), test_val);
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getFloat(), test_val);
 
         unmarshall->reset();
         inputStream->close();
@@ -412,7 +410,7 @@ TEST_F(SysIOTest, test_DataStream_scalar_float)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
 
         outStream->write(test_val);
         outSize = outStream->size();
@@ -420,16 +418,16 @@ TEST_F(SysIOTest, test_DataStream_scalar_float)
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         float readValue;
         inputStream->readFloat(readValue);
-        EXPECT_EQ(readValue, test_val);
+        ASSERT_EQ(readValue, test_val);
 
-        DataStreamSP inputStream1 = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream1 = new dolphindb::DataStream(pOutbuf, outSize);
         inputStream1->enableReverseIntegerByteOrder(); // reverseOrder == true
         float readValue1;
         inputStream1->readFloat(readValue1);
-        cout<<"result: "<<readValue1<<endl;
+        std::cout<<"result: "<<readValue1<<std::endl;
 
         inputStream->close();
         inputStream1->close();
@@ -444,11 +442,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_floatNull)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createNullConstant(DT_FLOAT);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createNullConstant(dolphindb::DT_FLOAT);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -456,15 +454,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_floatNull)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getFloat(), object->getFloat());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getFloat(), object->getFloat());
 
         unmarshall->reset();
         inputStream->close();
@@ -474,7 +472,7 @@ TEST_F(SysIOTest, test_DataStream_scalar_floatNull)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
 
         outStream->write(float(NULL));
         outSize = outStream->size();
@@ -482,16 +480,16 @@ TEST_F(SysIOTest, test_DataStream_scalar_floatNull)
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         float readValue;
         inputStream->readFloat(readValue);
-        EXPECT_EQ(readValue, float(NULL));
+        ASSERT_EQ(readValue, float(NULL));
 
-        DataStreamSP inputStream1 = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream1 = new dolphindb::DataStream(pOutbuf, outSize);
         inputStream1->enableReverseIntegerByteOrder(); // reverseOrder == true
         float readValue1;
         inputStream1->readFloat(readValue1);
-        cout<<"result: "<<readValue1<<endl;
+        std::cout<<"result: "<<readValue1<<std::endl;
 
         inputStream->close();
         inputStream1->close();
@@ -503,16 +501,16 @@ TEST_F(SysIOTest, test_DataStream_scalar_floatNull)
 TEST_F(SysIOTest, test_DataStream_scalar_string)
 {
     srand(time(NULL));
-    vector<string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
-    string test_val = rand_str[rand() % rand_str.size()];
+    std::vector<std::string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
+    std::string test_val = rand_str[rand() % rand_str.size()];
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createString(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createString(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -520,15 +518,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_string)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), test_val);
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), test_val);
 
         unmarshall->reset();
         inputStream->close();
@@ -538,30 +536,30 @@ TEST_F(SysIOTest, test_DataStream_scalar_string)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
         outStream->write(test_val);
         outSize = outStream->size();
         pOutbuf = new char[outSize];
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
-        string readValue;
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
+        std::string readValue;
         inputStream->readString(readValue);
-        EXPECT_EQ(inputStream->readString(readValue, 1000), END_OF_STREAM);
-        EXPECT_EQ(readValue, test_val);
-        EXPECT_TRUE(inputStream->isReadable());
+        ASSERT_EQ(inputStream->readString(readValue, 1000), dolphindb::END_OF_STREAM);
+        ASSERT_EQ(readValue, test_val);
+        ASSERT_TRUE(inputStream->isReadable());
         inputStream->isReadable(0);
-        EXPECT_FALSE(inputStream->isReadable());
-        EXPECT_TRUE(inputStream->isArrayStream());
-        EXPECT_FALSE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isReadable());
+        ASSERT_TRUE(inputStream->isArrayStream());
+        ASSERT_FALSE(inputStream->isWritable());
         inputStream->isWritable(1);
-        EXPECT_TRUE(inputStream->isWritable());
-        EXPECT_FALSE(inputStream->isFileStream());
-        EXPECT_FALSE(inputStream->isSocketStream());
+        ASSERT_TRUE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isFileStream());
+        ASSERT_FALSE(inputStream->isSocketStream());
 
         inputStream->clearReadBuffer();
-        EXPECT_EQ(inputStream->getDataSizeInArray(),0);
+        ASSERT_EQ(inputStream->getDataSizeInArray(),0);
 
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
@@ -571,30 +569,30 @@ TEST_F(SysIOTest, test_DataStream_scalar_string)
         char *pOutbuf;
         int outSize;
         char buf[] = "aadddccc";
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
         outStream->write(buf, 9);
         outSize = outStream->size();
         pOutbuf = new char[outSize];
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
-        string readValue;
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
+        std::string readValue;
         inputStream->readString(readValue);
-        EXPECT_EQ(inputStream->readString(readValue, 1000), END_OF_STREAM);
-        EXPECT_EQ(readValue, buf);
-        EXPECT_TRUE(inputStream->isReadable());
+        ASSERT_EQ(inputStream->readString(readValue, 1000), dolphindb::END_OF_STREAM);
+        ASSERT_EQ(readValue, buf);
+        ASSERT_TRUE(inputStream->isReadable());
         inputStream->isReadable(0);
-        EXPECT_FALSE(inputStream->isReadable());
-        EXPECT_TRUE(inputStream->isArrayStream());
-        EXPECT_FALSE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isReadable());
+        ASSERT_TRUE(inputStream->isArrayStream());
+        ASSERT_FALSE(inputStream->isWritable());
         inputStream->isWritable(1);
-        EXPECT_TRUE(inputStream->isWritable());
-        EXPECT_FALSE(inputStream->isFileStream());
-        EXPECT_FALSE(inputStream->isSocketStream());
+        ASSERT_TRUE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isFileStream());
+        ASSERT_FALSE(inputStream->isSocketStream());
 
         inputStream->clearReadBuffer();
-        EXPECT_EQ(inputStream->getDataSizeInArray(),0);
+        ASSERT_EQ(inputStream->getDataSizeInArray(),0);
 
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
@@ -604,32 +602,32 @@ TEST_F(SysIOTest, test_DataStream_scalar_string)
         char *pOutbuf;
         int outSize;
         char buf[] = "aadddccc";
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
         size_t actwrite;
         outStream->write(buf, 9, actwrite);
-        EXPECT_EQ(actwrite, 9);
+        ASSERT_EQ(actwrite, 9);
         outSize = outStream->size();
         pOutbuf = new char[outSize];
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
-        string readValue;
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
+        std::string readValue;
         inputStream->readString(readValue);
-        EXPECT_EQ(inputStream->readString(readValue, 1000), END_OF_STREAM);
-        EXPECT_EQ(readValue, buf);
-        EXPECT_TRUE(inputStream->isReadable());
+        ASSERT_EQ(inputStream->readString(readValue, 1000), dolphindb::END_OF_STREAM);
+        ASSERT_EQ(readValue, buf);
+        ASSERT_TRUE(inputStream->isReadable());
         inputStream->isReadable(0);
-        EXPECT_FALSE(inputStream->isReadable());
-        EXPECT_TRUE(inputStream->isArrayStream());
-        EXPECT_FALSE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isReadable());
+        ASSERT_TRUE(inputStream->isArrayStream());
+        ASSERT_FALSE(inputStream->isWritable());
         inputStream->isWritable(1);
-        EXPECT_TRUE(inputStream->isWritable());
-        EXPECT_FALSE(inputStream->isFileStream());
-        EXPECT_FALSE(inputStream->isSocketStream());
+        ASSERT_TRUE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isFileStream());
+        ASSERT_FALSE(inputStream->isSocketStream());
 
         inputStream->clearReadBuffer();
-        EXPECT_EQ(inputStream->getDataSizeInArray(),0);
+        ASSERT_EQ(inputStream->getDataSizeInArray(),0);
 
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
@@ -642,11 +640,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_stringNull)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createNullConstant(DT_STRING);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createNullConstant(dolphindb::DT_STRING);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -654,15 +652,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_stringNull)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -672,30 +670,30 @@ TEST_F(SysIOTest, test_DataStream_scalar_stringNull)
     { // c++ scalar
         char *pOutbuf;
         int outSize;
-        DataOutputStreamSP outStream = new DataOutputStream();
-        outStream->write(string(""));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        outStream->write(std::string(""));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
-        string readValue;
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
+        std::string readValue;
         inputStream->readString(readValue);
-        EXPECT_EQ(inputStream->readString(readValue, 1000), END_OF_STREAM);
-        EXPECT_EQ(readValue, string(""));
-        EXPECT_TRUE(inputStream->isReadable());
+        ASSERT_EQ(inputStream->readString(readValue, 1000), dolphindb::END_OF_STREAM);
+        ASSERT_EQ(readValue, std::string(""));
+        ASSERT_TRUE(inputStream->isReadable());
         inputStream->isReadable(0);
-        EXPECT_FALSE(inputStream->isReadable());
-        EXPECT_TRUE(inputStream->isArrayStream());
-        EXPECT_FALSE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isReadable());
+        ASSERT_TRUE(inputStream->isArrayStream());
+        ASSERT_FALSE(inputStream->isWritable());
         inputStream->isWritable(1);
-        EXPECT_TRUE(inputStream->isWritable());
-        EXPECT_FALSE(inputStream->isFileStream());
-        EXPECT_FALSE(inputStream->isSocketStream());
+        ASSERT_TRUE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isFileStream());
+        ASSERT_FALSE(inputStream->isSocketStream());
 
         inputStream->clearReadBuffer();
-        EXPECT_EQ(inputStream->getDataSizeInArray(),0);
+        ASSERT_EQ(inputStream->getDataSizeInArray(),0);
 
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
@@ -705,21 +703,21 @@ TEST_F(SysIOTest, test_DataStream_scalar_stringNull)
         char *pOutbuf;
         int outSize;
         char buf[] = "";
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
         outStream->write(buf, 1);
         outSize = outStream->size();
         pOutbuf = new char[outSize];
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
-        string readValue;
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
+        std::string readValue;
         inputStream->readString(readValue);
-        EXPECT_EQ(inputStream->readString(readValue, 1), END_OF_STREAM);
-        EXPECT_EQ(readValue, buf);
+        ASSERT_EQ(inputStream->readString(readValue, 1), dolphindb::END_OF_STREAM);
+        ASSERT_EQ(readValue, buf);
 
-        cout<<inputStream->clearReadBuffer()<<endl;
-        EXPECT_EQ(inputStream->getDataSizeInArray(), 0);
+        std::cout<<inputStream->clearReadBuffer()<<std::endl;
+        ASSERT_EQ(inputStream->getDataSizeInArray(), 0);
 
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
@@ -729,32 +727,32 @@ TEST_F(SysIOTest, test_DataStream_scalar_stringNull)
         char *pOutbuf;
         int outSize;
         char buf[] = "";
-        DataOutputStreamSP outStream = new DataOutputStream();
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
         size_t actwrite;
         outStream->write(buf, 1, actwrite);
-        EXPECT_EQ(actwrite, 1);
+        ASSERT_EQ(actwrite, 1);
         outSize = outStream->size();
         pOutbuf = new char[outSize];
         memcpy(pOutbuf, outStream->getBuffer(), outSize);
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
-        string readValue;
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
+        std::string readValue;
         inputStream->readString(readValue);
-        EXPECT_EQ(inputStream->readString(readValue, 1), END_OF_STREAM);
-        EXPECT_EQ(readValue, buf);
-        EXPECT_TRUE(inputStream->isReadable());
+        ASSERT_EQ(inputStream->readString(readValue, 1), dolphindb::END_OF_STREAM);
+        ASSERT_EQ(readValue, buf);
+        ASSERT_TRUE(inputStream->isReadable());
         inputStream->isReadable(0);
-        EXPECT_FALSE(inputStream->isReadable());
-        EXPECT_TRUE(inputStream->isArrayStream());
-        EXPECT_FALSE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isReadable());
+        ASSERT_TRUE(inputStream->isArrayStream());
+        ASSERT_FALSE(inputStream->isWritable());
         inputStream->isWritable(1);
-        EXPECT_TRUE(inputStream->isWritable());
-        EXPECT_FALSE(inputStream->isFileStream());
-        EXPECT_FALSE(inputStream->isSocketStream());
+        ASSERT_TRUE(inputStream->isWritable());
+        ASSERT_FALSE(inputStream->isFileStream());
+        ASSERT_FALSE(inputStream->isSocketStream());
 
         inputStream->clearReadBuffer();
-        EXPECT_EQ(inputStream->getDataSizeInArray(), 0);
+        ASSERT_EQ(inputStream->getDataSizeInArray(), 0);
 
         inputStream->close();
         // delete[] pOutbuf; // when copy == false, pOutbuf can not be delete[].
@@ -768,11 +766,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_date)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createDate(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createDate(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -780,15 +778,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_date)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -804,11 +802,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_month)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createMonth(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createMonth(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -816,15 +814,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_month)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -841,11 +839,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_time)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createTime(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createTime(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -853,15 +851,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_time)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -878,11 +876,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_minute)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createMinute(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createMinute(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -890,15 +888,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_minute)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -915,11 +913,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_second)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createSecond(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createSecond(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -927,15 +925,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_second)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -952,11 +950,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_datetime)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createDateTime(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createDateTime(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -964,15 +962,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_datetime)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -989,11 +987,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_timestamp)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createTimestamp(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createTimestamp(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1001,15 +999,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_timestamp)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1026,11 +1024,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_nanotime)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createNanoTime(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createNanoTime(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1038,15 +1036,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_nanotime)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1063,11 +1061,11 @@ TEST_F(SysIOTest, test_DataStream_scalar_nanotimestamp)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createNanoTimestamp(test_val);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createNanoTimestamp(test_val);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1075,15 +1073,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_nanotimestamp)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1102,12 +1100,12 @@ TEST_F(SysIOTest, test_DataStream_scalar_int128)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createConstant(DT_INT128);
-        object->setBinary(int128, sizeof(Guid));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createConstant(dolphindb::DT_INT128);
+        object->setBinary(int128, sizeof(dolphindb::Guid));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1115,15 +1113,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_int128)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1138,17 +1136,17 @@ TEST_F(SysIOTest, test_DataStream_scalar_ip)
     unsigned char ip[16];
     for (auto i = 0; i < 16; i++)
         ip[i] = rand() % CHAR_MAX;
-    string test_val = Guid(ip).getString();
+    std::string test_val = dolphindb::Guid(ip).getString();
 
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createConstant(DT_IP);
-        object->setBinary(ip, sizeof(Guid));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createConstant(dolphindb::DT_IP);
+        object->setBinary(ip, sizeof(dolphindb::Guid));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1156,15 +1154,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_ip)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1183,12 +1181,12 @@ TEST_F(SysIOTest, test_DataStream_scalar_uuid)
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createConstant(DT_UUID);
-        object->setBinary(uuid, sizeof(Guid));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createConstant(dolphindb::DT_UUID);
+        object->setBinary(uuid, sizeof(dolphindb::Guid));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1196,15 +1194,15 @@ TEST_F(SysIOTest, test_DataStream_scalar_uuid)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1213,17 +1211,17 @@ TEST_F(SysIOTest, test_DataStream_scalar_uuid)
 
 }
 
-INSTANTIATE_TEST_SUITE_P(test_DataStream_scalar_Temporal_Null, SysIOTest_Parameterized, testing::Values(DT_DATE,DT_MONTH,DT_TIME,DT_MINUTE,DT_SECOND,DT_DATETIME,DT_TIMESTAMP,DT_NANOTIME,DT_NANOTIMESTAMP,DT_DATEHOUR));
+INSTANTIATE_TEST_SUITE_P(test_DataStream_scalar_Temporal_Null, SysIOTest_Parameterized, testing::Values(dolphindb::DT_DATE,dolphindb::DT_MONTH,dolphindb::DT_TIME,dolphindb::DT_MINUTE,dolphindb::DT_SECOND,dolphindb::DT_DATETIME,dolphindb::DT_TIMESTAMP,dolphindb::DT_NANOTIME,dolphindb::DT_NANOTIMESTAMP,dolphindb::DT_DATEHOUR));
 TEST_P(SysIOTest_Parameterized, test_DataStream_scalar_Temporal_Null){
-    DATA_TYPE test_type =  GetParam();
+    dolphindb::DATA_TYPE test_type =  GetParam();
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createNullConstant(test_type);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createNullConstant(test_type);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1231,15 +1229,15 @@ TEST_P(SysIOTest_Parameterized, test_DataStream_scalar_Temporal_Null){
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1248,17 +1246,17 @@ TEST_P(SysIOTest_Parameterized, test_DataStream_scalar_Temporal_Null){
 }
 
 
-INSTANTIATE_TEST_SUITE_P(test_DataStream_scalar_Integral_Null, SysIOTest_Parameterized, testing::Values(DT_UUID, DT_IP, DT_INT128));
+INSTANTIATE_TEST_SUITE_P(test_DataStream_scalar_Integral_Null, SysIOTest_Parameterized, testing::Values(dolphindb::DT_UUID, dolphindb::DT_IP, dolphindb::DT_INT128));
 TEST_P(SysIOTest_Parameterized, test_DataStream_scalar_Integral_Null){
-    DATA_TYPE test_type =  GetParam();
+    dolphindb::DATA_TYPE test_type =  GetParam();
     { // DDB scalar
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createNullConstant(test_type);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createNullConstant(test_type);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1266,15 +1264,15 @@ TEST_P(SysIOTest_Parameterized, test_DataStream_scalar_Integral_Null){
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_SCALAR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_SCALAR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1287,15 +1285,15 @@ TEST_F(SysIOTest, test_DataStream_vector_int)
 {
     srand(time(NULL));
     int test_val = (int)rand()%INT_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_INT,1,1);
-        object->set(0,Util::createInt(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_INT,1,1);
+        object->set(0,dolphindb::Util::createInt(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1303,15 +1301,15 @@ TEST_F(SysIOTest, test_DataStream_vector_int)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1324,15 +1322,15 @@ TEST_F(SysIOTest, test_DataStream_vector_bool)
 {
     srand(time(NULL));
     char test_val = rand() % 2;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_BOOL,1,1);
-        object->set(0,Util::createBool(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_BOOL,1,1);
+        object->set(0,dolphindb::Util::createBool(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1340,15 +1338,15 @@ TEST_F(SysIOTest, test_DataStream_vector_bool)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1360,16 +1358,16 @@ TEST_F(SysIOTest, test_DataStream_vector_bool)
 TEST_F(SysIOTest, test_DataStream_vector_INDEX)
 {
     srand(time(NULL));
-    INDEX test_val = (INDEX)rand() % INDEX_MAX;
-    { // DDB vector
+    dolphindb::INDEX test_val = (dolphindb::INDEX)rand() % dolphindb::INDEX_MAX;
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_INDEX,1,1);
-        object->set(0,Util::createInt(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_INDEX,1,1);
+        object->set(0,dolphindb::Util::createInt(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1377,15 +1375,15 @@ TEST_F(SysIOTest, test_DataStream_vector_INDEX)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1398,15 +1396,15 @@ TEST_F(SysIOTest, test_DataStream_vector_float)
 {
     srand(time(NULL));
     float test_val = rand()/float(RAND_MAX);
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_FLOAT,1,1);
-        object->set(0,Util::createFloat(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_FLOAT,1,1);
+        object->set(0,dolphindb::Util::createFloat(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1414,15 +1412,15 @@ TEST_F(SysIOTest, test_DataStream_vector_float)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1433,17 +1431,17 @@ TEST_F(SysIOTest, test_DataStream_vector_float)
 
 TEST_F(SysIOTest, test_DataStream_vector_string)
 {
-    vector<string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
-    string test_val = rand_str[rand() % rand_str.size()];
-    { // DDB vector
+    std::vector<std::string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
+    std::string test_val = rand_str[rand() % rand_str.size()];
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_STRING,1,1);
-        object->set(0,Util::createString(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_STRING,1,1);
+        object->set(0,dolphindb::Util::createString(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1451,15 +1449,15 @@ TEST_F(SysIOTest, test_DataStream_vector_string)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1472,15 +1470,15 @@ TEST_F(SysIOTest, test_DataStream_vector_date)
 {
     srand(time(NULL));
     int test_val = rand()%INT_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_DATE,1,1);
-        object->set(0,Util::createDate(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_DATE,1,1);
+        object->set(0,dolphindb::Util::createDate(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1488,15 +1486,15 @@ TEST_F(SysIOTest, test_DataStream_vector_date)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1509,15 +1507,15 @@ TEST_F(SysIOTest, test_DataStream_vector_month)
 {
     srand(time(NULL));
     int test_val = rand()%INT_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_MONTH,1,1);
-        object->set(0,Util::createMonth(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_MONTH,1,1);
+        object->set(0,dolphindb::Util::createMonth(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1525,15 +1523,15 @@ TEST_F(SysIOTest, test_DataStream_vector_month)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1547,15 +1545,15 @@ TEST_F(SysIOTest, test_DataStream_vector_time)
 {
     srand(time(NULL));
     int test_val = rand()%INT_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_TIME,1,1);
-        object->set(0,Util::createTime(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_TIME,1,1);
+        object->set(0,dolphindb::Util::createTime(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1563,15 +1561,15 @@ TEST_F(SysIOTest, test_DataStream_vector_time)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1585,15 +1583,15 @@ TEST_F(SysIOTest, test_DataStream_vector_minute)
 {
     srand(time(NULL));
     int test_val = rand()%INT_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_MINUTE,1,1);
-        object->set(0,Util::createMinute(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_MINUTE,1,1);
+        object->set(0,dolphindb::Util::createMinute(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1601,15 +1599,15 @@ TEST_F(SysIOTest, test_DataStream_vector_minute)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1623,15 +1621,15 @@ TEST_F(SysIOTest, test_DataStream_vector_second)
 {
     srand(time(NULL));
     int test_val = rand()%INT_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_SECOND,1,1);
-        object->set(0,Util::createSecond(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_SECOND,1,1);
+        object->set(0,dolphindb::Util::createSecond(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1639,15 +1637,15 @@ TEST_F(SysIOTest, test_DataStream_vector_second)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1661,15 +1659,15 @@ TEST_F(SysIOTest, test_DataStream_vector_datetime)
 {
     srand(time(NULL));
     int test_val = rand()%INT_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_DATETIME,1,1);
-        object->set(0,Util::createDateTime(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_DATETIME,1,1);
+        object->set(0,dolphindb::Util::createDateTime(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1677,15 +1675,15 @@ TEST_F(SysIOTest, test_DataStream_vector_datetime)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1699,15 +1697,15 @@ TEST_F(SysIOTest, test_DataStream_vector_timestamp)
 {
     srand(time(NULL));
     long long test_val = rand()%LLONG_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_TIMESTAMP,1,1);
-        object->set(0,Util::createTimestamp(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_TIMESTAMP,1,1);
+        object->set(0,dolphindb::Util::createTimestamp(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1715,15 +1713,15 @@ TEST_F(SysIOTest, test_DataStream_vector_timestamp)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1737,15 +1735,15 @@ TEST_F(SysIOTest, test_DataStream_vector_nanotime)
 {
     srand(time(NULL));
     long long test_val = rand()%LLONG_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_NANOTIME,1,1);
-        object->set(0,Util::createNanoTime(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_NANOTIME,1,1);
+        object->set(0,dolphindb::Util::createNanoTime(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1753,15 +1751,15 @@ TEST_F(SysIOTest, test_DataStream_vector_nanotime)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1775,15 +1773,15 @@ TEST_F(SysIOTest, test_DataStream_vector_nanotimestamp)
 {
     srand(time(NULL));
     long long test_val = rand()%LLONG_MAX;
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_NANOTIMESTAMP,1,1);
-        object->set(0,Util::createNanoTimestamp(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_NANOTIMESTAMP,1,1);
+        object->set(0,dolphindb::Util::createNanoTimestamp(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1791,15 +1789,15 @@ TEST_F(SysIOTest, test_DataStream_vector_nanotimestamp)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1812,20 +1810,18 @@ TEST_F(SysIOTest, test_DataStream_vector_nanotimestamp)
 TEST_F(SysIOTest, test_DataStream_vector_uuid)
 {
     srand(time(NULL));
-    unsigned char uuid[16];
-    for (auto i = 0; i < 16; i++)
-        uuid[i] = rand() % CHAR_MAX;
-    DdbVector<Guid> test_val(0, 1);
+    dolphindb::Guid uuid=dolphindb::Guid(true);
+    dolphindb::DdbVector<dolphindb::Guid> test_val(0, 1);
     test_val.add(uuid);
 
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = test_val.createVector(DT_UUID);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = test_val.createVector(dolphindb::DT_UUID);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1833,15 +1829,15 @@ TEST_F(SysIOTest, test_DataStream_vector_uuid)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1853,17 +1849,17 @@ TEST_F(SysIOTest, test_DataStream_vector_uuid)
 
 TEST_F(SysIOTest, test_DataStream_vector_symbol)
 {
-    vector<string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
-    string test_val = rand_str[rand() % rand_str.size()];
-    { // DDB vector
+    std::vector<std::string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
+    std::string test_val = rand_str[rand() % rand_str.size()];
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(DT_SYMBOL,1,1);
-        object->set(0,Util::createString(test_val));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_SYMBOL,1,1);
+        object->set(0,dolphindb::Util::createString(test_val));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1871,15 +1867,15 @@ TEST_F(SysIOTest, test_DataStream_vector_symbol)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1891,20 +1887,18 @@ TEST_F(SysIOTest, test_DataStream_vector_symbol)
 TEST_F(SysIOTest, test_DataStream_vector_ip)
 {
     srand(time(NULL));
-    unsigned char ip[16];
-    for (auto i = 0; i < 16; i++)
-        ip[i] = rand() % CHAR_MAX;
-    DdbVector<Guid> test_val(0, 1);
+    dolphindb::Guid ip = dolphindb::Guid(true);
+    dolphindb::DdbVector<dolphindb::Guid> test_val(0, 1);
     test_val.add(ip);
 
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = test_val.createVector(DT_IP);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = test_val.createVector(dolphindb::DT_IP);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1912,15 +1906,15 @@ TEST_F(SysIOTest, test_DataStream_vector_ip)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1933,20 +1927,18 @@ TEST_F(SysIOTest, test_DataStream_vector_ip)
 TEST_F(SysIOTest, test_DataStream_vector_int128)
 {
     srand(time(NULL));
-    unsigned char int128[16];
-    for (auto i = 0; i < 16; i++)
-        int128[i] = rand() % CHAR_MAX;
-    DdbVector<Guid> test_val(0, 1);
+    dolphindb::Guid int128 = dolphindb::Guid(true);
+    dolphindb::DdbVector<dolphindb::Guid> test_val(0, 1);
     test_val.add(int128);
 
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = test_val.createVector(DT_INT128);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::ConstantSP object = test_val.createVector(dolphindb::DT_INT128);
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1954,15 +1946,15 @@ TEST_F(SysIOTest, test_DataStream_vector_int128)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -1972,20 +1964,20 @@ TEST_F(SysIOTest, test_DataStream_vector_int128)
 }
 
 
-INSTANTIATE_TEST_SUITE_P(test_DataStream_vector_Null, SysIOTest_Parameterized, testing::Values(DT_BOOL,DT_CHAR,DT_SHORT,DT_INT,DT_LONG,DT_DATE,DT_MONTH,DT_TIME,DT_MINUTE,DT_SECOND,DT_DATETIME,DT_TIMESTAMP,DT_NANOTIME,DT_NANOTIMESTAMP,
-    DT_FLOAT,DT_DOUBLE,DT_SYMBOL,DT_STRING,DT_UUID,DT_DATEHOUR,
-    DT_IP,DT_INT128,DT_BLOB, DT_DECIMAL32, DT_DECIMAL64));
+INSTANTIATE_TEST_SUITE_P(test_DataStream_vector_Null, SysIOTest_Parameterized, testing::Values(dolphindb::DT_BOOL,dolphindb::DT_CHAR,dolphindb::DT_SHORT,dolphindb::DT_INT,dolphindb::DT_LONG,dolphindb::DT_DATE,dolphindb::DT_MONTH,dolphindb::DT_TIME,dolphindb::DT_MINUTE,dolphindb::DT_SECOND,dolphindb::DT_DATETIME,dolphindb::DT_TIMESTAMP,dolphindb::DT_NANOTIME,dolphindb::DT_NANOTIMESTAMP,
+    dolphindb::DT_FLOAT,dolphindb::DT_DOUBLE,dolphindb::DT_SYMBOL,dolphindb::DT_STRING,dolphindb::DT_UUID,dolphindb::DT_DATEHOUR,
+    dolphindb::DT_IP,dolphindb::DT_INT128,dolphindb::DT_BLOB, dolphindb::DT_DECIMAL32, dolphindb::DT_DECIMAL64));
 TEST_P(SysIOTest_Parameterized, test_DataStream_vector_Null){
-    DATA_TYPE test_type =  GetParam();
-    { // DDB vector
+    dolphindb::DATA_TYPE test_type =  GetParam();
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
-        ConstantSP object = Util::createVector(test_type, 1);
+        dolphindb::ConstantSP object = dolphindb::Util::createVector(test_type, 1);
         object->setNull(0);
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -1993,15 +1985,15 @@ TEST_P(SysIOTest_Parameterized, test_DataStream_vector_Null){
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2015,7 +2007,7 @@ TEST_F(SysIOTest, test_DataStream_Vector_withAllType)
     unsigned char uuid[16];
     for (auto i = 0; i < 16; i++)
         uuid[i] = rand() % CHAR_MAX;
-    string uuidval = Guid(uuid).getString();
+    std::string uuidval = dolphindb::Guid(uuid).getString();
     char boolval = rand() % 2;
     char charval = rand() % CHAR_MAX;
     short shortval = rand() % SHRT_MAX;
@@ -2023,37 +2015,37 @@ TEST_F(SysIOTest, test_DataStream_Vector_withAllType)
     long long longval = rand() % LLONG_MAX;
     float floatval = rand()/float(RAND_MAX);
     double doubleval = rand()/double(RAND_MAX);
-    string strval = "dolphindb";
+    std::string strval = "dolphindb";
 
-    ConstantSP object = Util::createVector(DT_ANY,19,19);
-    object->set(0,Util::createBool(boolval));
-    object->set(1,Util::createChar(charval));
-    object->set(2,Util::createShort(shortval));
-    object->set(3,Util::createInt(intval));
-    object->set(4,Util::createLong(longval));
-    object->set(5,Util::createFloat(floatval));
-    object->set(6,Util::createDouble(doubleval));
-    object->set(7,Util::createDate(intval));
-    object->set(8,Util::createMonth(intval));
-    object->set(9,Util::createTime(intval));
-    object->set(10,Util::createMinute(intval));
-    object->set(11,Util::createSecond(intval));
-    object->set(12,Util::createDateTime(intval));
-    object->set(13,Util::createTimestamp(longval));
-    object->set(14,Util::createNanoTime(longval));
-    object->set(15,Util::createNanoTimestamp(longval));
-    object->set(16,Util::createString(strval));
-    object->set(17,Util::createBlob(strval));
-    object->set(18,Util::parseConstant(DT_UUID, uuidval));
+    dolphindb::ConstantSP object = dolphindb::Util::createVector(dolphindb::DT_ANY,19,19);
+    object->set(0,dolphindb::Util::createBool(boolval));
+    object->set(1,dolphindb::Util::createChar(charval));
+    object->set(2,dolphindb::Util::createShort(shortval));
+    object->set(3,dolphindb::Util::createInt(intval));
+    object->set(4,dolphindb::Util::createLong(longval));
+    object->set(5,dolphindb::Util::createFloat(floatval));
+    object->set(6,dolphindb::Util::createDouble(doubleval));
+    object->set(7,dolphindb::Util::createDate(intval));
+    object->set(8,dolphindb::Util::createMonth(intval));
+    object->set(9,dolphindb::Util::createTime(intval));
+    object->set(10,dolphindb::Util::createMinute(intval));
+    object->set(11,dolphindb::Util::createSecond(intval));
+    object->set(12,dolphindb::Util::createDateTime(intval));
+    object->set(13,dolphindb::Util::createTimestamp(longval));
+    object->set(14,dolphindb::Util::createNanoTime(longval));
+    object->set(15,dolphindb::Util::createNanoTimestamp(longval));
+    object->set(16,dolphindb::Util::createString(strval));
+    object->set(17,dolphindb::Util::createBlob(strval));
+    object->set(18,dolphindb::Util::parseConstant(dolphindb::DT_UUID, uuidval));
 
-    { // DDB vector
+    { // DDB std::vector
         char *pOutbuf;
         int outSize;
 
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2061,15 +2053,15 @@ TEST_F(SysIOTest, test_DataStream_Vector_withAllType)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_VECTOR);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_VECTOR);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2086,15 +2078,15 @@ TEST_F(SysIOTest, test_DataStream_table_int)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_INT, DT_INT};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createInt(test_val));
-        object->set(1, 0, Util::createInt(test_val+1));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_INT, dolphindb::DT_INT};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createInt(test_val));
+        object->set(1, 0, dolphindb::Util::createInt(test_val+1));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2102,15 +2094,15 @@ TEST_F(SysIOTest, test_DataStream_table_int)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2126,15 +2118,15 @@ TEST_F(SysIOTest, test_DataStream_table_bool)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_BOOL, DT_BOOL};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createBool(test_val));
-        object->set(1, 0, Util::createBool(test_val+1));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_BOOL, dolphindb::DT_BOOL};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createBool(test_val));
+        object->set(1, 0, dolphindb::Util::createBool((char)(test_val+1)));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2142,15 +2134,15 @@ TEST_F(SysIOTest, test_DataStream_table_bool)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2162,19 +2154,19 @@ TEST_F(SysIOTest, test_DataStream_table_bool)
 TEST_F(SysIOTest, test_DataStream_table_INDEX)
 {
     srand(time(NULL));
-    INDEX test_val = (INDEX)rand() % INDEX_MAX;
+    dolphindb::INDEX test_val = (dolphindb::INDEX)rand() % dolphindb::INDEX_MAX;
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_INDEX, DT_INDEX};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createInt(test_val));
-        object->set(1, 0, Util::createInt(test_val+1));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_INDEX, dolphindb::DT_INDEX};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createInt(test_val));
+        object->set(1, 0, dolphindb::Util::createInt(test_val+1));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2182,15 +2174,15 @@ TEST_F(SysIOTest, test_DataStream_table_INDEX)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2206,15 +2198,15 @@ TEST_F(SysIOTest, test_DataStream_table_float)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_FLOAT, DT_FLOAT};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createFloat(test_val+2.333));
-        object->set(1, 0, Util::createFloat(test_val+1.231));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_FLOAT, dolphindb::DT_FLOAT};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createFloat(test_val+2.333));
+        object->set(1, 0, dolphindb::Util::createFloat(test_val+1.231));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2222,15 +2214,15 @@ TEST_F(SysIOTest, test_DataStream_table_float)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2241,20 +2233,20 @@ TEST_F(SysIOTest, test_DataStream_table_float)
 
 TEST_F(SysIOTest, test_DataStream_table_string)
 {
-    vector<string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
-    string test_val = rand_str[rand() % rand_str.size()];
+    std::vector<std::string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
+    std::string test_val = rand_str[rand() % rand_str.size()];
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_STRING, DT_STRING};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createString(test_val));
-        object->set(1, 0, Util::createString(""));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_STRING, dolphindb::DT_STRING};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createString(test_val));
+        object->set(1, 0, dolphindb::Util::createString(""));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2262,15 +2254,15 @@ TEST_F(SysIOTest, test_DataStream_table_string)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2286,15 +2278,15 @@ TEST_F(SysIOTest, test_DataStream_table_date)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_DATE, DT_DATE};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createDate(test_val));
-        object->set(1, 0, Util::createDate(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_DATE, dolphindb::DT_DATE};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createDate(test_val));
+        object->set(1, 0, dolphindb::Util::createDate(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2302,15 +2294,15 @@ TEST_F(SysIOTest, test_DataStream_table_date)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2326,15 +2318,15 @@ TEST_F(SysIOTest, test_DataStream_table_month)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_MONTH, DT_MONTH};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createMonth(test_val));
-        object->set(1, 0, Util::createMonth(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_MONTH, dolphindb::DT_MONTH};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createMonth(test_val));
+        object->set(1, 0, dolphindb::Util::createMonth(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2342,15 +2334,15 @@ TEST_F(SysIOTest, test_DataStream_table_month)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2367,15 +2359,15 @@ TEST_F(SysIOTest, test_DataStream_table_time)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_TIME, DT_TIME};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createTime(test_val));
-        object->set(1, 0, Util::createTime(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_TIME, dolphindb::DT_TIME};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createTime(test_val));
+        object->set(1, 0, dolphindb::Util::createTime(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2383,15 +2375,15 @@ TEST_F(SysIOTest, test_DataStream_table_time)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2408,15 +2400,15 @@ TEST_F(SysIOTest, test_DataStream_table_minute)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_MINUTE, DT_MINUTE};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createMinute(test_val));
-        object->set(1, 0, Util::createMinute(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_MINUTE, dolphindb::DT_MINUTE};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createMinute(test_val));
+        object->set(1, 0, dolphindb::Util::createMinute(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2424,15 +2416,15 @@ TEST_F(SysIOTest, test_DataStream_table_minute)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2449,15 +2441,15 @@ TEST_F(SysIOTest, test_DataStream_table_second)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_SECOND, DT_SECOND};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createSecond(test_val));
-        object->set(1, 0, Util::createSecond(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_SECOND, dolphindb::DT_SECOND};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createSecond(test_val));
+        object->set(1, 0, dolphindb::Util::createSecond(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2465,15 +2457,15 @@ TEST_F(SysIOTest, test_DataStream_table_second)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2490,15 +2482,15 @@ TEST_F(SysIOTest, test_DataStream_table_datetime)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_DATETIME, DT_DATETIME};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createDateTime(test_val));
-        object->set(1, 0, Util::createDateTime(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_DATETIME, dolphindb::DT_DATETIME};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createDateTime(test_val));
+        object->set(1, 0, dolphindb::Util::createDateTime(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2506,15 +2498,15 @@ TEST_F(SysIOTest, test_DataStream_table_datetime)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2531,15 +2523,15 @@ TEST_F(SysIOTest, test_DataStream_table_timestamp)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_TIMESTAMP, DT_TIMESTAMP};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createTimestamp(test_val));
-        object->set(1, 0, Util::createTimestamp(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_TIMESTAMP, dolphindb::DT_TIMESTAMP};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createTimestamp(test_val));
+        object->set(1, 0, dolphindb::Util::createTimestamp(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2547,15 +2539,15 @@ TEST_F(SysIOTest, test_DataStream_table_timestamp)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2572,15 +2564,15 @@ TEST_F(SysIOTest, test_DataStream_table_nanotime)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_NANOTIME, DT_NANOTIME};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createNanoTime(test_val));
-        object->set(1, 0, Util::createNanoTime(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_NANOTIME, dolphindb::DT_NANOTIME};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createNanoTime(test_val));
+        object->set(1, 0, dolphindb::Util::createNanoTime(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2588,15 +2580,15 @@ TEST_F(SysIOTest, test_DataStream_table_nanotime)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2613,15 +2605,15 @@ TEST_F(SysIOTest, test_DataStream_table_nanotimestamp)
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_NANOTIMESTAMP, DT_NANOTIMESTAMP};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createNanoTimestamp(test_val));
-        object->set(1, 0, Util::createNanoTimestamp(0));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_NANOTIMESTAMP, dolphindb::DT_NANOTIMESTAMP};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createNanoTimestamp(test_val));
+        object->set(1, 0, dolphindb::Util::createNanoTimestamp(0));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2629,15 +2621,15 @@ TEST_F(SysIOTest, test_DataStream_table_nanotimestamp)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2650,26 +2642,24 @@ TEST_F(SysIOTest, test_DataStream_table_nanotimestamp)
 TEST_F(SysIOTest, test_DataStream_table_uuid)
 {
     srand(time(NULL));
-    unsigned char uuid[16];
-    for (auto i = 0; i < 16; i++)
-        uuid[i] = rand() % CHAR_MAX;
-    DdbVector<Guid> test_val(2, 2);
+    dolphindb::Guid uuid=dolphindb::Guid(true);
+    dolphindb::DdbVector<dolphindb::Guid> test_val(2, 2);
     test_val.set(0, uuid);
     test_val.setNull(1);
 
     { // DDB table
         char *pOutbuf;
         int outSize;
-        ConstantSP colVals = test_val.createVector(DT_UUID);
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_UUID, DT_UUID};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
+        dolphindb::ConstantSP colVals = test_val.createVector(dolphindb::DT_UUID);
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_UUID, dolphindb::DT_UUID};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
         object->set(0, 0, colVals->get(0));
         object->set(1, 0, colVals->get(1));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2677,15 +2667,15 @@ TEST_F(SysIOTest, test_DataStream_table_uuid)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2697,20 +2687,20 @@ TEST_F(SysIOTest, test_DataStream_table_uuid)
 
 TEST_F(SysIOTest, test_DataStream_table_symbol)
 {
-    vector<string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
-    string test_val = rand_str[rand() % rand_str.size()];
+    std::vector<std::string> rand_str = {"sd","dag","xxx","智臾科技a","23!@#$%","^&#%……@","/,m[[`"};
+    std::string test_val = rand_str[rand() % rand_str.size()];
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_SYMBOL, DT_SYMBOL};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createString(test_val));
-        object->set(1, 0, Util::createString(""));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_SYMBOL, dolphindb::DT_SYMBOL};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createString(test_val));
+        object->set(1, 0, dolphindb::Util::createString(""));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2718,15 +2708,15 @@ TEST_F(SysIOTest, test_DataStream_table_symbol)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2738,26 +2728,24 @@ TEST_F(SysIOTest, test_DataStream_table_symbol)
 TEST_F(SysIOTest, test_DataStream_table_ip)
 {
     srand(time(NULL));
-    unsigned char ip[16];
-    for (auto i = 0; i < 16; i++)
-        ip[i] = rand() % CHAR_MAX;
-    DdbVector<Guid> test_val(2, 2);
+    dolphindb::Guid ip=dolphindb::Guid(true);
+    dolphindb::DdbVector<dolphindb::Guid> test_val(2, 2);
     test_val.set(0,ip);
     test_val.setNull(1);
 
     { // DDB table
         char *pOutbuf;
         int outSize;
-        ConstantSP colVals = test_val.createVector(DT_IP);
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_IP, DT_IP};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
+        dolphindb::ConstantSP colVals = test_val.createVector(dolphindb::DT_IP);
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_IP, dolphindb::DT_IP};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
         object->set(0, 0, colVals->get(0));
         object->set(1, 0, colVals->get(1));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2765,15 +2753,15 @@ TEST_F(SysIOTest, test_DataStream_table_ip)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2786,26 +2774,24 @@ TEST_F(SysIOTest, test_DataStream_table_ip)
 TEST_F(SysIOTest, test_DataStream_table_int128)
 {
     srand(time(NULL));
-    unsigned char int128[16];
-    for (auto i = 0; i < 16; i++)
-        int128[i] = rand() % CHAR_MAX;
-    DdbVector<Guid> test_val(2, 2);
+    dolphindb::Guid int128=dolphindb::Guid(true);
+    dolphindb::DdbVector<dolphindb::Guid> test_val(2, 2);
     test_val.set(0,int128);
     test_val.setNull(1);
 
     { // DDB table
         char *pOutbuf;
         int outSize;
-        ConstantSP colVals = test_val.createVector(DT_INT128);
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {DT_INT128, DT_INT128};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
+        dolphindb::ConstantSP colVals = test_val.createVector(dolphindb::DT_INT128);
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {dolphindb::DT_INT128, dolphindb::DT_INT128};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
         object->set(0, 0, colVals->get(0));
         object->set(1, 0, colVals->get(1));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2813,15 +2799,15 @@ TEST_F(SysIOTest, test_DataStream_table_int128)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2831,23 +2817,23 @@ TEST_F(SysIOTest, test_DataStream_table_int128)
 }
 
 
-INSTANTIATE_TEST_SUITE_P(test_DataStream_table_Null, SysIOTest_Parameterized, testing::Values(DT_BOOL,DT_CHAR,DT_SHORT,DT_INT,DT_LONG,DT_DATE,DT_MONTH,DT_TIME,DT_MINUTE,DT_SECOND,DT_DATETIME,DT_TIMESTAMP,DT_NANOTIME,DT_NANOTIMESTAMP,
-    DT_FLOAT,DT_DOUBLE,DT_SYMBOL,DT_STRING,DT_UUID,DT_DATEHOUR,
-    DT_IP,DT_INT128,DT_BLOB, DT_DECIMAL32, DT_DECIMAL64));
+INSTANTIATE_TEST_SUITE_P(test_DataStream_table_Null, SysIOTest_Parameterized, testing::Values(dolphindb::DT_BOOL,dolphindb::DT_CHAR,dolphindb::DT_SHORT,dolphindb::DT_INT,dolphindb::DT_LONG,dolphindb::DT_DATE,dolphindb::DT_MONTH,dolphindb::DT_TIME,dolphindb::DT_MINUTE,dolphindb::DT_SECOND,dolphindb::DT_DATETIME,dolphindb::DT_TIMESTAMP,dolphindb::DT_NANOTIME,dolphindb::DT_NANOTIMESTAMP,
+    dolphindb::DT_FLOAT,dolphindb::DT_DOUBLE,dolphindb::DT_SYMBOL,dolphindb::DT_STRING,dolphindb::DT_UUID,dolphindb::DT_DATEHOUR,
+    dolphindb::DT_IP,dolphindb::DT_INT128,dolphindb::DT_BLOB, dolphindb::DT_DECIMAL32, dolphindb::DT_DECIMAL64));
 TEST_P(SysIOTest_Parameterized, test_DataStream_table_Null){
-    DATA_TYPE test_type =  GetParam();
+    dolphindb::DATA_TYPE test_type =  GetParam();
     { // DDB table
         char *pOutbuf;
         int outSize;
-        vector<string> cols = {"col1", "col2"};
-        vector<DATA_TYPE> colTypes = {test_type, test_type};
-        ConstantSP object = Util::createTable(cols, colTypes, 1, 1);
-        object->set(0, 0, Util::createNullConstant(test_type));
-        object->set(1, 0, Util::createNullConstant(test_type));
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        std::vector<std::string> cols = {"col1", "col2"};
+        std::vector<dolphindb::DATA_TYPE> colTypes = {test_type, test_type};
+        dolphindb::ConstantSP object = dolphindb::Util::createTable(cols, colTypes, 1, 1);
+        object->set(0, 0, dolphindb::Util::createNullConstant(test_type));
+        object->set(1, 0, dolphindb::Util::createNullConstant(test_type));
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2855,15 +2841,15 @@ TEST_P(SysIOTest_Parameterized, test_DataStream_table_Null){
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2873,84 +2859,84 @@ TEST_P(SysIOTest_Parameterized, test_DataStream_table_Null){
 
 TEST_F(SysIOTest, test_DataStream_table_withAllType)
 {
-	int colNum = 25, rowNum = 1;
-	vector<string> colNamesVec1;
-	for (int i = 0; i < colNum; i++){
-		colNamesVec1.emplace_back("col"+to_string(i));
-	}
-	vector<DATA_TYPE> colTypesVec1;
-	colTypesVec1.emplace_back(DT_CHAR);
-	colTypesVec1.emplace_back(DT_BOOL);
-	colTypesVec1.emplace_back(DT_SHORT);
-	colTypesVec1.emplace_back(DT_INT);
-	colTypesVec1.emplace_back(DT_LONG);
-	colTypesVec1.emplace_back(DT_DATE);
-	colTypesVec1.emplace_back(DT_MONTH);
-	colTypesVec1.emplace_back(DT_TIME);
-	colTypesVec1.emplace_back(DT_MINUTE);
-	colTypesVec1.emplace_back(DT_DATETIME);
-	colTypesVec1.emplace_back(DT_SECOND);
-	colTypesVec1.emplace_back(DT_TIMESTAMP);
-	colTypesVec1.emplace_back(DT_NANOTIME);
-	colTypesVec1.emplace_back(DT_NANOTIMESTAMP);
-	colTypesVec1.emplace_back(DT_FLOAT);
-	colTypesVec1.emplace_back(DT_DOUBLE);
-	colTypesVec1.emplace_back(DT_STRING);
-	colTypesVec1.emplace_back(DT_UUID);
-	colTypesVec1.emplace_back(DT_IP);
-	colTypesVec1.emplace_back(DT_INT128);
-	colTypesVec1.emplace_back(DT_BLOB);
-	colTypesVec1.emplace_back(DT_DATEHOUR);
-	colTypesVec1.emplace_back(DT_DECIMAL32);
-	colTypesVec1.emplace_back(DT_DECIMAL64);
-	colTypesVec1.emplace_back(DT_SYMBOL);
+    int colNum = 25, rowNum = 1;
+    std::vector<std::string> colNamesVec1;
+    for (int i = 0; i < colNum; i++){
+        colNamesVec1.emplace_back("col"+std::to_string(i));
+    }
+    std::vector<dolphindb::DATA_TYPE> colTypesVec1;
+    colTypesVec1.emplace_back(dolphindb::DT_CHAR);
+    colTypesVec1.emplace_back(dolphindb::DT_BOOL);
+    colTypesVec1.emplace_back(dolphindb::DT_SHORT);
+    colTypesVec1.emplace_back(dolphindb::DT_INT);
+    colTypesVec1.emplace_back(dolphindb::DT_LONG);
+    colTypesVec1.emplace_back(dolphindb::DT_DATE);
+    colTypesVec1.emplace_back(dolphindb::DT_MONTH);
+    colTypesVec1.emplace_back(dolphindb::DT_TIME);
+    colTypesVec1.emplace_back(dolphindb::DT_MINUTE);
+    colTypesVec1.emplace_back(dolphindb::DT_DATETIME);
+    colTypesVec1.emplace_back(dolphindb::DT_SECOND);
+    colTypesVec1.emplace_back(dolphindb::DT_TIMESTAMP);
+    colTypesVec1.emplace_back(dolphindb::DT_NANOTIME);
+    colTypesVec1.emplace_back(dolphindb::DT_NANOTIMESTAMP);
+    colTypesVec1.emplace_back(dolphindb::DT_FLOAT);
+    colTypesVec1.emplace_back(dolphindb::DT_DOUBLE);
+    colTypesVec1.emplace_back(dolphindb::DT_STRING);
+    colTypesVec1.emplace_back(dolphindb::DT_UUID);
+    colTypesVec1.emplace_back(dolphindb::DT_IP);
+    colTypesVec1.emplace_back(dolphindb::DT_INT128);
+    colTypesVec1.emplace_back(dolphindb::DT_BLOB);
+    colTypesVec1.emplace_back(dolphindb::DT_DATEHOUR);
+    colTypesVec1.emplace_back(dolphindb::DT_DECIMAL32);
+    colTypesVec1.emplace_back(dolphindb::DT_DECIMAL64);
+    colTypesVec1.emplace_back(dolphindb::DT_SYMBOL);
 
-	srand((int)time(NULL));
-	TableSP object = Util::createTable(colNamesVec1, colTypesVec1, rowNum, rowNum);
-	vector<VectorSP> columnVecs;
-	columnVecs.reserve(colNum);
-	for (int i = 0; i < colNum; i++){
-		columnVecs.emplace_back(object->getColumn(i));
+    srand((int)time(NULL));
+    dolphindb::TableSP object = dolphindb::Util::createTable(colNamesVec1, colTypesVec1, rowNum, rowNum);
+    std::vector<dolphindb::VectorSP> columnVecs;
+    columnVecs.reserve(colNum);
+    for (int i = 0; i < colNum; i++){
+        columnVecs.emplace_back(object->getColumn(i));
 
-	}
-	for (int i = 0; i < rowNum-1; i++){
-		columnVecs[0]->set(i, Util::createChar(rand()%CHAR_MAX));
-		columnVecs[1]->set(i, Util::createBool(rand()%2));
-		columnVecs[2]->set(i, Util::createShort(rand()%SHRT_MAX));
-		columnVecs[3]->set(i, Util::createInt(rand()%INT_MAX));
-		columnVecs[4]->set(i, Util::createLong(rand()%LLONG_MAX));
-		columnVecs[5]->set(i, Util::createDate(rand()%INT_MAX));
-		columnVecs[6]->set(i, Util::createMonth(rand()%INT_MAX));
-		columnVecs[7]->set(i, Util::createTime(rand()%INT_MAX));
-		columnVecs[8]->set(i, Util::createMinute(rand()%1440));
-		columnVecs[9]->set(i, Util::createDateTime(rand()%INT_MAX));
-		columnVecs[10]->set(i, Util::createSecond(rand()%86400));
-		columnVecs[11]->set(i, Util::createTimestamp(rand()%LLONG_MAX));
-		columnVecs[12]->set(i, Util::createNanoTime(rand()%LLONG_MAX));
-		columnVecs[13]->set(i, Util::createNanoTimestamp(rand()%LLONG_MAX));
-		columnVecs[14]->set(i, Util::createFloat(rand()/float(RAND_MAX)));
-		columnVecs[15]->set(i, Util::createDouble(rand()/double(RAND_MAX)));
-		columnVecs[16]->set(i, Util::createString("str"+to_string(i)));
-		columnVecs[17]->set(i, Util::parseConstant(DT_UUID,"5d212a78-cc48-e3b1-4235-b4d91473ee87"));
-		columnVecs[18]->set(i, Util::parseConstant(DT_IP,"192.0.0."+to_string(rand()%255)));
-		columnVecs[19]->set(i, Util::parseConstant(DT_INT128,"e1671797c52e15f763380b45e841ec32"));
-		columnVecs[20]->set(i, Util::createBlob("blob"+to_string(i)));
-		columnVecs[21]->set(i, Util::createDateHour(rand()%INT_MAX));
-		columnVecs[22]->set(i, Util::createDecimal32(rand()%10,rand()/float(RAND_MAX)));
-		columnVecs[23]->set(i, Util::createDecimal64(rand()%19,rand()/double(RAND_MAX)));
-		columnVecs[24]->set(i, Util::createString("sym"+to_string(i)));
-	}
-	for (int j = 0; j < colNum; j++)
-		columnVecs[j]->setNull(rowNum-1);
+    }
+    for (int i = 0; i < rowNum-1; i++){
+        columnVecs[0]->set(i, dolphindb::Util::createChar(rand()%CHAR_MAX));
+        columnVecs[1]->set(i, dolphindb::Util::createBool((char)(rand()%2)));
+        columnVecs[2]->set(i, dolphindb::Util::createShort(rand()%SHRT_MAX));
+        columnVecs[3]->set(i, dolphindb::Util::createInt(rand()%INT_MAX));
+        columnVecs[4]->set(i, dolphindb::Util::createLong(rand()%LLONG_MAX));
+        columnVecs[5]->set(i, dolphindb::Util::createDate(rand()%INT_MAX));
+        columnVecs[6]->set(i, dolphindb::Util::createMonth(rand()%INT_MAX));
+        columnVecs[7]->set(i, dolphindb::Util::createTime(rand()%INT_MAX));
+        columnVecs[8]->set(i, dolphindb::Util::createMinute(rand()%1440));
+        columnVecs[9]->set(i, dolphindb::Util::createDateTime(rand()%INT_MAX));
+        columnVecs[10]->set(i, dolphindb::Util::createSecond(rand()%86400));
+        columnVecs[11]->set(i, dolphindb::Util::createTimestamp(rand()%LLONG_MAX));
+        columnVecs[12]->set(i, dolphindb::Util::createNanoTime(rand()%LLONG_MAX));
+        columnVecs[13]->set(i, dolphindb::Util::createNanoTimestamp(rand()%LLONG_MAX));
+        columnVecs[14]->set(i, dolphindb::Util::createFloat(rand()/float(RAND_MAX)));
+        columnVecs[15]->set(i, dolphindb::Util::createDouble(rand()/double(RAND_MAX)));
+        columnVecs[16]->set(i, dolphindb::Util::createString("str"+std::to_string(i)));
+        columnVecs[17]->set(i, dolphindb::Util::parseConstant(dolphindb::DT_UUID,"5d212a78-cc48-e3b1-4235-b4d91473ee87"));
+        columnVecs[18]->set(i, dolphindb::Util::parseConstant(dolphindb::DT_IP,"192.0.0."+std::to_string(rand()%255)));
+        columnVecs[19]->set(i, dolphindb::Util::parseConstant(dolphindb::DT_INT128,"e1671797c52e15f763380b45e841ec32"));
+        columnVecs[20]->set(i, dolphindb::Util::createBlob("blob"+std::to_string(i)));
+        columnVecs[21]->set(i, dolphindb::Util::createDateHour(rand()%INT_MAX));
+        columnVecs[22]->set(i, dolphindb::Util::createDecimal32(rand()%10,rand()/float(RAND_MAX)));
+        columnVecs[23]->set(i, dolphindb::Util::createDecimal64(rand()%19,rand()/double(RAND_MAX)));
+        columnVecs[24]->set(i, dolphindb::Util::createString("sym"+std::to_string(i)));
+    }
+    for (int j = 0; j < colNum; j++)
+        columnVecs[j]->setNull(rowNum-1);
 
     { // DDB table
         char *pOutbuf;
         int outSize;
 
-        DataOutputStreamSP outStream = new DataOutputStream();
-        ConstantMarshallFactory marshallFactory(outStream);
-        ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
-        IO_ERR ret;
+        dolphindb::DataOutputStreamSP outStream = new dolphindb::DataOutputStream();
+        dolphindb::ConstantMarshallFactory marshallFactory(outStream);
+        dolphindb::ConstantMarshall* marshall = marshallFactory.getConstantMarshall(object->getForm());
+        dolphindb::IO_ERR ret;
         ASSERT_TRUE(marshall->start(object, true, false, ret));
         outSize = outStream->size();
         pOutbuf = new char[outSize];
@@ -2958,15 +2944,15 @@ TEST_F(SysIOTest, test_DataStream_table_withAllType)
         marshall->reset();
         outStream->close();
 
-        DataStreamSP inputStream = new DataStream(pOutbuf, outSize);
+        dolphindb::DataStreamSP inputStream = new dolphindb::DataStream(pOutbuf, outSize);
         short flag;
         inputStream->readShort(flag);
-        ConstantUnmarshallFactory unmarshallFactory(inputStream);
-        ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(DF_TABLE);
-        IO_ERR ret2;
+        dolphindb::ConstantUnmarshallFactory unmarshallFactory(inputStream);
+        dolphindb::ConstantUnmarshall* unmarshall = unmarshallFactory.getConstantUnmarshall(dolphindb::DF_TABLE);
+        dolphindb::IO_ERR ret2;
         ASSERT_TRUE(unmarshall->start(flag, true, ret2)) ;
-        ConstantSP unmarsh_object=unmarshall->getConstant();
-        EXPECT_EQ(unmarsh_object->getString(), object->getString());
+        dolphindb::ConstantSP unmarsh_object=unmarshall->getConstant();
+        ASSERT_EQ(unmarsh_object->getString(), object->getString());
 
         unmarshall->reset();
         inputStream->close();
@@ -2982,35 +2968,35 @@ TEST_F(SysIOTest, test_class_Buffer)
     char buf1[]="aaaccc";
     char buf2[]="bbbddd";
 
-    Buffer* bf1 = new Buffer();
-    Buffer* bf2 = new Buffer(256);
-    Buffer* bf3 = new Buffer(buf1, 256);
-    Buffer* bf4 = new Buffer(buf2, -1, 256);
+    dolphindb::Buffer* bf1 = new dolphindb::Buffer();
+    dolphindb::Buffer* bf2 = new dolphindb::Buffer(256);
+    dolphindb::Buffer* bf3 = new dolphindb::Buffer(buf1, 256);
+    dolphindb::Buffer* bf4 = new dolphindb::Buffer(buf2, -1, 256);
     std::size_t actlen;
     bf1->write(buf1,10,actlen);
-    EXPECT_EQ((string)bf1->getBuffer(), buf1);
+    ASSERT_EQ((std::string)bf1->getBuffer(), buf1);
 
     bf2->write(buf2,20,actlen);
-    EXPECT_EQ((string)bf2->getBuffer(), buf2);
+    ASSERT_EQ((std::string)bf2->getBuffer(), buf2);
 
-    EXPECT_EQ((string)bf3->getBuffer(), buf1);
-    EXPECT_EQ((string)bf4->getBuffer(), buf2);
+    ASSERT_EQ((std::string)bf3->getBuffer(), buf1);
+    ASSERT_EQ((std::string)bf4->getBuffer(), buf2);
 
-    EXPECT_EQ(bf1->capacity(),256);
-    EXPECT_EQ(bf2->capacity(),256);
-    EXPECT_EQ(bf1->size(),10);
-    EXPECT_EQ(bf2->size(),20);
+    ASSERT_EQ(bf1->capacity(),256);
+    ASSERT_EQ(bf2->capacity(),256);
+    ASSERT_EQ(bf1->size(),10);
+    ASSERT_EQ(bf2->size(),20);
 
     bf1->clear();
-    EXPECT_EQ(bf1->size(), 0);
-    string str = "lll1235678";
+    ASSERT_EQ(bf1->size(), 0);
+    std::string str = "lll1235678";
     bf2->clear();
     bf2->writeData(str);
-    string bf2str(bf2->getBuffer(), str.length());
-    EXPECT_EQ(bf2str, str);
+    std::string bf2str(bf2->getBuffer(), str.length());
+    ASSERT_EQ(bf2str, str);
 
     bf3->write(buf2, 7);
-    EXPECT_EQ((string)bf3->getBuffer(), buf2);
+    ASSERT_EQ((std::string)bf3->getBuffer(), buf2);
 }
 
 #ifndef _WIN32
@@ -3021,7 +3007,7 @@ TEST_F(SysIOTest, test_DataStream_File){
     {
         FILE* f = fopen(file.c_str(), "w+");
         ASSERT_NE(f, nullptr);
-        DataStreamSP stream = new DataStream(f, true, true);
+        dolphindb::DataStreamSP stream = new dolphindb::DataStream(f, true, true);
         char buf1[] = "Hello!\r\n";
         std::size_t sent = 0;
         stream->write(buf1, strlen(buf1), sent);
@@ -3032,32 +3018,7 @@ TEST_F(SysIOTest, test_DataStream_File){
         std::cout << stream->getDescription() << std::endl;
         long long position;
         stream->seek(0, 0, position);
-        EXPECT_EQ(position, 0);
-    }
-    {
-        FILE* f = fopen(file.c_str(), "r");
-        ASSERT_NE(f, nullptr);
-        DataInputStreamSP input = new DataInputStream(f);
-        EXPECT_FALSE(input->reset(100));
-        char buffer[256]{};
-        input->peekBuffer(buffer, 6);
-        EXPECT_EQ(0, strcmp(buffer, "Hello!"));
-        EXPECT_EQ(input->getPosition(), 0);
-        input->moveToPosition(8);
-        std::string line;
-        input->peekLine(line);
-        EXPECT_EQ(line, "My Name is");
-        input->moveToPosition(20);
-        char c = 2;
-        input->readBool(c);
-        EXPECT_EQ(c, '0');
-        input->moveToPosition(0);
-        char buf[256]{};
-        size_t actualLength = 0;
-        input->readBytes(buf, 6, actualLength);
-        EXPECT_EQ(0, strcmp(buf, "Hello!"));
-        input->moveToPosition(25);
-        EXPECT_EQ(END_OF_STREAM, input->readBytes(buf, 6, actualLength));
+        ASSERT_EQ(position, 0);
     }
     remove(file.c_str());
 }
@@ -3069,15 +3030,15 @@ TEST_F(SysIOTest, test_DataOutputStream_write){
     { //FILE_STREAM
         FILE* f = fopen(file.c_str(), "w+");
         ASSERT_NE(f, nullptr);
-        DataOutputStreamSP output = new DataOutputStream(f, true);
+        dolphindb::DataOutputStreamSP output = new dolphindb::DataOutputStream(f, true);
         char buf1[] = "Hello!\r\n";
         std::size_t sent = 0;
-        EXPECT_EQ(output->write(buf1, strlen(buf1), sent), OK);
+        ASSERT_EQ(output->write(buf1, strlen(buf1), sent), dolphindb::OK);
         std::string str = "My Name is\r\n";
-        EXPECT_EQ(output->writeData(str), OK);
+        ASSERT_EQ(output->writeData(str), dolphindb::OK);
         char buf3[] = "汤姆克兰西！";
-        EXPECT_EQ(output->write(buf3, strlen(buf3), sent), OK);
-        EXPECT_EQ(output->close(), OK);
+        ASSERT_EQ(output->write(buf3, strlen(buf3), sent), dolphindb::OK);
+        ASSERT_EQ(output->close(), dolphindb::OK);
 
         std::ifstream ifs(file);
         std::string data = "";
@@ -3087,42 +3048,16 @@ TEST_F(SysIOTest, test_DataOutputStream_write){
             data.append("\n");
         }
         ifs.close();
-        EXPECT_EQ(data, "Hello!\r\nMy Name is\r\n汤姆克兰西！\n");
+        ASSERT_EQ(data, "Hello!\r\nMy Name is\r\n汤姆克兰西！\n");
     }
     { // FILE_STREAM
         FILE* f = fopen(file.c_str(), "r"); // readonly
         ASSERT_NE(f, nullptr);
-        DataOutputStreamSP output = new DataOutputStream(f, true);
+        dolphindb::DataOutputStreamSP output = new dolphindb::DataOutputStream(f, true);
         size_t sent = 0;
-        EXPECT_EQ(output->write("123456", 6, sent), OTHERERR);
+        ASSERT_EQ(output->write("123456", 6, sent), dolphindb::OTHERERR);
     }
     remove(file.c_str());
-    // { // BIGARRAY_STREAM
-    //     char* buffer = new char[1024*1024];
-    //     DataOutputStreamSP output = new DataOutputStream(BIGARRAY_STREAM);
-    //     char buf1[] = "Hello!\r\n";
-    //     std::size_t sent = 0;
-    //     EXPECT_EQ(output->write(buf1, strlen(buf1), sent), OK);
-
-    // }
 }
 
 #endif
-
-// class Mock_DataOutputStream : public DataOutputStream {
-// public:
-//     size_t myMin(size_t a, size_t b) {
-//         return std::min(a, b);
-//     };
-//     MOCK_METHOD(size_t, std::min<size_t, size_t>, (size_t a, size_t b), (const));
-// };
-
-// TEST_F(SysIOTest, test_DataOutputStream_write_mock){
-//     Mock_DataOutputStream output;
-
-//     char buf1[] = "Hello!\r\n";
-//     std::size_t sent = 0;
-//     EXPECT_CALL(output, myMin(testing::_, testing::_))
-//         .WillOnce(testing::Return(-1));
-//     cout << output.write(buf1, strlen(buf1), sent) << endl;
-// }

@@ -5,31 +5,60 @@
  *      Author: dzhou
  */
 
-#include <algorithm>
-
 #include "TableImp.h"
-#include "Dictionary.h"
-#include "Util.h"
+#include "Constant.h"
 #include "ConstantImp.h"
-#include "ConstantMarshall.h"
+#include "Dictionary.h"
+#include "Exceptions.h"
+#include "SmartPointer.h"
+#include "Table.h"
+#include "Types.h"
+#include "Util.h"
+#include "Vector.h"
+
+#include "json/json.h"
+
+#include <algorithm>
+#include <climits>
+#include <cstddef>
+#include <exception>
+#include <memory>
+#include <string>
+#include <tuple>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace dolphindb {
+
+nlohmann::json Table::getRowJson(size_t row)
+{
+	nlohmann::json j;
+	for (auto &name : colNames_) {
+		j[name] = getColumn(name)->get((INDEX)row)->getString();
+	}
+	return j;
+}
 
 using std::vector;
 using std::string;
 
-AbstractTable::AbstractTable(const SmartPointer<vector<string>>& colNames) : colNames_(colNames){
-	colMap_ = new std::unordered_map<string, int>();
-	for(unsigned int i=0; i<colNames->size(); ++i){
-		colMap_->insert(std::pair<string, int>(Util::lower(colNames->at(i)),i));
+AbstractTable::AbstractTable(const std::vector<std::string> &colNames)
+{
+	colNames_ = colNames;
+	colMap_ = std::make_shared<std::unordered_map<std::string,int>>();
+	for(unsigned int i=0; i<colNames_.size(); ++i){
+		colMap_->insert(std::pair<string, int>(Util::lower(colNames_.at(i)),i));
 	}
 }
 
-AbstractTable::AbstractTable(const SmartPointer<vector<string>>& colNames, SmartPointer<std::unordered_map<string,int>> colMap) : colNames_(colNames), colMap_(colMap){
-
+AbstractTable::AbstractTable(const vector<string> &colNames, const std::shared_ptr<std::unordered_map<string,int>>& colMap) : colMap_(colMap)
+{
+	colNames_ = colNames;
 }
 
-string AbstractTable::getTableClassName() const {
+std::string AbstractTable::getTableClassName() const {
 	switch(getTableType()){
 	case BASICTBL:
 		return "BasicTable";
@@ -38,7 +67,7 @@ string AbstractTable::getTableClassName() const {
 	}
 }
 
-string AbstractTable::getTableTypeName() const {
+std::string AbstractTable::getTableTypeName() const {
 	switch(getTableType()){
 	case BASICTBL:
 		return "A basic table";
@@ -47,16 +76,16 @@ string AbstractTable::getTableTypeName() const {
 	}
 }
 
-ConstantSP AbstractTable::getColumn(const string& name) const{
-	std::unordered_map<string,int>::const_iterator it=colMap_->find(Util::lower(name));
+ConstantSP AbstractTable::getColumn(const std::string & name) const{
+	auto it=colMap_->find(Util::lower(name));
 	if(it==colMap_->end()){
 		throw TableRuntimeException("Unrecognized column name " + name);
 	}
 	return getColumn(it->second);
 }
 
-ConstantSP AbstractTable::getColumn(const string& qualifier, const string& name) const{
-	std::unordered_map<string,int>::const_iterator it=colMap_->find(Util::lower(name));
+ConstantSP AbstractTable::getColumn(const std::string & qualifier, const std::string & name) const{
+	auto it=colMap_->find(Util::lower(name));
 	if(it!=colMap_->end()){
 		if(Util::equalIgnoreCase(qualifier, name_))
 			return getColumn(it->second);
@@ -64,57 +93,53 @@ ConstantSP AbstractTable::getColumn(const string& qualifier, const string& name)
 	throw TableRuntimeException("Unrecognized column name " + qualifier + "." + name);
 }
 
-ConstantSP AbstractTable::getColumn(const string& name, const ConstantSP& rowFilter) const{
+ConstantSP AbstractTable::getColumn(const std::string & name, const ConstantSP& rowFilter) const{
 	if(rowFilter.isNull())
 		return getColumn(name);
-	else
-		return getColumn(name)->get(rowFilter);
+	return getColumn(name)->get(rowFilter);
 }
 
-ConstantSP AbstractTable::getColumn(const string& qualifier, const string& name, const ConstantSP& rowFilter) const{
+ConstantSP AbstractTable::getColumn(const std::string & qualifier, const std::string & name, const ConstantSP& rowFilter) const{
 	if(rowFilter.isNull())
 		return getColumn(qualifier, name);
-	else
-		return getColumn(qualifier, name)->get(rowFilter);
+	return getColumn(qualifier, name)->get(rowFilter);
 }
 
 ConstantSP AbstractTable::getColumn(INDEX index, const ConstantSP& rowFilter) const{
 	if(!rowFilter.isNull())
 		return getColumn(index)->get(rowFilter);
-	else
-		return getColumn(index);
+	return getColumn(index);
 }
 
 ConstantSP AbstractTable::get(INDEX col, INDEX row) const {
 	return getColumn(col)->get(row);
 }
 
-void AbstractTable::setColumnName(int index, const string& name){
+void AbstractTable::setColumnName(int index, const std::string & name){
 	std::ignore = index;
 	std::ignore = name;
 	throw TableRuntimeException(getTableTypeName() + " can't rename columns.");
 }
 
-int AbstractTable::getColumnIndex(const string& name) const {
-	std::unordered_map<string,int>::const_iterator it = colMap_->find(Util::lower(name));
+int AbstractTable::getColumnIndex(const std::string & name) const {
+	auto it = colMap_->find(Util::lower(name));
 	if(it == colMap_->end())
 		return -1;
-	else
-		return it->second;
+	return it->second;
 }
 
-bool AbstractTable::contain(const string& name) const {
+bool AbstractTable::contain(const std::string & name) const {
 	return colMap_->find(Util::lower(name))!=colMap_->end();
 }
 
-bool AbstractTable::contain(const string& qualifier, const string& name) const {
+bool AbstractTable::contain(const std::string & qualifier, const std::string & name) const {
 	return colMap_->find(Util::lower(name))!=colMap_->end() && Util::equalIgnoreCase(qualifier, name_);
 }
 
 ConstantSP AbstractTable::getColumnLabel() const {
-	VectorSP colNames = Util::createVector(DT_STRING, static_cast<INDEX>(colNames_->size()));
-	for(unsigned int i=0; i<colNames_->size(); ++i)
-		colNames->setString(i, colNames_->at(i));
+	VectorSP colNames = Util::createVector(DT_STRING, static_cast<INDEX>(colNames_.size()));
+	for(unsigned int i=0; i<colNames_.size(); ++i)
+		colNames->setString(i, colNames_.at(i));
 	return ConstantSP(colNames);
 }
 
@@ -127,7 +152,7 @@ ConstantSP AbstractTable::values() const {
 }
 
 
-string AbstractTable::getString(INDEX index) const {
+std::string AbstractTable::getString(INDEX index) const {
 	string str;
 	string tmp;
 	int remains;
@@ -138,8 +163,7 @@ string AbstractTable::getString(INDEX index) const {
 		if((int)(str.size()+tmp.size())<Util::DISPLAY_WIDTH){
 			str.append(1,' ');
 			str.append(tmp);
-		}
-		else{
+		} else{
 			remains= static_cast<int>(Util::DISPLAY_WIDTH-1-str.size());
 			if(remains>0){
 				str.append(1,' ');
@@ -152,9 +176,9 @@ string AbstractTable::getString(INDEX index) const {
 	return str;
 }
 
-string AbstractTable::getString() const {
+std::string AbstractTable::getString() const {
 	int rowNum=(std::min)(Util::DISPLAY_ROWS,size());
-    int strColMaxWidth=Util::DISPLAY_WIDTH/(std::min)(columns(),Util::DISPLAY_COLS)+5;
+    int strColMaxWidth=(Util::DISPLAY_WIDTH/(std::min)(columns(),Util::DISPLAY_COLS))+5;
     int length=0;
     int curCol=0;
     int maxColWidth;
@@ -171,8 +195,7 @@ string AbstractTable::getString() const {
     		if((int)listTmp[i+1].size()>maxColWidth)
     			maxColWidth=static_cast<int>(listTmp[i+1].size());
     	}
-    	if(maxColWidth>strColMaxWidth)
-    		maxColWidth=strColMaxWidth;
+    	maxColWidth = std::min(maxColWidth, strColMaxWidth);
     	if((int)listTmp[0].size()>maxColWidth)
     		maxColWidth=(std::min)(strColMaxWidth,(int)listTmp[0].size());
 
@@ -224,28 +247,25 @@ string AbstractTable::getString() const {
 COMPRESS_METHOD AbstractTable::getColumnCompressMethod(INDEX index) {
 	if (index < (INDEX)colCompresses_.size())
 		return colCompresses_[index];
-	else
-		return COMPRESS_NONE;
+	return COMPRESS_NONE;
 }
 
 void AbstractTable::setColumnCompressMethods(const vector<COMPRESS_METHOD> &colCompresses) {
-	if (colCompresses.size() > 0 && colCompresses.size() != colNames_->size()) {
-		throw RuntimeException("The number of elements in parameter compressMethods does not match the column size "+std::to_string(colNames_->size())+".");
+	if (!colCompresses.empty() && colCompresses.size() != colNames_.size()) {
+		throw RuntimeException("The number of elements in parameter compressMethods does not match the column size "+std::to_string(colNames_.size())+".");
 	}
 	for (INDEX i = 0; i < static_cast<INDEX>(colCompresses.size()); i++) {
 		if (colCompresses[i] == COMPRESS_DELTA) {
 			DATA_TYPE dataType = getColumn(i)->getRawType();
 			if (dataType != DT_SHORT && dataType != DT_INT && dataType != DT_LONG && dataType != DT_DECIMAL32 && dataType != DT_DECIMAL64) {
-				throw RuntimeException("Cannot apply compression method DELTA to column "+colNames_->at(i)+", Only integral and temporal and Decimal32/Decimal64 data supports DELTA compression");
+				throw RuntimeException("Cannot apply compression method DELTA to column "+colNames_.at(i)+", Only integral and temporal and Decimal32/Decimal64 data supports DELTA compression");
 			}
 			if (((Vector*)getColumn(i).get())->getVectorType() == VECTOR_TYPE::ARRAYVECTOR) {
-				throw RuntimeException("Cannot apply compression method DELTA to array vector at column "+colNames_->at(i));
+				throw RuntimeException("Cannot apply compression method DELTA to array vector at column "+colNames_.at(i));
 			}
-		}
-		else if (colCompresses[i] == COMPRESS_LZ4) {
-		}
-		else {
-			throw RuntimeException("Unsupported compression method at column "+colNames_->at(i));
+		} else if (colCompresses[i] == COMPRESS_LZ4) {
+		} else {
+			throw RuntimeException("Unsupported compression method at column "+colNames_.at(i));
 		}
 	}
 	colCompresses_ = colCompresses;
@@ -257,7 +277,7 @@ ConstantSP AbstractTable::getInternal(INDEX index) const {
 
 	int numCol=columns();
 	for(int i=0;i<numCol;++i)
-		dict->set(colNames_->at(i),getColumn(i)->get(index));
+		dict->set(colNames_.at(i),getColumn(i)->get(index));
 	return resultSP;
 }
 
@@ -270,13 +290,13 @@ bool AbstractTable::set(INDEX index, const ConstantSP& value) {
 ConstantSP AbstractTable::getInternal(const ConstantSP& index) const {
 	if(index->getCategory()==LITERAL)
 		return getMember(index);
-	else if(index->isScalar()){
+	if(index->isScalar()){
 		Dictionary* dict=Util::createDictionary(DT_STRING,DT_ANY);
 		ConstantSP resultSP(dict);
 
 		int numCol=columns();
 		for(int i=0;i<numCol;++i)
-			dict->set(colNames_->at(i),getColumn(i)->get(index));
+			dict->set(colNames_.at(i),getColumn(i)->get(index));
 		return resultSP;
 	}
 
@@ -288,15 +308,14 @@ ConstantSP AbstractTable::getInternal(const ConstantSP& index) const {
 			--start;
 		return getWindow((INDEX)0,columns(),(INDEX)start,(int)length);
 	}
-	else{
-		vector<ConstantSP> newCols;
-		int columnNum = static_cast<int>(colNames_->size());
-		for(int i=0;i<columnNum;i++){
-			newCols.push_back(getColumn(i)->get(index));
-		}
-
-		return new BasicTable(newCols, *colNames_);
+	int columnNum = static_cast<int>(colNames_.size());
+	vector<ConstantSP> newCols;
+	newCols.reserve(columnNum);
+	for (int i = 0; i < columnNum; i++) {
+		newCols.push_back(getColumn(i)->get(index));
 	}
+
+	return new BasicTable(newCols, colNames_);
 }
 
 ConstantSP AbstractTable::getWindowInternal(int columnStart, int columnLength,int rowStart, int rowLength) const {
@@ -309,33 +328,30 @@ ConstantSP AbstractTable::getWindowInternal(int columnStart, int columnLength,in
 
 	if(rowStart==0 && rowLength==size()){
 		for(int i=0;i<columnLength;i++)
-			newCols.push_back(getColumn(columnStart+sign*i)->getValue());
+			newCols.push_back(getColumn(columnStart+(sign*i))->getValue());
 	}
 	else{
 		for(int i=0;i<columnLength;i++)
-			newCols.push_back(((Vector*)getColumn(columnStart+sign*i).get())->getSubVector(rowStart,rowLength));
+			newCols.push_back(((Vector*)getColumn(columnStart+(sign*i)).get())->getSubVector(rowStart,rowLength));
 	}
 
 	if(columnStart==0 && columnLength==columns())
-		return new BasicTable(newCols, *colNames_);
-	else{
-		vector<string> names;
-		for(int i=0;i<columnLength;i++)
-			names.push_back(colNames_->at(columnStart+sign*i));
-		return new BasicTable(newCols, names);
-	}
+		return new BasicTable(newCols, colNames_);
+	vector<string> names;
+	names.reserve(columnLength);
+	for (int i = 0; i < columnLength; i++)
+		names.push_back(colNames_.at(columnStart + (sign * i)));
+	return new BasicTable(newCols, names);
 }
 
 ConstantSP AbstractTable::getMemberInternal(const ConstantSP& key) const{
 	if(key->isScalar())
 		return getColumn(key->getString(0));
-	else {
-		int sz = key->size();
-		ConstantSP result = Util::createVector(DT_ANY, sz);
-		for(int i=0; i<sz; ++i)
-			result->set(i, getColumn(key->getString(i)));
-		return result;
-	}
+	int sz = key->size();
+	ConstantSP result = Util::createVector(DT_ANY, sz);
+	for (int i = 0; i < sz; ++i)
+		result->set(i, getColumn(key->getString(i)));
+	return result;
 }
 
 ConstantSP AbstractTable::getInstance(int sz) const{
@@ -373,11 +389,11 @@ bool AbstractTable::remove(const ConstantSP& indexSP, string& errMsg) {
 	return false;
 }
 
-BasicTable::BasicTable(const vector<ConstantSP>& cols, const vector<string>& colNames) : AbstractTable(new vector<string>(colNames)){
+BasicTable::BasicTable(const vector<ConstantSP>& cols, const vector<string>& colNames) : AbstractTable(vector<string>(colNames)){
 	initData(cols, colNames);
 }
 
-BasicTable::BasicTable(const vector<ConstantSP>& cols, const vector<string>& colNames, const vector<int>& key) : AbstractTable(new vector<string>(colNames)){
+BasicTable::BasicTable(const vector<ConstantSP>& cols, const vector<string>& colNames, const vector<int>& key) : AbstractTable(vector<string>(colNames)){
 	std::ignore = key;
 	initData(cols, colNames);
 }
@@ -408,10 +424,9 @@ void BasicTable::initData(const vector<ConstantSP>& cols, const vector<string>& 
 		if(!cols[i]->isArray()){
 			Vector* tmp=Util::createVector(cols[i]->getType(),rowNum,0,true,cols[i]->getExtraParamForType());
 			tmp->fill(0,rowNum,cols[i]);
-			cols_.push_back(ConstantSP(tmp));
-		}
-		else{
-			Vector* cur=(Vector*)cols[i].get();
+			cols_.emplace_back(tmp);
+		} else{
+			auto* cur=(Vector*)cols[i].get();
 			if(cur->isTemporary())
 				cols_.push_back(cols[i]);
 			else
@@ -422,19 +437,14 @@ void BasicTable::initData(const vector<ConstantSP>& cols, const vector<string>& 
 		((Vector*)cols_[i].get())->setName(colNames[i]);
 
 		INDEX curCapacity  = ((Vector*)cols_[i].get())->getCapacity();
-		if(curCapacity < capacity_)
-			capacity_ = curCapacity;
+		capacity_ = std::min(curCapacity, capacity_);
 	}
 	size_=rowNum;
 }
 
-BasicTable::~BasicTable(){
-
-}
-
-void BasicTable::setColumnName(int index, const string& name){
-	string oldName = colNames_->at(index);
-	(*colNames_)[index]=name;
+void BasicTable::setColumnName(int index, const std::string & name){
+	string oldName = colNames_.at(index);
+	colNames_[index]=name;
 	colMap_->erase(Util::lower(oldName));
 	(*colMap_)[Util::lower(name)] = index;
 }
@@ -449,7 +459,7 @@ bool BasicTable::set(INDEX index, const ConstantSP& value){
 
 	int numCol=columns();
 	for(int i=0;i<numCol;++i)
-		cols_[i]->set(index,((Dictionary*)value.get())->getMember(colNames_->at(i)));
+		cols_[i]->set(index,((Dictionary*)value.get())->getMember(colNames_.at(i)));
 	return true;
 }
 
@@ -470,27 +480,29 @@ ConstantSP BasicTable::getMember(const ConstantSP& key) const {
 }
 
 ConstantSP BasicTable::getValue() const {
-	ConstantSP copy = ConstantSP(new BasicTable(cols_,*colNames_));
+	ConstantSP copy = ConstantSP(new BasicTable(cols_, colNames_));
 	((Table*)copy.get())->setName(name_);
 	return copy;
 }
 
 ConstantSP BasicTable::getValue(INDEX capacity) const {
-	vector<ConstantSP> newCols;
 	if(capacity == 0)
 		capacity = 1;
+	vector<ConstantSP> newCols;
+	newCols.reserve(cols_.size());
 	for(unsigned int i=0;i<cols_.size();i++)
 		newCols.push_back(((Vector*)cols_[i].get())->getValue(capacity));
-	ConstantSP copy = ConstantSP(new BasicTable(newCols,*colNames_));
+	ConstantSP copy = ConstantSP(new BasicTable(newCols, colNames_));
 	((Table*)copy.get())->setName(name_);
 	return copy;
 }
 
 ConstantSP BasicTable::getInstance(int sz) const {
 	vector<ConstantSP> newCols;
+	newCols.reserve(cols_.size());
 	for(unsigned int i=0;i<cols_.size();i++)
 		newCols.push_back(((Vector*)cols_[i].get())->getInstance(sz));
-	ConstantSP copy = ConstantSP(new BasicTable(newCols,*colNames_));
+	ConstantSP copy = ConstantSP(new BasicTable(newCols, colNames_));
 	((Table*)copy.get())->setName(name_);
 	return copy;
 }
@@ -504,7 +516,7 @@ bool BasicTable::append(vector<ConstantSP>& valueVec, INDEX& insertedRows, strin
 	int num = static_cast<int>(valueVec.size());
 	INDEX rowNum;
 	if(num==1 && valueVec[0]->isTable()){
-		Table* tbl=(Table*)valueVec[0].get();
+		auto* tbl=(Table*)valueVec[0].get();
 		num=tbl->columns();
 		if(num!=(int)cols_.size()){
 			errMsg = "Number of columns for the original table and the table to insert are different.";
@@ -528,12 +540,10 @@ bool BasicTable::append(vector<ConstantSP>& valueVec, INDEX& insertedRows, strin
 				size_ += rowNum;
 				return true;
 			}
-			else{
-				for(int k=0; k<i; ++k)
-					((Vector*)cols_[k].get())->remove(rowNum);
-				errMsg = "Failed to append data to column '" + getColumnName(i) +"' reason: " + errMsg;
-				return false;
-			}
+			for (int k = 0; k < i; ++k)
+				((Vector *)cols_[k].get())->remove(rowNum);
+			errMsg = "Failed to append data to column '" + getColumnName(i) + "' reason: " + errMsg;
+			return false;
 		}
 		catch(std::exception& ex){
 			for(int k=0; k<i; ++k)
@@ -543,7 +553,7 @@ bool BasicTable::append(vector<ConstantSP>& valueVec, INDEX& insertedRows, strin
 		}
 	}
 	if(num==1 && valueVec[0]->isTuple()){
-		AnyVector* tbl=(AnyVector*)valueVec[0].get();
+		auto* tbl=(AnyVector*)valueVec[0].get();
 		num=tbl->rows();
 		if(num!=(int)cols_.size()){
 			errMsg = "Number of columns for the original table and the table to insert are different.";
@@ -568,12 +578,10 @@ bool BasicTable::append(vector<ConstantSP>& valueVec, INDEX& insertedRows, strin
 				size_ += rowNum;
 				return true;
 			}
-			else{
-				for(int k=0; k<i; ++k)
-					((Vector*)cols_[k].get())->remove(rowNum);
-				errMsg = "Failed to append data to column '" + getColumnName(i) +"' reason: " + errMsg;
-				return false;
-			}
+			for(int k=0; k<i; ++k)
+				((Vector*)cols_[k].get())->remove(rowNum);
+			errMsg = "Failed to append data to column '" + getColumnName(i) +"' reason: " + errMsg;
+			return false;
 		}
 		catch(std::exception& ex){
 			for(int k=0; k<i; ++k)
@@ -611,13 +619,11 @@ bool BasicTable::append(vector<ConstantSP>& valueVec, INDEX& insertedRows, strin
 				size_+=rowNum;
 				return true;
 			}
-			else{
-				for(int k=0; k<i; ++k){
-					((Vector*)cols_[k].get())->remove(rowNum);
-				}
-				errMsg = "Failed to append data to column '" + getColumnName(i) +"' reason: " + errMsg;
-				return false;
+			for(int k=0; k<i; ++k){
+				((Vector*)cols_[k].get())->remove(rowNum);
 			}
+			errMsg = "Failed to append data to column '" + getColumnName(i) +"' reason: " + errMsg;
+			return false;
 		}
 		catch(std::exception& ex){
 			for(int k=0; k<i; ++k)
@@ -647,8 +653,7 @@ bool BasicTable::internalAppend(vector<ConstantSP>& values, string& errMsg){
 		if(i >= cols){
 			size_+=rows;
 			return true;
-		}
-		else{
+		} else{
 			for(int k=0; k<i; ++k){
 				((Vector*)cols_[k].get())->remove(rows);
 			}
@@ -688,24 +693,20 @@ bool BasicTable::internalUpdate(vector<ConstantSP>& valueVec, const ConstantSP& 
 				errMsg.append("The column "+ colNames[i]+ " does not exist. To add a new column, the table shouldn't be shared and the value size must match the table.");
 				return false;
 			}
-			else{
-				ConstantSP value = valueVec[i];
-				if(value->isScalar()){
-					VectorSP vec = Util::createVector(value->getType(), rowNum);
-					vec->fill(0, rowNum, value);
-					value = vec;
-				}
-				else if(!value->isTemporary())
-					value = value->getValue();
-				newCols.push_back(std::pair<string, ConstantSP>(colNames[i], value));
-			}
-		}
-		else{
+			ConstantSP value = valueVec[i];
+			if (value->isScalar()) {
+				VectorSP vec = Util::createVector(value->getType(), rowNum);
+				vec->fill(0, rowNum, value);
+				value = (ConstantSP)vec;
+			} else if (!value->isTemporary())
+				value = value->getValue();
+			newCols.emplace_back(colNames[i], value);
+		} else{
 			colIndex[i]=it->second;
 
 			if(cols_[colIndex[i]]->getCategory()!=valueVec[i]->getCategory() && (!valueVec[i]->isNumber() || !cols_[colIndex[i]]->isNumber()) && valueVec[i]->getCategory()!=NOTHING){
 				errMsg.append("The category of the value to update does not match the column ");
-				errMsg.append(colNames_->at(colIndex[i]));
+				errMsg.append(colNames_.at(colIndex[i]));
 				return false;
 			}
 			int curSize=valueVec[i]->size();
@@ -727,7 +728,7 @@ bool BasicTable::internalUpdate(vector<ConstantSP>& valueVec, const ConstantSP& 
 			cols_[colIndex[i]]->assign(valueVec[i]);
 	}
 	for(std::size_t i=0; i<newCols.size(); ++i){
-		colNames_->push_back(newCols[i].first);
+		colNames_.push_back(newCols[i].first);
 		colMap_->insert(std::pair<string, int>(Util::lower(newCols[i].first), static_cast<int>(colMap_->size())));
 		cols_.push_back(newCols[i].second);
 		cols_.back()->setTemporary(false);
@@ -774,18 +775,18 @@ void BasicTable::internalDrop(vector<int>& columnNum){
 	dropColumns.insert(columnNum.begin(), columnNum.end());
 
 	vector<ConstantSP> newCols;
-	SmartPointer<vector<string>> newColNames = new vector<string>();
-	SmartPointer<std::unordered_map<string,int>> newColMap = new std::unordered_map<string,int>();
+	std::vector<std::string> newColNames;
+	auto newColMap = std::make_shared<std::unordered_map<string,int>>();
 	vector<COMPRESS_METHOD> newColCompresses;
-	int numCol = static_cast<int>(colNames_->size());
+	int numCol = static_cast<int>(colNames_.size());
 	for(int i=0; i<numCol; ++i){
 		if(dropColumns.find(i) != dropColumns.end())
 			continue;
 		newCols.push_back(cols_[i]);
-		newColNames->push_back(colNames_->at(i));
+		newColNames.push_back(colNames_.at(i));
 		if(!colCompresses_.empty())
 			newColCompresses.push_back(colCompresses_.at(i));
-		newColMap->insert(std::pair<string,int>(Util::lower(colNames_->at(i)), static_cast<int>(newCols.size()-1)));
+		newColMap->insert(std::pair<string,int>(Util::lower(colNames_.at(i)), static_cast<int>(newCols.size()-1)));
 	}
 	cols_ = newCols;
 	colNames_ = newColNames;
@@ -809,7 +810,7 @@ bool BasicTable::join(vector<ConstantSP>& columnNum){
 		col->setTemporary(false);
 		string name = ((Vector*)col.get())->getName();
 		cols_.push_back(col);
-		colNames_->push_back(name);
+		colNames_.push_back(name);
 		colMap_->insert(std::pair<string,int>(Util::lower(name), static_cast<int>(cols_.size() - 1)));
 	}
 	return true;
@@ -826,7 +827,7 @@ bool BasicTable::clear(){
 }
 
 long long BasicTable::getAllocatedMemory() const {
-	long long sz=sizeof(BasicTable)+sizeof(string)*colNames_->capacity();
+	long long sz=sizeof(BasicTable)+(sizeof(string)*colNames_.capacity());
 	sz+=sizeof(ConstantSP)*cols_.capacity();
 	for(unsigned int i=0;i<cols_.size();++i)
 		sz+=cols_[i]->getAllocatedMemory();
@@ -857,7 +858,7 @@ bool BasicTable::increaseCapacity(long long newCapacity, string& errMsg){
 		}
 
 		for(std::size_t i=0; i<colCount; ++i){
-			Vector* vec = (Vector*)cols_[i].get();
+			auto* vec = (Vector*)cols_[i].get();
 			if(newCapacity > vec->getCapacity()){
 				INDEX capacity = (std::min)(INDEX_MAX, static_cast<int>(newCapacity * 1.2));
 				if(vec->isFastMode()){
@@ -887,8 +888,8 @@ ConstantSP BasicTable::getSubTable(vector<int> indices) const{
 	std::size_t colCount = cols_.size();
 	vector<ConstantSP> cols(colCount);
 	for(std::size_t i = 0; i < colCount; i++){
-		cols[i] = Util::createSubVector(cols_[i], indices);
+		cols[i] = Util::createSubVector((VectorSP)cols_[i], indices);
 	}
-	return new BasicTable(cols, *colNames_.get());
+	return new BasicTable(cols, colNames_);
 }
-}
+} // namespace dolphindb

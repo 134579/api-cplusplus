@@ -1,4 +1,14 @@
 #include "Matrix.h"
+#include "Constant.h"
+#include "Exceptions.h"
+#include "Types.h"
+#include "Util.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <tuple>
+#include <vector>
 
 namespace dolphindb {
 
@@ -103,8 +113,7 @@ std::string Matrix::getString() const {
         maxColWidth = 0;
         for (i = 0; i < rows; i++) {
             listTmp[i + 1] = rowLabel_->getString(i);
-            if (listTmp[i + 1].size() > maxColWidth)
-                maxColWidth = listTmp[i + 1].size();
+            maxColWidth = std::max(listTmp[i + 1].size(), maxColWidth);
         }
 
         for (i = 0; i <= rows; i++) {
@@ -131,8 +140,7 @@ std::string Matrix::getString() const {
         maxColWidth = 0;
         for (i = 0; i < rows; i++) {
             listTmp[i + 1] = getString(curCol, i);
-            if (listTmp[i + 1].size() > maxColWidth)
-                maxColWidth = listTmp[i + 1].size();
+            maxColWidth = std::max(listTmp[i + 1].size(), maxColWidth);
         }
         if (maxColWidth > static_cast<std::size_t>(limitColMaxWidth))
             maxColWidth = limitColMaxWidth;
@@ -241,7 +249,7 @@ ConstantSP Matrix::get(const ConstantSP& index) const {
     return result;
 }
 
-bool Matrix::set(const ConstantSP index, const ConstantSP& value) {
+bool Matrix::set(const ConstantSP& index, const ConstantSP& value) {
     int cols = index->size();
     bool scalar = value->isScalar();
     if (value->size() != rows_ * cols && !scalar)
@@ -263,4 +271,4 @@ bool Matrix::set(const ConstantSP index, const ConstantSP& value) {
     return true;
 }
 
-}
+} // namespace dolphindb

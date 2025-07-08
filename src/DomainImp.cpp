@@ -1,6 +1,13 @@
 #include "DomainImp.h"
-#include "Util.h"
+#include "Constant.h"
 #include "ConstantImp.h"
+#include "Exceptions.h"
+#include "ScalarImp.h"
+#include "Types.h"
+#include "Util.h"
+
+#include <algorithm>
+#include <vector>
 
 namespace dolphindb{
 
@@ -11,8 +18,8 @@ std::vector<int> HashDomain::getPartitionKeys(const ConstantSP& partitionColTabl
     ConstantSP partitionCol = partitionColTable;
     if(partitionColCategory_ == TEMPORAL && partitionColType_ != partitionCol->getType()){
     	partitionCol = ((FastTemporalVector*)partitionCol.get())->castTemporal(partitionColType_);
-    	if(partitionCol == NULL)
-    		throw new RuntimeException("Can't convert partition column");
+    	if(partitionCol == nullptr)
+    		throw RuntimeException("Can't convert partition column");
     }
     int rows = partitionCol->rows();
     std::vector<int> keys(rows);
@@ -30,7 +37,7 @@ std::vector<int> HashDomain::getPartitionKeys(const ConstantSP& partitionColTabl
     return keys;
 }
 
-ListDomain::ListDomain(DATA_TYPE partitionColType, ConstantSP partitionSchema) : Domain(LIST, partitionColType){
+ListDomain::ListDomain(DATA_TYPE partitionColType, const ConstantSP& partitionSchema) : Domain(LIST, partitionColType){
     if(!partitionSchema->isVector()){
         throw RuntimeException("The input list must be a tuple.");
     }
@@ -58,8 +65,8 @@ std::vector<int> ListDomain::getPartitionKeys(const ConstantSP& partitionColTabl
     ConstantSP partitionCol = partitionColTable;
     if (partitionColCategory_ == TEMPORAL && partitionColType_ != partitionCol->getType()) {
         partitionCol = ((FastTemporalVector*)partitionCol.get())->castTemporal(partitionColType_);
-        if (partitionCol == NULL)
-            throw new RuntimeException("Can't convert partition column");
+        if (partitionCol == nullptr)
+            throw RuntimeException("Can't convert partition column");
     }
     int rows = partitionCol->rows();
     std::vector<int> keys(rows);
@@ -79,8 +86,8 @@ std::vector<int> ValueDomain::getPartitionKeys(const ConstantSP& partitionColTab
     ConstantSP partitionCol = partitionColTable;
     if (partitionColCategory_ == TEMPORAL && partitionColType_ != partitionCol->getType()) {
         partitionCol = ((FastTemporalVector*)partitionCol.get())->castTemporal(partitionColType_);
-        if (partitionCol == NULL)
-            throw new RuntimeException("Can't convert partition column");
+        if (partitionCol == nullptr)
+            throw RuntimeException("Can't convert partition column");
     }
     if(partitionColType_ == DT_LONG)
         throw RuntimeException("Long type value can't be used as a partition column.");
@@ -106,8 +113,8 @@ std::vector<int> RangeDomain::getPartitionKeys(const ConstantSP& partitionColTab
     ConstantSP partitionCol = partitionColTable;
     if (partitionColCategory_ == TEMPORAL && partitionColType_ != partitionCol->getType()) {
         partitionCol = ((FastTemporalVector*)partitionCol.get())->castTemporal(partitionColType_);
-        if (partitionCol == NULL)
-            throw new RuntimeException("Can't convert partition column");
+        if (partitionCol == nullptr)
+            throw RuntimeException("Can't convert partition column");
     }
     int rows = partitionCol->rows();
     int partitions = range_->size() - 1;
@@ -121,4 +128,4 @@ std::vector<int> RangeDomain::getPartitionKeys(const ConstantSP& partitionColTab
     }
     return keys;
 }
-}
+} // namespace dolphindb

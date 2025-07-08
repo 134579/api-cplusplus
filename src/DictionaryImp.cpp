@@ -5,9 +5,19 @@
  *      Author: dzhou
  */
 
-#include <memory.h>
 #include "DictionaryImp.h"
-#include "ConstantImp.h"
+#include "Constant.h"
+#include "Exceptions.h"
+#include "Guid.h"
+#include "Types.h"
+#include "Util.h"
+
+#include <algorithm>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 using std::unordered_map;
 using std::string;
@@ -32,7 +42,7 @@ void stringU8VectorReader(const ConstantSP& value, int start, int count, U8* out
 }
 
 void stringU8ScalarReader(const ConstantSP& value, U8& output){
-	const string& str=value->getStringRef();
+	const std::string & str=value->getStringRef();
 	size_t len=str.length()+1;
 	output.pointer=new char[len];
 	memcpy(output.pointer,str.c_str(),len);
@@ -70,7 +80,7 @@ void doubleU8ScalarWriter(const U8& value, const ConstantSP& output){
 }
 
 void floatU8VectorReader(const ConstantSP& value, int start, int count, U8* output){
-	float* buf=(float*)(output+count/2);
+	auto* buf=(float*)(output+(count/2));
 	const float* pbuf=value->getFloatConst(start,count,buf);
 	for(int i=0;i<count;i++)
 		output[i].floatVal=pbuf[i];
@@ -81,7 +91,7 @@ void floatU8ScalarReader(const ConstantSP& value, U8& output){
 }
 
 void floatU8VectorWriter(U8* input, const ConstantSP& output, int start, int count){
-	float* buf=(float*)input;
+	auto* buf=(float*)input;
 	float* pbuf=output->getFloatBuffer(start,count,buf);
 	for(int i=0;i<count;++i)
 		pbuf[i]=input[i].floatVal;
@@ -109,7 +119,7 @@ void longU8ScalarWriter(const U8& value, const ConstantSP& output){
 }
 
 void intU8VectorReader(const ConstantSP& value, int start, int count, U8* output){
-	int* buf=(int*)(output+count/2);
+	int* buf=(int*)(output+(count/2));
 	const int* pbuf=value->getIntConst(start,count,buf);
 	for(int i=0;i<count;i++)
 		output[i].intVal=pbuf[i];
@@ -132,7 +142,7 @@ void intU8ScalarWriter(const U8& value, const ConstantSP& output){
 }
 
 void shortU8VectorReader(const ConstantSP& value, int start, int count, U8* output){
-	short* buf=(short*)(output+count/2);
+	auto* buf=(short*)(output+(count/2));
 	const short* pbuf=value->getShortConst(start,count,buf);
 	for(int i=0;i<count;i++)
 		output[i].shortVal=pbuf[i];
@@ -143,7 +153,7 @@ void shortU8ScalarReader(const ConstantSP& value, U8& output){
 }
 
 void shortU8VectorWriter(U8* input, const ConstantSP& output, int start, int count){
-	short* buf=(short*)input;
+	auto* buf=(short*)input;
 	short* pbuf=output->getShortBuffer(start,count,buf);
 	for(int i=0;i<count;++i)
 		pbuf[i]=input[i].shortVal;
@@ -155,7 +165,7 @@ void shortU8ScalarWriter(const U8& value, const ConstantSP& output){
 }
 
 void charU8VectorReader(const ConstantSP& value, int start, int count, U8* output){
-	char* buf=(char*)(output+count/2);
+	char* buf=(char*)(output+(count/2));
 	const char* pbuf=value->getCharConst(start,count,buf);
 	for(int i=0;i<count;i++)
 		output[i].charVal=pbuf[i];
@@ -178,7 +188,7 @@ void charU8ScalarWriter(const U8& value, const ConstantSP& output){
 }
 
 void boolU8VectorReader(const ConstantSP& value, int start, int count, U8* output){
-	char* buf=(char*)(output+count/2);
+	char* buf=(char*)(output+(count/2));
 	const char* pbuf=value->getBoolConst(start,count,buf);
 	for(int i=0;i<count;i++)
 		output[i].charVal=pbuf[i];
@@ -271,16 +281,15 @@ void AbstractDictionary::init(){
 ConstantSP AbstractDictionary::createValues(const ConstantSP& key) const{
 	if(key->isScalar())
 		return Util::createConstant(type_);
-	else
-		return Util::createVector(type_,key->size());
+	return Util::createVector(type_,key->size());
 }
 
 IntDictionary::IntDictionary(const unordered_map<int,U8>& dict, DATA_TYPE keyType,DATA_TYPE type)
 	:AbstractDictionary(keyType,type),dict_(dict){
 	if(type_!=DT_STRING)
 		return;
-	unordered_map<int,U8>::iterator it=dict_.begin();
-	unordered_map<int,U8>::iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	size_t len;
 	char* tmp;
 	while(it!=end){
@@ -293,10 +302,10 @@ IntDictionary::IntDictionary(const unordered_map<int,U8>& dict, DATA_TYPE keyTyp
 }
 
 IntDictionary::~IntDictionary(){
-	if(type_!=DT_STRING)
+	if(type_ != DT_STRING && type_ != DT_BLOB)
 		return;
-	unordered_map<int,U8>::const_iterator it=dict_.begin();
-	unordered_map<int,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		delete[] it->second.pointer;
 		++it;
@@ -328,8 +337,7 @@ bool IntDictionary::set(const ConstantSP& key, const ConstantSP& value){
 	ConstantSP newKey;
 	if(keyCategory_==TEMPORAL && key->getType()!=keyType_)
 		return false;
-	else
-		newKey=key;
+	newKey=key;
 
 	if(newKey->isScalar()){
 		U8 tmp;
@@ -337,54 +345,50 @@ bool IntDictionary::set(const ConstantSP& key, const ConstantSP& value){
 		dict_[newKey->getInt()]=tmp;
 		return true;
 	}
-	else{
-		int len=newKey->size();
-		if(len!=value->size())
-			return false;
+	int len=newKey->size();
+	if(len!=value->size())
+		return false;
 
-		if(dict_.empty())
-			dict_.reserve((int)(len*1.33));
-		const int bufSize=Util::BUF_SIZE;
-		int buf[bufSize];
-		const int* pbuf;
-		U8 tmp[bufSize];
-		int start=0;
-		int counts;
-		std::size_t dictSize=dict_.size();
-		while(start<len){
-			counts=((std::min))(len-start,bufSize);
-			pbuf=newKey->getIntConst(start,counts,buf);
-			(*vreader_)(value,start,counts,tmp);
-			if(type_==DT_STRING){
-				for(int i=0;i<counts;++i){
-					U8& cur=dict_[pbuf[i]];
-					if(dict_.size()==dictSize)
-						delete[] cur.pointer;
-					else
-						++dictSize;
-					cur=tmp[i];
-				}
+	if(dict_.empty())
+		dict_.reserve((int)(len*1.33));
+	const int bufSize = Util::BUF_SIZE;
+	int buf[bufSize];
+	const int *pbuf;
+	U8 tmp[bufSize];
+	int start = 0;
+	int counts;
+	std::size_t dictSize = dict_.size();
+	while (start < len) {
+		counts = ((std::min))(len - start, bufSize);
+		pbuf = newKey->getIntConst(start, counts, buf);
+		(*vreader_)(value, start, counts, tmp);
+		if (type_ == DT_STRING) {
+			for (int i = 0; i < counts; ++i) {
+				U8 &cur = dict_[pbuf[i]];
+				if (dict_.size() == dictSize)
+					delete[] cur.pointer;
+				else
+					++dictSize;
+				cur = tmp[i];
 			}
-			else{
-				for(int i=0;i<counts;++i)
-					dict_[pbuf[i]]=tmp[i];
-			}
-			start+=counts;
+		} else {
+			for (int i = 0; i < counts; ++i)
+				dict_[pbuf[i]] = tmp[i];
 		}
-		return true;
+		start += counts;
 	}
+	return true;
 }
 
 ConstantSP IntDictionary::getMember(const ConstantSP& key) const{
 	ConstantSP newKey;
 	if(keyCategory_==TEMPORAL && key->getType()!=keyType_)
 		throw IncompatibleTypeException(keyType_, key->getType());
-	else
-		newKey=key;
+	newKey=key;
 
 	ConstantSP result=createValues(newKey);
 	if(newKey->isScalar()){
-		unordered_map<int,U8>::const_iterator it=dict_.find(newKey->getInt());
+		auto it=dict_.find(newKey->getInt());
 		if(it==dict_.end())
 			(*swriter_)(nullVal_,result);
 		else
@@ -399,7 +403,7 @@ ConstantSP IntDictionary::getMember(const ConstantSP& key) const{
 		int start=0;
 		int counts;
 		unordered_map<int,U8>::const_iterator it;
-		unordered_map<int,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=((std::min))(len-start,bufSize);
 			pbuf=newKey->getIntConst(start,counts,buf);
@@ -417,7 +421,7 @@ ConstantSP IntDictionary::getMember(const ConstantSP& key) const{
 
 void IntDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getInt())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getInt())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -430,13 +434,13 @@ void IntDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP
 		int counts;
 
 		unordered_map<int,U8>::const_iterator it;
-		unordered_map<int,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=((std::min))(len-start,bufSize);
 			pbuf=target->getIntConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
@@ -444,7 +448,7 @@ void IntDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP
 }
 
 ConstantSP IntDictionary::keys() const {
-	unordered_map<int,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -467,7 +471,7 @@ ConstantSP IntDictionary::keys() const {
 }
 
 ConstantSP IntDictionary::values() const {
-	unordered_map<int,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP= Util::createVector(type_,len);
 
@@ -488,11 +492,11 @@ ConstantSP IntDictionary::values() const {
 	return resultSP;
 }
 
-string IntDictionary::getString() const {
+std::string IntDictionary::getString() const {
 	string content;
 	int len=((std::min))(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<int,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	ConstantSP key=Util::createConstant(keyType_);
 	ConstantSP value=Util::createConstant(type_);
 	while(counts<len){
@@ -511,10 +515,10 @@ string IntDictionary::getString() const {
 }
 
 long long IntDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(IntDictionary)+size()*12;
+	long long bytes=sizeof(IntDictionary)+(size()*12);
 	if(getType()==DT_STRING){
-		unordered_map<int,U8>::const_iterator it=dict_.begin();
-		unordered_map<int,U8>::const_iterator end=dict_.end();
+		auto it=dict_.begin();
+		auto end=dict_.end();
 		while(it!=end){
 			bytes += strlen(it->second.pointer);
 			++it;
@@ -527,8 +531,8 @@ CharDictionary::CharDictionary(const unordered_map<char,U8>& dict, DATA_TYPE key
 	:AbstractDictionary(keyType,type),dict_(dict){
 	if(type_!=DT_STRING)
 		return;
-	unordered_map<char,U8>::iterator it=dict_.begin();
-	unordered_map<char,U8>::iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	size_t len;
 	char* tmp;
 	while(it!=end){
@@ -541,10 +545,10 @@ CharDictionary::CharDictionary(const unordered_map<char,U8>& dict, DATA_TYPE key
 }
 
 CharDictionary::~CharDictionary(){
-	if(type_!=DT_STRING)
+	if(type_ != DT_STRING && type_ != DT_BLOB)
 		return;
-	unordered_map<char,U8>::const_iterator it=dict_.begin();
-	unordered_map<char,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		delete[] it->second.pointer;
 		++it;
@@ -579,48 +583,45 @@ bool CharDictionary::set(const ConstantSP& key, const ConstantSP& value){
 		dict_[key->getChar()]=tmp;
 		return true;
 	}
-	else{
-		int len=key->size();
-		if(len!=value->size())
-			return false;
+	int len = key->size();
+	if (len != value->size())
+		return false;
 
-		if(dict_.empty())
-			dict_.reserve((int)(len*1.33));
-		const int bufSize=Util::BUF_SIZE;
-		char buf[bufSize];
-		const char* pbuf;
-		U8 tmp[bufSize];
-		int start=0;
-		int counts;
-		std::size_t dictSize=dict_.size();
-		while(start<len){
-			counts=((std::min))(len-start,bufSize);
-			pbuf=key->getCharConst(start,counts,buf);
-			(*vreader_)(value,start,counts,tmp);
-			if(type_==DT_STRING){
-				for(int i=0;i<counts;++i){
-					U8& cur=dict_[pbuf[i]];
-					if(dict_.size()==dictSize)
-						delete[] cur.pointer;
-					else
-						++dictSize;
-					cur=tmp[i];
-				}
+	if (dict_.empty())
+		dict_.reserve((int)(len * 1.33));
+	const int bufSize = Util::BUF_SIZE;
+	char buf[bufSize];
+	const char *pbuf;
+	U8 tmp[bufSize];
+	int start = 0;
+	int counts;
+	std::size_t dictSize = dict_.size();
+	while (start < len) {
+		counts = ((std::min))(len - start, bufSize);
+		pbuf = key->getCharConst(start, counts, buf);
+		(*vreader_)(value, start, counts, tmp);
+		if (type_ == DT_STRING) {
+			for (int i = 0; i < counts; ++i) {
+				U8 &cur = dict_[pbuf[i]];
+				if (dict_.size() == dictSize)
+					delete[] cur.pointer;
+				else
+					++dictSize;
+				cur = tmp[i];
 			}
-			else{
-				for(int i=0;i<counts;++i)
-					dict_[pbuf[i]]=tmp[i];
-			}
-			start+=counts;
+		} else {
+			for (int i = 0; i < counts; ++i)
+				dict_[pbuf[i]] = tmp[i];
 		}
-		return true;
+		start += counts;
 	}
+	return true;
 }
 
 ConstantSP CharDictionary::getMember(const ConstantSP& key) const {
 	ConstantSP result=createValues(key);
 	if(key->isScalar()){
-		unordered_map<char,U8>::const_iterator it=dict_.find(key->getChar());
+		auto it=dict_.find(key->getChar());
 		if(it==dict_.end())
 			(*swriter_)(nullVal_,result);
 		else
@@ -635,7 +636,7 @@ ConstantSP CharDictionary::getMember(const ConstantSP& key) const {
 		int start=0;
 		int counts;
 		unordered_map<char,U8>::const_iterator it;
-		unordered_map<char,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=((std::min))(len-start,bufSize);
 			pbuf=key->getCharConst(start,counts,buf);
@@ -653,7 +654,7 @@ ConstantSP CharDictionary::getMember(const ConstantSP& key) const {
 
 void CharDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getChar())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getChar())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -666,13 +667,13 @@ void CharDictionary::contain(const ConstantSP& target, const ConstantSP& resultS
 		int counts;
 
 		unordered_map<char,U8>::const_iterator it;
-		unordered_map<char,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=((std::min))(len-start,bufSize);
 			pbuf=target->getCharConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
@@ -680,7 +681,7 @@ void CharDictionary::contain(const ConstantSP& target, const ConstantSP& resultS
 }
 
 ConstantSP CharDictionary::keys() const {
-	unordered_map<char,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -703,7 +704,7 @@ ConstantSP CharDictionary::keys() const {
 }
 
 ConstantSP CharDictionary::values() const {
-	unordered_map<char,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP= Util::createVector(type_,len);
 
@@ -724,11 +725,11 @@ ConstantSP CharDictionary::values() const {
 	return resultSP;
 }
 
-string CharDictionary::getString() const{
+std::string CharDictionary::getString() const{
 	string content;
 	int len=((std::min))(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<char,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	ConstantSP key=Util::createConstant(keyType_);
 	ConstantSP value=Util::createConstant(type_);
 	while(counts<len){
@@ -747,10 +748,10 @@ string CharDictionary::getString() const{
 }
 
 long long CharDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(CharDictionary)+size()*9;
+	long long bytes=sizeof(CharDictionary)+(size()*9);
 	if(getType()==DT_STRING){
-		unordered_map<char,U8>::const_iterator it=dict_.begin();
-		unordered_map<char,U8>::const_iterator end=dict_.end();
+		auto it=dict_.begin();
+		auto end=dict_.end();
 		while(it!=end){
 			bytes += strlen(it->second.pointer);
 			++it;
@@ -763,8 +764,8 @@ ShortDictionary::ShortDictionary(const unordered_map<short,U8>& dict, DATA_TYPE 
 	:AbstractDictionary(keyType,type),dict_(dict){
 	if(type_!=DT_STRING)
 		return;
-	unordered_map<short,U8>::iterator it=dict_.begin();
-	unordered_map<short,U8>::iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	size_t len;
 	char* tmp;
 	while(it!=end){
@@ -777,10 +778,10 @@ ShortDictionary::ShortDictionary(const unordered_map<short,U8>& dict, DATA_TYPE 
 }
 
 ShortDictionary::~ShortDictionary(){
-	if(type_!=DT_STRING)
+	if(type_ != DT_STRING && type_ != DT_BLOB)
 		return;
-	unordered_map<short,U8>::const_iterator it=dict_.begin();
-	unordered_map<short,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		delete[] it->second.pointer;
 		++it;
@@ -815,48 +816,45 @@ bool ShortDictionary::set(const ConstantSP& key, const ConstantSP& value){
 		dict_[key->getShort()]=tmp;
 		return true;
 	}
-	else{
-		int len=key->size();
-		if(len!=value->size())
-			return false;
+	int len = key->size();
+	if (len != value->size())
+		return false;
 
-		if(dict_.empty())
-			dict_.reserve((int)(len*1.33));
-		const int bufSize=Util::BUF_SIZE;
-		short buf[bufSize];
-		const short* pbuf;
-		U8 tmp[bufSize];
-		int start=0;
-		int counts;
-		std::size_t dictSize=dict_.size();
-		while(start<len){
-			counts=((std::min))(len-start,bufSize);
-			pbuf=key->getShortConst(start,counts,buf);
-			(*vreader_)(value,start,counts,tmp);
-			if(type_==DT_STRING){
-				for(int i=0;i<counts;++i){
-					U8& cur=dict_[pbuf[i]];
-					if(dict_.size()==dictSize)
-						delete[] cur.pointer;
-					else
-						++dictSize;
-					cur=tmp[i];
-				}
+	if (dict_.empty())
+		dict_.reserve((int)(len * 1.33));
+	const int bufSize = Util::BUF_SIZE;
+	short buf[bufSize];
+	const short *pbuf;
+	U8 tmp[bufSize];
+	int start = 0;
+	int counts;
+	std::size_t dictSize = dict_.size();
+	while (start < len) {
+		counts = ((std::min))(len - start, bufSize);
+		pbuf = key->getShortConst(start, counts, buf);
+		(*vreader_)(value, start, counts, tmp);
+		if (type_ == DT_STRING) {
+			for (int i = 0; i < counts; ++i) {
+				U8 &cur = dict_[pbuf[i]];
+				if (dict_.size() == dictSize)
+					delete[] cur.pointer;
+				else
+					++dictSize;
+				cur = tmp[i];
 			}
-			else{
-				for(int i=0;i<counts;++i)
-					dict_[pbuf[i]]=tmp[i];
-			}
-			start+=counts;
+		} else {
+			for (int i = 0; i < counts; ++i)
+				dict_[pbuf[i]] = tmp[i];
 		}
-		return true;
+		start += counts;
 	}
+	return true;
 }
 
 ConstantSP ShortDictionary::getMember(const ConstantSP& key) const {
 	ConstantSP result=createValues(key);
 	if(key->isScalar()){
-		unordered_map<short,U8>::const_iterator it=dict_.find(key->getShort());
+		auto it=dict_.find(key->getShort());
 		if(it==dict_.end())
 			(*swriter_)(nullVal_,result);
 		else
@@ -871,7 +869,7 @@ ConstantSP ShortDictionary::getMember(const ConstantSP& key) const {
 		int start=0;
 		int counts;
 		unordered_map<short,U8>::const_iterator it;
-		unordered_map<short,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=((std::min))(len-start,bufSize);
 			pbuf=key->getShortConst(start,counts,buf);
@@ -889,7 +887,7 @@ ConstantSP ShortDictionary::getMember(const ConstantSP& key) const {
 
 void ShortDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getShort())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getShort())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -902,13 +900,13 @@ void ShortDictionary::contain(const ConstantSP& target, const ConstantSP& result
 		int counts;
 
 		unordered_map<short,U8>::const_iterator it;
-		unordered_map<short,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=((std::min))(len-start,bufSize);
 			pbuf=target->getShortConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
@@ -916,7 +914,7 @@ void ShortDictionary::contain(const ConstantSP& target, const ConstantSP& result
 }
 
 ConstantSP ShortDictionary::keys() const {
-	unordered_map<short,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -939,7 +937,7 @@ ConstantSP ShortDictionary::keys() const {
 }
 
 ConstantSP ShortDictionary::values() const {
-	unordered_map<short,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP= Util::createVector(type_,len);
 
@@ -960,11 +958,11 @@ ConstantSP ShortDictionary::values() const {
 	return resultSP;
 }
 
-string ShortDictionary::getString() const{
+std::string ShortDictionary::getString() const{
 	string content;
 	int len=(std::min)(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<short,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	ConstantSP key=Util::createConstant(keyType_);
 	ConstantSP value=Util::createConstant(type_);
 	while(counts<len){
@@ -983,10 +981,10 @@ string ShortDictionary::getString() const{
 }
 
 long long ShortDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(ShortDictionary)+size()*10;
+	long long bytes=sizeof(ShortDictionary)+(size()*10);
 	if(getType()==DT_STRING){
-		unordered_map<short,U8>::const_iterator it=dict_.begin();
-		unordered_map<short,U8>::const_iterator end=dict_.end();
+		auto it=dict_.begin();
+		auto end=dict_.end();
 		while(it!=end){
 			bytes += strlen(it->second.pointer);
 			++it;
@@ -999,8 +997,8 @@ LongDictionary::LongDictionary(const unordered_map<long long,U8>& dict, DATA_TYP
 	:AbstractDictionary(keyType,type),dict_(dict){
 	if(type_!=DT_STRING)
 		return;
-	unordered_map<long long,U8>::iterator it=dict_.begin();
-	unordered_map<long long,U8>::iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	size_t len;
 	char* tmp;
 	while(it!=end){
@@ -1013,10 +1011,10 @@ LongDictionary::LongDictionary(const unordered_map<long long,U8>& dict, DATA_TYP
 }
 
 LongDictionary::~LongDictionary(){
-	if(type_!=DT_STRING)
+	if(type_ != DT_STRING && type_ != DT_BLOB)
 		return;
-	unordered_map<long long,U8>::const_iterator it=dict_.begin();
-	unordered_map<long long,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		delete[] it->second.pointer;
 		++it;
@@ -1048,8 +1046,7 @@ bool LongDictionary::set(const ConstantSP& key, const ConstantSP& value){
 	ConstantSP newKey;
 	if(keyCategory_==TEMPORAL && key->getType()!=keyType_)
 		return false;
-	else
-		newKey=key;
+	newKey=key;
 
 	if(newKey->isScalar()){
 		U8 tmp;
@@ -1057,54 +1054,51 @@ bool LongDictionary::set(const ConstantSP& key, const ConstantSP& value){
 		dict_[newKey->getLong()]=tmp;
 		return true;
 	}
-	else{
-		int len=newKey->size();
-		if(len!=value->size())
-			return false;
+	int len = newKey->size();
+	if (len != value->size())
+		return false;
 
-		if(dict_.empty())
-			dict_.reserve((int)(len*1.33));
-		const int bufSize=Util::BUF_SIZE;
-		long long buf[bufSize];
-		const long long* pbuf;
-		U8 tmp[bufSize];
-		int start=0;
-		int counts;
-		std::size_t dictSize=dict_.size();
-		while(start<len){
-			counts=(std::min)(len-start,bufSize);
-			pbuf=newKey->getLongConst(start,counts,buf);
-			(*vreader_)(value,start,counts,tmp);
-			if(type_==DT_STRING){
-				for(int i=0;i<counts;++i){
-					U8& cur=dict_[pbuf[i]];
-					if(dict_.size()==dictSize)
-						delete[] cur.pointer;
-					else
-						++dictSize;
-					cur=tmp[i];
-				}
+	if (dict_.empty())
+		dict_.reserve((int)(len * 1.33));
+	const int bufSize = Util::BUF_SIZE;
+	long long buf[bufSize];
+	const long long *pbuf;
+	U8 tmp[bufSize];
+	int start = 0;
+	int counts;
+	std::size_t dictSize = dict_.size();
+	while (start < len)
+	{
+		counts = (std::min)(len - start, bufSize);
+		pbuf = newKey->getLongConst(start, counts, buf);
+		(*vreader_)(value, start, counts, tmp);
+		if (type_ == DT_STRING) {
+			for (int i = 0; i < counts; ++i) {
+				U8 &cur = dict_[pbuf[i]];
+				if (dict_.size() == dictSize)
+					delete[] cur.pointer;
+				else
+					++dictSize;
+				cur = tmp[i];
 			}
-			else{
-				for(int i=0;i<counts;++i)
-					dict_[pbuf[i]]=tmp[i];
-			}
-			start+=counts;
+		} else {
+			for (int i = 0; i < counts; ++i)
+				dict_[pbuf[i]] = tmp[i];
 		}
-		return true;
+		start += counts;
 	}
+	return true;
 }
 
 ConstantSP LongDictionary::getMember(const ConstantSP& key) const {
 	ConstantSP newKey;
 	if(keyCategory_==TEMPORAL && key->getType()!=keyType_)
 		throw IncompatibleTypeException(keyType_, key->getType());
-	else
-		newKey=key;
+	newKey=key;
 
 	ConstantSP result=createValues(newKey);
 	if(newKey->isScalar()){
-		unordered_map<long long,U8>::const_iterator it=dict_.find(newKey->getLong());
+		auto it=dict_.find(newKey->getLong());
 		if(it==dict_.end())
 			(*swriter_)(nullVal_,result);
 		else
@@ -1119,7 +1113,7 @@ ConstantSP LongDictionary::getMember(const ConstantSP& key) const {
 		int start=0;
 		int counts;
 		unordered_map<long long,U8>::const_iterator it;
-		unordered_map<long long,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=newKey->getLongConst(start,counts,buf);
@@ -1137,7 +1131,7 @@ ConstantSP LongDictionary::getMember(const ConstantSP& key) const {
 
 void LongDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getLong())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getLong())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -1150,13 +1144,13 @@ void LongDictionary::contain(const ConstantSP& target, const ConstantSP& resultS
 		int counts;
 
 		unordered_map<long long,U8>::const_iterator it;
-		unordered_map<long long,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=target->getLongConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
@@ -1164,7 +1158,7 @@ void LongDictionary::contain(const ConstantSP& target, const ConstantSP& resultS
 }
 
 ConstantSP LongDictionary::keys() const {
-	unordered_map<long long,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -1187,7 +1181,7 @@ ConstantSP LongDictionary::keys() const {
 }
 
 ConstantSP LongDictionary::values() const {
-	unordered_map<long long,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP= Util::createVector(type_,len);
 
@@ -1208,11 +1202,11 @@ ConstantSP LongDictionary::values() const {
 	return resultSP;
 }
 
-string LongDictionary::getString() const {
+std::string LongDictionary::getString() const {
 	string content;
 	int len=(std::min)(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<long long,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	ConstantSP key=Util::createConstant(keyType_);
 	ConstantSP value=Util::createConstant(type_);
 	while(counts<len){
@@ -1231,10 +1225,10 @@ string LongDictionary::getString() const {
 }
 
 long long LongDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(LongDictionary)+size()*16;
+	long long bytes=sizeof(LongDictionary)+(size()*16);
 	if(getType()==DT_STRING){
-		unordered_map<long long,U8>::const_iterator it=dict_.begin();
-		unordered_map<long long,U8>::const_iterator end=dict_.end();
+		auto it=dict_.begin();
+		auto end=dict_.end();
 		while(it!=end){
 			bytes += strlen(it->second.pointer);
 			++it;
@@ -1247,8 +1241,8 @@ FloatDictionary::FloatDictionary(const unordered_map<float,U8>& dict, DATA_TYPE 
 	:AbstractDictionary(DT_FLOAT,type),dict_(dict){
 	if(type_!=DT_STRING)
 		return;
-	unordered_map<float,U8>::iterator it=dict_.begin();
-	unordered_map<float,U8>::iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	size_t len;
 	char* tmp;
 	while(it!=end){
@@ -1261,10 +1255,10 @@ FloatDictionary::FloatDictionary(const unordered_map<float,U8>& dict, DATA_TYPE 
 }
 
 FloatDictionary::~FloatDictionary(){
-	if(type_!=DT_STRING)
+	if(type_ != DT_STRING && type_ != DT_BLOB)
 		return;
-	unordered_map<float,U8>::const_iterator it=dict_.begin();
-	unordered_map<float,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		delete[] it->second.pointer;
 		++it;
@@ -1299,48 +1293,46 @@ bool FloatDictionary::set(const ConstantSP& key, const ConstantSP& value){
 		dict_[key->getFloat()]=tmp;
 		return true;
 	}
-	else{
-		int len=key->size();
-		if(len!=value->size())
-			return false;
+	int len = key->size();
+	if (len != value->size())
+		return false;
 
-		if(dict_.empty())
-			dict_.reserve((int)(len*1.33));
-		const int bufSize=Util::BUF_SIZE;
-		float buf[bufSize];
-		const float* pbuf;
-		U8 tmp[bufSize];
-		int start=0;
-		int counts;
-		std::size_t dictSize=dict_.size();
-		while(start<len){
-			counts=(std::min)(len-start,bufSize);
-			pbuf=key->getFloatConst(start,counts,buf);
-			(*vreader_)(value,start,counts,tmp);
-			if(type_==DT_STRING){
-				for(int i=0;i<counts;++i){
-					U8& cur=dict_[pbuf[i]];
-					if(dict_.size()==dictSize)
-						delete[] cur.pointer;
-					else
-						++dictSize;
-					cur=tmp[i];
-				}
+	if (dict_.empty())
+		dict_.reserve((int)(len * 1.33));
+	const int bufSize = Util::BUF_SIZE;
+	float buf[bufSize];
+	const float *pbuf;
+	U8 tmp[bufSize];
+	int start = 0;
+	int counts;
+	std::size_t dictSize = dict_.size();
+	while (start < len)
+	{
+		counts = (std::min)(len - start, bufSize);
+		pbuf = key->getFloatConst(start, counts, buf);
+		(*vreader_)(value, start, counts, tmp);
+		if (type_ == DT_STRING) {
+			for (int i = 0; i < counts; ++i) {
+				U8 &cur = dict_[pbuf[i]];
+				if (dict_.size() == dictSize)
+					delete[] cur.pointer;
+				else
+					++dictSize;
+				cur = tmp[i];
 			}
-			else{
-				for(int i=0;i<counts;++i)
-					dict_[pbuf[i]]=tmp[i];
-			}
-			start+=counts;
+		} else {
+			for (int i = 0; i < counts; ++i)
+				dict_[pbuf[i]] = tmp[i];
 		}
-		return true;
+		start += counts;
 	}
+	return true;
 }
 
 ConstantSP FloatDictionary::getMember(const ConstantSP& key) const {
 	ConstantSP result=createValues(key);
 	if(key->isScalar()){
-		unordered_map<float,U8>::const_iterator it=dict_.find(key->getFloat());
+		auto it=dict_.find(key->getFloat());
 		if(it==dict_.end())
 			(*swriter_)(nullVal_,result);
 		else
@@ -1355,7 +1347,7 @@ ConstantSP FloatDictionary::getMember(const ConstantSP& key) const {
 		int start=0;
 		int counts;
 		unordered_map<float,U8>::const_iterator it;
-		unordered_map<float,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=key->getFloatConst(start,counts,buf);
@@ -1373,7 +1365,7 @@ ConstantSP FloatDictionary::getMember(const ConstantSP& key) const {
 
 void FloatDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getFloat())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getFloat())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -1386,13 +1378,13 @@ void FloatDictionary::contain(const ConstantSP& target, const ConstantSP& result
 		int counts;
 
 		unordered_map<float,U8>::const_iterator it;
-		unordered_map<float,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=target->getFloatConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
@@ -1400,7 +1392,7 @@ void FloatDictionary::contain(const ConstantSP& target, const ConstantSP& result
 }
 
 ConstantSP FloatDictionary::keys() const {
-	unordered_map<float,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -1423,7 +1415,7 @@ ConstantSP FloatDictionary::keys() const {
 }
 
 ConstantSP FloatDictionary::values() const {
-	unordered_map<float,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP= Util::createVector(type_,len);
 
@@ -1444,11 +1436,11 @@ ConstantSP FloatDictionary::values() const {
 	return resultSP;
 }
 
-string FloatDictionary::getString() const {
+std::string FloatDictionary::getString() const {
 	string content;
 	int len=(std::min)(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<float,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	ConstantSP key=Util::createConstant(keyType_);
 	ConstantSP value=Util::createConstant(type_);
 	while(counts<len){
@@ -1467,10 +1459,10 @@ string FloatDictionary::getString() const {
 }
 
 long long FloatDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(FloatDictionary)+size()*12;
+	long long bytes=sizeof(FloatDictionary)+(size()*12);
 	if(getType()==DT_STRING){
-		unordered_map<float,U8>::const_iterator it=dict_.begin();
-		unordered_map<float,U8>::const_iterator end=dict_.end();
+		auto it=dict_.begin();
+		auto end=dict_.end();
 		while(it!=end){
 			bytes += strlen(it->second.pointer);
 			++it;
@@ -1483,8 +1475,8 @@ DoubleDictionary::DoubleDictionary(const unordered_map<double,U8>& dict, DATA_TY
 	:AbstractDictionary(DT_DOUBLE,type),dict_(dict){
 	if(type_!=DT_STRING)
 		return;
-	unordered_map<double,U8>::iterator it=dict_.begin();
-	unordered_map<double,U8>::iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	size_t len;
 	char* tmp;
 	while(it!=end){
@@ -1497,10 +1489,10 @@ DoubleDictionary::DoubleDictionary(const unordered_map<double,U8>& dict, DATA_TY
 }
 
 DoubleDictionary::~DoubleDictionary(){
-	if(type_!=DT_STRING)
+	if(type_ != DT_STRING && type_ != DT_BLOB)
 		return;
-	unordered_map<double,U8>::const_iterator it=dict_.begin();
-	unordered_map<double,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		delete[] it->second.pointer;
 		++it;
@@ -1535,7 +1527,6 @@ bool DoubleDictionary::set(const ConstantSP& key, const ConstantSP& value){
 		dict_[key->getDouble()]=tmp;
 		return true;
 	}
-	else{
 		int len=key->size();
 		if(len!=value->size())
 			return false;
@@ -1570,13 +1561,12 @@ bool DoubleDictionary::set(const ConstantSP& key, const ConstantSP& value){
 			start+=counts;
 		}
 		return true;
-	}
 }
 
 ConstantSP DoubleDictionary::getMember(const ConstantSP& key) const {
 	ConstantSP result=createValues(key);
 	if(key->isScalar()){
-		unordered_map<double,U8>::const_iterator it=dict_.find(key->getDouble());
+		auto it=dict_.find(key->getDouble());
 		if(it==dict_.end())
 			(*swriter_)(nullVal_,result);
 		else
@@ -1591,7 +1581,7 @@ ConstantSP DoubleDictionary::getMember(const ConstantSP& key) const {
 		int start=0;
 		int counts;
 		unordered_map<double,U8>::const_iterator it;
-		unordered_map<double,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=key->getDoubleConst(start,counts,buf);
@@ -1609,7 +1599,7 @@ ConstantSP DoubleDictionary::getMember(const ConstantSP& key) const {
 
 void DoubleDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getDouble())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getDouble())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -1622,13 +1612,13 @@ void DoubleDictionary::contain(const ConstantSP& target, const ConstantSP& resul
 		int counts;
 
 		unordered_map<double,U8>::const_iterator it;
-		unordered_map<double,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=target->getDoubleConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
@@ -1636,7 +1626,7 @@ void DoubleDictionary::contain(const ConstantSP& target, const ConstantSP& resul
 }
 
 ConstantSP DoubleDictionary::keys() const {
-	unordered_map<double,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -1659,7 +1649,7 @@ ConstantSP DoubleDictionary::keys() const {
 }
 
 ConstantSP DoubleDictionary::values() const {
-	unordered_map<double,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP= Util::createVector(type_,len);
 
@@ -1680,11 +1670,11 @@ ConstantSP DoubleDictionary::values() const {
 	return resultSP;
 }
 
-string DoubleDictionary::getString() const {
+std::string DoubleDictionary::getString() const {
 	string content;
 	int len=(std::min)(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<double,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	ConstantSP key=Util::createConstant(keyType_);
 	ConstantSP value=Util::createConstant(type_);
 	while(counts<len){
@@ -1703,10 +1693,10 @@ string DoubleDictionary::getString() const {
 }
 
 long long DoubleDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(DoubleDictionary)+size()*16;
+	long long bytes=sizeof(DoubleDictionary)+(size()*16);
 	if(getType()==DT_STRING){
-		unordered_map<double,U8>::const_iterator it=dict_.begin();
-		unordered_map<double,U8>::const_iterator end=dict_.end();
+		auto it=dict_.begin();
+		auto end=dict_.end();
 		while(it!=end){
 			bytes += strlen(it->second.pointer);
 			++it;
@@ -1719,8 +1709,8 @@ StringDictionary::StringDictionary(const unordered_map<string,U8>& dict, DATA_TY
 	:AbstractDictionary(keyType,type),dict_(dict){
 	if(type_!=DT_STRING)
 		return;
-	unordered_map<string,U8>::iterator it=dict_.begin();
-	unordered_map<string,U8>::iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	size_t len;
 	char* tmp;
 	while(it!=end){
@@ -1733,10 +1723,10 @@ StringDictionary::StringDictionary(const unordered_map<string,U8>& dict, DATA_TY
 }
 
 StringDictionary::~StringDictionary(){
-	if(type_!=DT_STRING)
+	if(type_ != DT_STRING && type_ != DT_BLOB)
 		return;
-	unordered_map<string,U8>::const_iterator it=dict_.begin();
-	unordered_map<string,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		delete[] it->second.pointer;
 		++it;
@@ -1766,7 +1756,7 @@ bool StringDictionary::remove(const ConstantSP& key){
 	return true;
 }
 
-bool StringDictionary::set(const string& key, const ConstantSP& value){
+bool StringDictionary::set(const std::string & key, const ConstantSP& value){
 	U8 tmp;
 	(*sreader_)(value,tmp);
 	dict_[key]=tmp;
@@ -1782,7 +1772,6 @@ bool StringDictionary::set(const ConstantSP& key, const ConstantSP& value){
 		dict_[key->getString()]=tmp;
 		return true;
 	}
-	else{
 		int len=key->size();
 		if(len!=value->size())
 			return false;
@@ -1817,12 +1806,11 @@ bool StringDictionary::set(const ConstantSP& key, const ConstantSP& value){
 			start+=counts;
 		}
 		return true;
-	}
 }
 
-ConstantSP StringDictionary::getMember(const string& key) const {
+ConstantSP StringDictionary::getMember(const std::string & key) const {
 	ConstantSP result = Util::createConstant(type_);
-	unordered_map<string,U8>::const_iterator it=dict_.find(key);
+	auto it=dict_.find(key);
 	if(it==dict_.end())
 		(*swriter_)(nullVal_,result);
 	else
@@ -1835,7 +1823,7 @@ ConstantSP StringDictionary::getMember(const ConstantSP& key) const {
 		throw RuntimeException("Key data type incompatible. Expecting literal/BLOB data");
 	ConstantSP result=createValues(key);
 	if(key->isScalar()){
-		unordered_map<string,U8>::const_iterator it=dict_.find(key->getStringRef());
+		auto it=dict_.find(key->getStringRef());
 		if(it==dict_.end())
 			(*swriter_)(nullVal_,result);
 		else
@@ -1850,7 +1838,7 @@ ConstantSP StringDictionary::getMember(const ConstantSP& key) const {
 		int start=0;
 		int counts;
 		unordered_map<string,U8>::const_iterator it;
-		unordered_map<string,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=key->getStringConst(start,counts,buf);
@@ -1870,7 +1858,7 @@ void StringDictionary::contain(const ConstantSP& target, const ConstantSP& resul
 	if(target->getCategory() != LITERAL && target->getType() != DT_BLOB)
 		throw RuntimeException("target data type incompatible. Expecting literal/BLOB data");
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getStringRef())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getStringRef())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -1883,13 +1871,13 @@ void StringDictionary::contain(const ConstantSP& target, const ConstantSP& resul
 		int counts;
 
 		unordered_map<string,U8>::const_iterator it;
-		unordered_map<string,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=target->getStringConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
@@ -1897,7 +1885,7 @@ void StringDictionary::contain(const ConstantSP& target, const ConstantSP& resul
 }
 
 ConstantSP StringDictionary::keys() const {
-	unordered_map<string,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -1918,7 +1906,7 @@ ConstantSP StringDictionary::keys() const {
 }
 
 ConstantSP StringDictionary::values() const {
-	unordered_map<string,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP= Util::createVector(type_,len);
 
@@ -1939,11 +1927,11 @@ ConstantSP StringDictionary::values() const {
 	return resultSP;
 }
 
-string StringDictionary::getString() const {
+std::string StringDictionary::getString() const {
 	string content;
 	int len=(std::min)(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<string,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	ConstantSP value=Util::createConstant(type_);
 	while(counts<len){
 		content.append(it->first);
@@ -1960,10 +1948,10 @@ string StringDictionary::getString() const {
 }
 
 long long StringDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(StringDictionary)+size()*(8+sizeof(string));
+	long long bytes=sizeof(StringDictionary)+(size()*(8+sizeof(string)));
 
-	unordered_map<string,U8>::const_iterator it=dict_.begin();
-	unordered_map<string,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	if(getType()==DT_STRING){
 		while(it!=end){
 			bytes += strlen(it->second.pointer)+it->first.size();
@@ -2002,7 +1990,7 @@ bool AnyDictionary::remove(const ConstantSP& key){
 	return true;
 }
 
-bool AnyDictionary::set(const string& key, const ConstantSP& value){
+bool AnyDictionary::set(const std::string & key, const ConstantSP& value){
 	dict_[key]=value;
 	value->setIndependent(false);
 	value->setTemporary(false);
@@ -2012,7 +2000,7 @@ bool AnyDictionary::set(const string& key, const ConstantSP& value){
 bool AnyDictionary::set(const ConstantSP& key, const ConstantSP& value){
 	if(key->getCategory() != LITERAL && key->getCategory() != BINARY)
 		throw RuntimeException("Dictionary with 'ANY' data type must use string or integer as key");
-	else if(key->isScalar()){
+	if(key->isScalar()){
 		dict_[key->getString()]=value;
 		value->setIndependent(false);
 		value->setTemporary(false);
@@ -2044,50 +2032,46 @@ bool AnyDictionary::set(const ConstantSP& key, const ConstantSP& value){
 	return true;
 }
 
-ConstantSP AnyDictionary::getMember(const string& key) const{
-	unordered_map<string,ConstantSP>::const_iterator it=dict_.find(key);
+ConstantSP AnyDictionary::getMember(const std::string & key) const{
+	auto it=dict_.find(key);
 	if(it==dict_.end())
 		return Constant::void_;
-	else
-		return it->second;
+	return it->second;
 }
 
 ConstantSP AnyDictionary::getMember(const ConstantSP& key) const {
 	if(key->getCategory()!=LITERAL)
 		throw RuntimeException("Dictionary with 'ANY' data type must use string as key");
-	else if(key->isScalar()){
-		unordered_map<string,ConstantSP>::const_iterator it=dict_.find(key->getString());
+	if(key->isScalar()){
+		auto it=dict_.find(key->getString());
 		if(it==dict_.end())
 			return Constant::void_;
-		else
-			return it->second;
+		return it->second;
 	}
-	else{
-		ConstantSP result = Util::createVector(DT_ANY, key->size());
-		int len=key->size();
-		const int bufSize = Util::BUF_SIZE;
-		char* buf[bufSize];
-		char** pbuf;
-		int start=0;
-		int counts;
-		unordered_map<string,ConstantSP>::const_iterator it;
-		unordered_map<string,ConstantSP>::const_iterator end=dict_.end();
-		while(start<len){
-			counts=(std::min)(len-start,bufSize);
-			pbuf=key->getStringConst(start,counts,buf);
-			for(int i=0;i<counts;++i){
-				it=dict_.find(pbuf[i]);
-				result->set(start + i,it==end ? Constant::void_ : it->second);
-			}
-			start+=counts;
+	ConstantSP result = Util::createVector(DT_ANY, key->size());
+	int len = key->size();
+	const int bufSize = Util::BUF_SIZE;
+	char *buf[bufSize];
+	char **pbuf;
+	int start = 0;
+	int counts;
+	unordered_map<string, ConstantSP>::const_iterator it;
+	auto end = dict_.end();
+	while (start < len) {
+		counts = (std::min)(len - start, bufSize);
+		pbuf = key->getStringConst(start, counts, buf);
+		for (int i = 0; i < counts; ++i) {
+			it = dict_.find(pbuf[i]);
+			result->set(start + i, it == end ? Constant::void_ : it->second);
 		}
-		result->setNullFlag(result->hasNull());
-		return result;
+		start += counts;
 	}
+	result->setNullFlag(result->hasNull());
+	return result;
 }
 
 ConstantSP AnyDictionary::keys() const {
-	unordered_map<string,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -2108,7 +2092,7 @@ ConstantSP AnyDictionary::keys() const {
 }
 
 ConstantSP AnyDictionary::values() const {
-	unordered_map<string,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP result=Util::createVector(DT_ANY,len);
 
@@ -2125,7 +2109,7 @@ void AnyDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP
 	if(target->getCategory() != LITERAL && target->getType() != DT_BLOB)
 		throw RuntimeException("Key data type incompatible. Expecting literal/BLOB data");
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getStringRef())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getStringRef())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -2138,24 +2122,24 @@ void AnyDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP
 		int counts;
 
 		unordered_map<string,ConstantSP>::const_iterator it;
-		unordered_map<string,ConstantSP>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=target->getStringConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
 	}
 }
 
-string AnyDictionary::getString() const{
+std::string AnyDictionary::getString() const{
 	string content;
 	int len=(std::min)(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<string,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	while(counts<len){
 		content.append(it->first);
 		content.append("->");
@@ -2177,10 +2161,10 @@ string AnyDictionary::getString() const{
 }
 
 long long AnyDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(AnyDictionary)+size()*(sizeof(ConstantSP)+sizeof(string));
+	long long bytes=sizeof(AnyDictionary)+(size()*(sizeof(ConstantSP)+sizeof(string)));
 
-	unordered_map<string,ConstantSP>::const_iterator it=dict_.begin();
-	unordered_map<string,ConstantSP>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		bytes=it->first.size();
 		if(it->second.count()==1)
@@ -2191,8 +2175,8 @@ long long AnyDictionary::getAllocatedMemory() const {
 }
 
 bool AnyDictionary::containNotMarshallableObject() const{
-	unordered_map<string,ConstantSP>::const_iterator it=dict_.begin();
-	unordered_map<string,ConstantSP>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		if((*it).second->containNotMarshallableObject())
 			return true;
@@ -2264,38 +2248,35 @@ bool IntAnyDictionary::set(const ConstantSP& key, const ConstantSP& value){
 
 ConstantSP IntAnyDictionary::getMember(const ConstantSP& key) const {
 	if(key->isScalar()){
-		unordered_map<int,ConstantSP>::const_iterator it=dict_.find(key->getInt());
+		auto it=dict_.find(key->getInt());
 		if(it==dict_.end())
 			return Constant::void_;
-		else
-			return it->second;
+		return it->second;
 	}
-	else{
-		ConstantSP result = Util::createVector(DT_ANY, key->size());
-		int len=key->size();
-		const int bufSize = Util::BUF_SIZE;
-		int buf[bufSize];
-		const int* pbuf;
-		int start=0;
-		int counts;
-		unordered_map<int,ConstantSP>::const_iterator it;
-		unordered_map<int,ConstantSP>::const_iterator end=dict_.end();
-		while(start<len){
-			counts=(std::min)(len-start,bufSize);
-			pbuf=key->getIntConst(start,counts,buf);
-			for(int i=0;i<counts;++i){
-				it=dict_.find(pbuf[i]);
-				result->set(start + i, it==end ? Constant::void_ : it->second);
-			}
-			start+=counts;
+	ConstantSP result = Util::createVector(DT_ANY, key->size());
+	int len = key->size();
+	const int bufSize = Util::BUF_SIZE;
+	int buf[bufSize];
+	const int *pbuf;
+	int start = 0;
+	int counts;
+	unordered_map<int, ConstantSP>::const_iterator it;
+	auto end = dict_.end();
+	while (start < len) {
+		counts = (std::min)(len - start, bufSize);
+		pbuf = key->getIntConst(start, counts, buf);
+		for (int i = 0; i < counts; ++i) {
+			it = dict_.find(pbuf[i]);
+			result->set(start + i, it == end ? Constant::void_ : it->second);
 		}
-		result->setNullFlag(result->hasNull());
-		return result;
+		start += counts;
 	}
+	result->setNullFlag(result->hasNull());
+	return result;
 }
 
 ConstantSP IntAnyDictionary::keys() const {
-	unordered_map<int,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
@@ -2318,7 +2299,7 @@ ConstantSP IntAnyDictionary::keys() const {
 }
 
 ConstantSP IntAnyDictionary::values() const {
-	unordered_map<int,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP result=Util::createVector(DT_ANY,len);
 
@@ -2333,7 +2314,7 @@ ConstantSP IntAnyDictionary::values() const {
 
 void IntAnyDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getInt())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getInt())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -2346,25 +2327,25 @@ void IntAnyDictionary::contain(const ConstantSP& target, const ConstantSP& resul
 		int counts;
 
 		unordered_map<int,ConstantSP>::const_iterator it;
-		unordered_map<int,ConstantSP>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=(std::min)(len-start,bufSize);
 			pbuf=target->getIntConst(start,counts,buf);
 			pret=resultSP->getBoolBuffer(start,counts,ret);
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
 	}
 }
 
-string IntAnyDictionary::getString() const {
+std::string IntAnyDictionary::getString() const {
 	string content;
 	int len=(std::min)(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
 	ConstantSP key=Util::createConstant(keyType_);
-	unordered_map<int,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	while(counts<len){
 		key->setInt(it->first);
 		content.append(key->getString());
@@ -2387,10 +2368,10 @@ string IntAnyDictionary::getString() const {
 }
 
 long long IntAnyDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(IntAnyDictionary)+size()*(sizeof(ConstantSP)+4);
+	long long bytes=sizeof(IntAnyDictionary)+(size()*(sizeof(ConstantSP)+4));
 
-	unordered_map<int,ConstantSP>::const_iterator it=dict_.begin();
-	unordered_map<int,ConstantSP>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		if(it->second.count()==1)
 			bytes+=it->second->getAllocatedMemory();
@@ -2400,8 +2381,8 @@ long long IntAnyDictionary::getAllocatedMemory() const {
 }
 
 bool IntAnyDictionary::containNotMarshallableObject() const{
-	unordered_map<int,ConstantSP>::const_iterator it=dict_.begin();
-	unordered_map<int,ConstantSP>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		if((*it).second->containNotMarshallableObject())
 			return true;
@@ -2413,53 +2394,53 @@ bool IntAnyDictionary::containNotMarshallableObject() const{
 bool FloatAnyDictionary::set(const ConstantSP& key, const ConstantSP& value){
     if(key->getRawType() != DT_FLOAT)
         throw RuntimeException("Key data type incompatible. Expecting Float");
-    else if(key->isScalar()){
+    if(key->isScalar()){
         dict_[key->getFloat()] = value;
         value->setIndependent(false);
         value->setTemporary(false);
+		return true;
     }
-    else{
-        int len = key->size();
-        if(len != value->size() && value->size() != 1)
-            return false;
 
-        if(dict_.empty())
-            dict_.reserve((std::size_t)(len*1.33));
-        int bufSize = std::min(len, Util::BUF_SIZE);
-        std::unique_ptr<float> buf(new float[bufSize]);
-        const float* pbuf;
-        int start = 0, counts = 0;
-        while(start < len){
-            counts = std::min(len - start, bufSize);
-            pbuf = key->getFloatConst(start,counts, buf.get());
-            for(int i = 0; i < counts; ++i){
-                ConstantSP obj = value->get(start + i);
-                obj->setIndependent(false);
-                obj->setTemporary(false);
-                dict_[pbuf[i]] = obj;
-            }
-            start += counts;
+    int len = key->size();
+    if (len != value->size() && value->size() != 1)
+        return false;
+
+    if (dict_.empty())
+        dict_.reserve((std::size_t)(len * 1.33));
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<float> buf(bufSize);
+    const float *pbuf;
+    int start = 0, counts = 0;
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = key->getFloatConst(start, counts, buf.data());
+        for (int i = 0; i < counts; ++i) {
+            ConstantSP obj = value->get(start + i);
+            obj->setIndependent(false);
+            obj->setTemporary(false);
+            dict_[pbuf[i]] = obj;
         }
+        start += counts;
     }
     return true;
 }
 
 bool FloatAnyDictionary::remove(const ConstantSP& key){
-    if(key->isScalar())
+    if (key->isScalar()) {
         dict_.erase(key->getFloat());
-    else{
-        int len = key->size();
-        int bufSize = std::min(len, Util::BUF_SIZE);
-        std::unique_ptr<float> buf(new float[bufSize]);
-        const float* pbuf = nullptr;
-        int counts = 0, start = 0;
-        while(start < len){
-            counts = std::min(len - start, bufSize);
-            pbuf = key->getFloatConst(start, counts, buf.get());
-            for(int i = 0; i < counts; ++i)
-                dict_.erase(pbuf[i]);
-            start += counts;
-        }
+        return true;
+    }
+    int len = key->size();
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<float> buf(bufSize);
+    const float *pbuf = nullptr;
+    int counts = 0, start = 0;
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = key->getFloatConst(start, counts, buf.data());
+        for (int i = 0; i < counts; ++i)
+            dict_.erase(pbuf[i]);
+        start += counts;
     }
     return true;
 }
@@ -2467,34 +2448,31 @@ bool FloatAnyDictionary::remove(const ConstantSP& key){
 ConstantSP FloatAnyDictionary::getMember(const ConstantSP& key) const{
     if(key->getRawType() != DT_FLOAT)
         throw RuntimeException("Key data type incompatible. Expecting Float");
-    else if(key->isScalar()){
+    if(key->isScalar()){
         auto it = dict_.find(key->getFloat());
         if(it == dict_.end())
             return Constant::void_;
-        else
-            return it->second;
+        return it->second;
     }
-    else{
-        ConstantSP result = Util::createVector(DT_ANY, key->size());
-        int len = key->size();
-        int bufSize = std::min(len, Util::BUF_SIZE);
-        std::unique_ptr<float> buf(new float[bufSize]);
-        const float* pbuf = nullptr;
-        int start = 0, counts = 0;
-        unordered_map<float, ConstantSP>::const_iterator it;
-        unordered_map<float, ConstantSP>::const_iterator end = dict_.end();
-        while(start < len){
-            counts =  std::min(len - start,bufSize);
-            pbuf = key->getFloatConst(start, counts, buf.get());
-            for(int i = 0; i < counts; ++i){
-                it=dict_.find(pbuf[i]);
-                result->set(start + i, it==end ? Constant::void_ : it->second);
-            }
-            start+=counts;
-        }
-        result->setNullFlag(result->hasNull());
-        return result;
-    }
+	ConstantSP result = Util::createVector(DT_ANY, key->size());
+	int len = key->size();
+	int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<float> buf(bufSize);
+	const float *pbuf = nullptr;
+	int start = 0, counts = 0;
+	unordered_map<float, ConstantSP>::const_iterator it;
+	auto end = dict_.end();
+	while (start < len) {
+		counts = std::min(len - start, bufSize);
+		pbuf = key->getFloatConst(start, counts, buf.data());
+		for (int i = 0; i < counts; ++i) {
+			it = dict_.find(pbuf[i]);
+			result->set(start + i, it == end ? Constant::void_ : it->second);
+		}
+		start += counts;
+	}
+	result->setNullFlag(result->hasNull());
+	return result;
 }
 
 ConstantSP FloatAnyDictionary::keys() const{
@@ -2503,12 +2481,12 @@ ConstantSP FloatAnyDictionary::keys() const{
     ConstantSP resultSP = Util::createVector(keyType_, len);
     int start = 0, counts = 0;
     int bufSize = std::min(len, Util::BUF_SIZE);
-    std::unique_ptr<float> buf(new float[bufSize]);
+    std::vector<float> buf(bufSize);
     float* pbuf = nullptr;
 
     while(start < len){
         counts = std::min(len - start, bufSize);
-        pbuf = resultSP->getFloatBuffer(start, counts, buf.get());
+        pbuf = resultSP->getFloatBuffer(start, counts, buf.data());
         for(int i = 0; i < counts; ++i){
             pbuf[i] = it->first;
             ++it;
@@ -2533,35 +2511,35 @@ ConstantSP FloatAnyDictionary::values() const{
     return result;
 }
 
-void FloatAnyDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
-    if(target->getRawType() != DT_FLOAT)
+void FloatAnyDictionary::contain(const ConstantSP &target, const ConstantSP &resultSP) const
+{
+    if (target->getRawType() != DT_FLOAT)
         throw RuntimeException("Key data type incompatible. Expecting Float");
-    if(target->isScalar()){
-        resultSP->setBool(dict_.find(target->getFloat()) != dict_.end());
+    if (target->isScalar()) {
+        resultSP->setBool(static_cast<char>(dict_.find(target->getFloat()) != dict_.end()));
+        return;
     }
-    else{
-        int len = target->size();
-        int bufSize = std::min(len, Util::BUF_SIZE);
-        std::unique_ptr<char> ret(new char[bufSize]);
-        char* pret = nullptr;
-        std::unique_ptr<float> buf(new float[bufSize]);
-        const float* pbuf = nullptr;
-        int start = 0, counts = 0;
+    int len = target->size();
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<char> ret(bufSize);
+    char *pret = nullptr;
+    std::vector<float> buf(bufSize);
+    const float *pbuf = nullptr;
+    int start = 0, counts = 0;
 
-        unordered_map<float, ConstantSP>::const_iterator end = dict_.end();
-        while(start < len){
-            counts = std::min(len-start, bufSize);
-            pbuf = target->getFloatConst(start, counts, buf.get());
-            pret= resultSP->getBoolBuffer(start, counts, ret.get());
-            for(int i = 0; i < counts; ++i)
-                pret[i] = dict_.find(pbuf[i]) != end;
-            resultSP->setBool(start, counts, pret);
-            start += counts;
-        }
+    auto end = dict_.end();
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = target->getFloatConst(start, counts, buf.data());
+        pret = resultSP->getBoolBuffer(start, counts, ret.data());
+        for (int i = 0; i < counts; ++i)
+            pret[i] = static_cast<char>(dict_.find(pbuf[i]) != end);
+        resultSP->setBool(start, counts, pret);
+        start += counts;
     }
 }
 
-string FloatAnyDictionary::getString() const{
+std::string FloatAnyDictionary::getString() const{
     string content;
     int len=std::min(Util::DISPLAY_ROWS, (int)dict_.size());
     int counts = 0;
@@ -2589,7 +2567,7 @@ string FloatAnyDictionary::getString() const{
 }
 
 long long FloatAnyDictionary::getAllocatedMemory() const{
-    long long bytes= sizeof(FloatAnyDictionary) + size() * (sizeof(ConstantSP) + 8);
+    long long bytes= sizeof(FloatAnyDictionary) + (size() * (sizeof(ConstantSP) + 8));
     auto it = dict_.begin();
     auto end = dict_.end();
     while(it != end){
@@ -2611,56 +2589,57 @@ bool FloatAnyDictionary::containNotMarshallableObject() const{
     return false;
 }
 
-bool DoubleAnyDictionary::set(const ConstantSP& key, const ConstantSP& value){
-    if(key->getRawType() != DT_DOUBLE)
+bool DoubleAnyDictionary::set(const ConstantSP &key, const ConstantSP &value)
+{
+    if (key->getRawType() != DT_DOUBLE)
         throw RuntimeException("Key data type incompatible. Expecting Double");
-    else if(key->isScalar()){
+    if (key->isScalar()) {
         dict_[key->getDouble()] = value;
         value->setIndependent(false);
         value->setTemporary(false);
+        return true;
     }
-    else{
-        int len = key->size();
-        if(len != value->size() && value->size() != 1)
-            return false;
+    int len = key->size();
+    if (len != value->size() && value->size() != 1)
+        return false;
 
-        if(dict_.empty())
-            dict_.reserve((std::size_t)(len*1.33));
-        int bufSize = std::min(len, Util::BUF_SIZE);
-        std::unique_ptr<double> buf(new double[bufSize]);
-        const double* pbuf = nullptr;
-        int start = 0, counts = 0;
-        while(start < len){
-            counts = std::min(len - start, bufSize);
-            pbuf = key->getDoubleConst(start, counts, buf.get());
-            for(int i = 0; i < counts; ++i){
-                ConstantSP obj = value->get(start + i);
-                obj->setIndependent(false);
-                obj->setTemporary(false);
-                dict_[pbuf[i]] = obj;
-            }
-            start += counts;
+    if (dict_.empty())
+        dict_.reserve((std::size_t)(len * 1.33));
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<double> buf(bufSize);
+    const double *pbuf = nullptr;
+    int start = 0, counts = 0;
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = key->getDoubleConst(start, counts, buf.data());
+        for (int i = 0; i < counts; ++i) {
+            ConstantSP obj = value->get(start + i);
+            obj->setIndependent(false);
+            obj->setTemporary(false);
+            dict_[pbuf[i]] = obj;
         }
+        start += counts;
     }
     return true;
 }
 
-bool DoubleAnyDictionary::remove(const ConstantSP& key){
-    if(key->isScalar())
+bool DoubleAnyDictionary::remove(const ConstantSP &key)
+{
+    if (key->isScalar()) {
         dict_.erase(key->getDouble());
-    else{
-        int len = key->size();
-        int bufSize = std::min(len, Util::BUF_SIZE);
-        std::unique_ptr<double> buf(new double[bufSize]);
-        const double* pbuf = nullptr;
-        int counts = 0, start = 0;
-        while(start < len){
-            counts = std::min(len - start, bufSize);
-            pbuf = key->getDoubleConst(start, counts, buf.get());
-            for(int i = 0; i < counts; ++i)
-                dict_.erase(pbuf[i]);
-            start += counts;
-        }
+        return true;
+    }
+    int len = key->size();
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<double> buf(bufSize);
+    const double *pbuf = nullptr;
+    int counts = 0, start = 0;
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = key->getDoubleConst(start, counts, buf.data());
+        for (int i = 0; i < counts; ++i)
+            dict_.erase(pbuf[i]);
+        start += counts;
     }
     return true;
 }
@@ -2668,34 +2647,31 @@ bool DoubleAnyDictionary::remove(const ConstantSP& key){
 ConstantSP DoubleAnyDictionary::getMember(const ConstantSP& key) const{
     if(key->getRawType() != DT_DOUBLE)
         throw RuntimeException("Key data type incompatible. Expecting Double");
-    else if(key->isScalar()){
+    if(key->isScalar()){
         auto it = dict_.find(key->getDouble());
         if(it == dict_.end())
             return Constant::void_;
-        else
-            return it->second;
+        return it->second;
     }
-    else{
-        ConstantSP result = Util::createVector(DT_ANY, key->size());
-        int len = key->size();
-        int bufSize = std::min(len, Util::BUF_SIZE);
-        std::unique_ptr<double> buf(new double[bufSize]);
-        const double* pbuf = nullptr;
-        int start = 0, counts = 0;
-        unordered_map<double, ConstantSP>::const_iterator it;
-        unordered_map<double, ConstantSP>::const_iterator end = dict_.end();
-        while(start < len){
-            counts =  std::min(len - start,bufSize);
-            pbuf = key->getDoubleConst(start, counts, buf.get());
-            for(int i = 0; i < counts; ++i){
-                it=dict_.find(pbuf[i]);
-                result->set(start + i, it==end ? Constant::void_ : it->second);
-            }
-            start+=counts;
-        }
-        result->setNullFlag(result->hasNull());
-        return result;
-    }
+	ConstantSP result = Util::createVector(DT_ANY, key->size());
+	int len = key->size();
+	int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<double> buf(bufSize);
+	const double *pbuf = nullptr;
+	int start = 0, counts = 0;
+	unordered_map<double, ConstantSP>::const_iterator it;
+	auto end = dict_.end();
+	while (start < len) {
+		counts = std::min(len - start, bufSize);
+		pbuf = key->getDoubleConst(start, counts, buf.data());
+		for (int i = 0; i < counts; ++i) {
+			it = dict_.find(pbuf[i]);
+			result->set(start + i, it == end ? Constant::void_ : it->second);
+		}
+		start += counts;
+	}
+	result->setNullFlag(result->hasNull());
+	return result;
 }
 
 ConstantSP DoubleAnyDictionary::keys() const{
@@ -2704,12 +2680,12 @@ ConstantSP DoubleAnyDictionary::keys() const{
     ConstantSP resultSP = Util::createVector(keyType_, len);
     int start = 0, counts = 0;
     int bufSize = std::min(len, Util::BUF_SIZE);
-    std::unique_ptr<double> buf(new double[bufSize]);
+    std::vector<double> buf(bufSize);
     double* pbuf = nullptr;
 
     while(start < len){
         counts = std::min(len - start, bufSize);
-        pbuf = resultSP->getDoubleBuffer(start, counts, buf.get());
+        pbuf = resultSP->getDoubleBuffer(start, counts, buf.data());
         for(int i = 0; i < counts; ++i){
             pbuf[i] = it->first;
             ++it;
@@ -2734,35 +2710,35 @@ ConstantSP DoubleAnyDictionary::values() const{
     return result;
 }
 
-void DoubleAnyDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
-    if(target->getRawType() != DT_DOUBLE)
+void DoubleAnyDictionary::contain(const ConstantSP &target, const ConstantSP &resultSP) const
+{
+    if (target->getRawType() != DT_DOUBLE)
         throw RuntimeException("Key data type incompatible. Expecting Double");
-    if(target->isScalar()){
-        resultSP->setBool(dict_.find(target->getDouble()) != dict_.end());
+    if (target->isScalar()) {
+        resultSP->setBool(static_cast<char>(dict_.find(target->getDouble()) != dict_.end()));
+        return;
     }
-    else{
-        int len = target->size();
-        int bufSize = std::min(len, Util::BUF_SIZE);
-        std::unique_ptr<char> ret(new char[bufSize]);
-        char* pret = nullptr;
-        std::unique_ptr<double> buf(new double[bufSize]);
-        const double* pbuf = nullptr;
-        int start = 0, counts = 0;
+    int len = target->size();
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<char> ret(bufSize);
+    char *pret = nullptr;
+    std::vector<double> buf(bufSize);
+    const double *pbuf = nullptr;
+    int start = 0, counts = 0;
 
-        auto end = dict_.end();
-        while(start < len){
-            counts = std::min(len-start, bufSize);
-            pbuf = target->getDoubleConst(start, counts, buf.get());
-            pret= resultSP->getBoolBuffer(start, counts, ret.get());
-            for(int i = 0; i < counts; ++i)
-                pret[i] = dict_.find(pbuf[i]) != end;
-            resultSP->setBool(start, counts, pret);
-            start += counts;
-        }
+    auto end = dict_.end();
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = target->getDoubleConst(start, counts, buf.data());
+        pret = resultSP->getBoolBuffer(start, counts, ret.data());
+        for (int i = 0; i < counts; ++i)
+            pret[i] = static_cast<char>(dict_.find(pbuf[i]) != end);
+        resultSP->setBool(start, counts, pret);
+        start += counts;
     }
 }
 
-string DoubleAnyDictionary::getString() const{
+std::string DoubleAnyDictionary::getString() const{
     string content;
     int len=std::min(Util::DISPLAY_ROWS, (int)dict_.size());
     int counts = 0;
@@ -2790,7 +2766,7 @@ string DoubleAnyDictionary::getString() const{
 }
 
 long long DoubleAnyDictionary::getAllocatedMemory() const{
-    long long bytes= sizeof(DoubleAnyDictionary) + size() * (sizeof(ConstantSP) + 8);
+    long long bytes= sizeof(DoubleAnyDictionary) + (size() * (sizeof(ConstantSP) + 8));
     auto it = dict_.begin();
     auto end = dict_.end();
     while(it != end){
@@ -2812,113 +2788,108 @@ bool DoubleAnyDictionary::containNotMarshallableObject() const{
     return false;
 }
 
-bool LongAnyDictionary::remove(const ConstantSP& key){
-	if(key->isScalar())
-		dict_.erase(key->getLong());
-	else{
-		int len=key->size();
-		int bufSize=std::min(len,Util::BUF_SIZE);
-		std::unique_ptr<long long> buf(new long long[bufSize]);
-		//long long buf[bufSize];
-		const long long* pbuf;
-		int counts;
-		int start = 0;
-		while(start < len){
-			counts = std::min(len - start, bufSize);
-			pbuf = key->getLongConst(start, counts, buf.get());
-			for(int i=0; i<counts; ++i)
-				dict_.erase(pbuf[i]);
-			start += counts;
-		}
-	}
-	return true;
+bool LongAnyDictionary::remove(const ConstantSP &key)
+{
+    if (key->isScalar()) {
+        dict_.erase(key->getLong());
+        return true;
+    }
+    int len = key->size();
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<long long> buf(bufSize);
+    const long long *pbuf;
+    int counts;
+    int start = 0;
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = key->getLongConst(start, counts, buf.data());
+        for (int i = 0; i < counts; ++i)
+            dict_.erase(pbuf[i]);
+        start += counts;
+    }
+    return true;
 }
 
-bool LongAnyDictionary::set(const ConstantSP& key, const ConstantSP& value){
-	if(key->getRawType() != DT_LONG)
-		throw RuntimeException("Key data type incompatible. Expecting LONG or the like");
-	else if(key->isScalar()){
-		dict_[key->getLong()]=value;
-		value->setIndependent(false);
-		value->setTemporary(false);
-	}
-	else{
-		int len=key->size();
-		if(len!=value->size())
-			return false;
+bool LongAnyDictionary::set(const ConstantSP &key, const ConstantSP &value)
+{
+    if (key->getRawType() != DT_LONG)
+        throw RuntimeException("Key data type incompatible. Expecting LONG or the like");
+    if (key->isScalar()) {
+        dict_[key->getLong()] = value;
+        value->setIndependent(false);
+        value->setTemporary(false);
+        return true;
+    }
+    int len = key->size();
+    if (len != value->size())
+        return false;
 
-		if(dict_.empty())
-			dict_.reserve((int)(len*1.33));
-		int bufSize=std::min(len,Util::BUF_SIZE);
-		//long long buf[bufSize];
-		std::unique_ptr<long long> buf(new long long[bufSize]);
-		const long long* pbuf;
-		int start=0;
-		int counts;
-		while(start<len){
-			counts=std::min(len-start,bufSize);
-			pbuf=key->getLongConst(start,counts, buf.get());
-			for(int i=0;i<counts;++i){
-				ConstantSP obj = value->get(start+i);
-				obj->setIndependent(false);
-				obj->setTemporary(false);
-				dict_[pbuf[i]] = obj;
-			}
-			start+=counts;
-		}
-	}
-	return true;
+    if (dict_.empty())
+        dict_.reserve((int)(len * 1.33));
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<long long> buf(bufSize);
+    const long long *pbuf;
+    int start = 0;
+    int counts;
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = key->getLongConst(start, counts, buf.data());
+        for (int i = 0; i < counts; ++i) {
+            ConstantSP obj = value->get(start + i);
+            obj->setIndependent(false);
+            obj->setTemporary(false);
+            dict_[pbuf[i]] = obj;
+        }
+        start += counts;
+    }
+    return true;
 }
 
 ConstantSP LongAnyDictionary::getMember(const ConstantSP& key) const {
 	if(key->getRawType() != DT_LONG)
 		throw RuntimeException("Key data type incompatible. Expecting LONG or the like");
-	else if(key->isScalar()){
-		unordered_map<long long,ConstantSP>::const_iterator it=dict_.find(key->getLong());
+	if(key->isScalar()){
+		auto it=dict_.find(key->getLong());
 		if(it==dict_.end())
 			return Constant::void_;
-		else
-			return it->second;
+		return it->second;
 	}
-	else{
-		ConstantSP result = Util::createVector(DT_ANY, key->size());
-		int len=key->size();
-		int bufSize=std::min(len,Util::BUF_SIZE);
-		//long long buf[bufSize];
-		std::unique_ptr<long long> buf(new long long[bufSize]);
-		const long long* pbuf;
-		int start=0;
-		int counts;
-		unordered_map<long long,ConstantSP>::const_iterator it;
-		unordered_map<long long,ConstantSP>::const_iterator end=dict_.end();
-		while(start<len){
-			counts=std::min(len-start,bufSize);
-			//pbuf=key->getLongConst(start,counts,buf);
-			pbuf = key->getLongConst(start, counts, buf.get());
-			for(int i=0;i<counts;++i){
-				it=dict_.find(pbuf[i]);
-				result->set(start + i, it==end ? Constant::void_ : it->second);
-			}
-			start+=counts;
+	ConstantSP result = Util::createVector(DT_ANY, key->size());
+	int len = key->size();
+	int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<long long> buf(bufSize);
+	const long long *pbuf;
+	int start = 0;
+	int counts;
+	unordered_map<long long, ConstantSP>::const_iterator it;
+	auto end = dict_.end();
+	while (start < len) {
+		counts = std::min(len - start, bufSize);
+		// pbuf=key->getLongConst(start,counts,buf);
+		pbuf = key->getLongConst(start, counts, buf.data());
+		for (int i = 0; i < counts; ++i) {
+			it = dict_.find(pbuf[i]);
+			result->set(start + i, it == end ? Constant::void_ : it->second);
 		}
-		result->setNullFlag(result->hasNull());
-		return result;
+		start += counts;
 	}
+	result->setNullFlag(result->hasNull());
+	return result;
 }
 
 ConstantSP LongAnyDictionary::keys() const {
-	unordered_map<long long,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
 	int counts;
 	int bufSize=std::min(len,Util::BUF_SIZE);
-	std::unique_ptr<long long> buf(new long long[bufSize]); //long long buf[bufSize];
+    std::vector<long long> buf(bufSize);
 	long long* pbuf;
 
 	while(start<len){
 		counts=std::min(len-start,bufSize);
-		pbuf=resultSP->getLongBuffer(start,counts,buf.get());
+		pbuf=resultSP->getLongBuffer(start,counts,buf.data());
 		for(int i=0;i<counts;++i){
 			pbuf[i]=it->first;
 			++it;
@@ -2930,7 +2901,7 @@ ConstantSP LongAnyDictionary::keys() const {
 }
 
 ConstantSP LongAnyDictionary::values() const {
-	unordered_map<long long,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP result=Util::createVector(DT_ANY,len);
 
@@ -2943,42 +2914,42 @@ ConstantSP LongAnyDictionary::values() const {
 	return result;
 }
 
-void LongAnyDictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
-	if(target->getRawType() != DT_LONG)
-		throw RuntimeException("Key data type incompatible. Expecting LONG or the like");
-	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getLong())!=dict_.end());
-	}
-	else{
-		int len=target->size();
-		int bufSize=std::min(len,Util::BUF_SIZE);
-		std::unique_ptr<char> ret(new char[bufSize]);//char ret[bufSize];
-		char* pret;
-		std::unique_ptr<long long> buf(new long long[bufSize]); //long long buf[bufSize];
-		const long long* pbuf;
-		int start=0;
-		int counts;
+void LongAnyDictionary::contain(const ConstantSP &target, const ConstantSP &resultSP) const
+{
+    if (target->getRawType() != DT_LONG)
+        throw RuntimeException("Key data type incompatible. Expecting LONG or the like");
+    if (target->isScalar()) {
+        resultSP->setBool(static_cast<char>(dict_.find(target->getLong()) != dict_.end()));
+        return;
+    }
+    int len = target->size();
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<char> ret(bufSize);
+    char *pret;
+    std::vector<long long> buf(bufSize);
+    const long long *pbuf;
+    int start = 0;
+    int counts;
 
-		unordered_map<long long,ConstantSP>::const_iterator it;
-		unordered_map<long long,ConstantSP>::const_iterator end=dict_.end();
-		while(start<len){
-			counts=std::min(len-start,bufSize);
-			pbuf=target->getLongConst(start,counts,buf.get());
-			pret=resultSP->getBoolBuffer(start,counts,ret.get());
-			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
-			resultSP->setBool(start,counts,pret);
-			start+=counts;
-		}
-	}
+    unordered_map<long long, ConstantSP>::const_iterator it;
+    auto end = dict_.end();
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = target->getLongConst(start, counts, buf.data());
+        pret = resultSP->getBoolBuffer(start, counts, ret.data());
+        for (int i = 0; i < counts; ++i)
+            pret[i] = static_cast<char>(dict_.find(pbuf[i]) != end);
+        resultSP->setBool(start, counts, pret);
+        start += counts;
+    }
 }
 
-string LongAnyDictionary::getString() const {
+std::string LongAnyDictionary::getString() const {
 	string content;
 	int len=std::min(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
 	ConstantSP key=Util::createConstant(keyType_);
-	unordered_map<long long,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	while(counts<len){
 		key->setLong(it->first);
 		content.append(key->getString());
@@ -3001,10 +2972,10 @@ string LongAnyDictionary::getString() const {
 }
 
 long long LongAnyDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(LongAnyDictionary)+size()*(sizeof(ConstantSP)+8);
+	long long bytes=sizeof(LongAnyDictionary)+(size()*(sizeof(ConstantSP)+8));
 
-	unordered_map<long long,ConstantSP>::const_iterator it=dict_.begin();
-	unordered_map<long long,ConstantSP>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		if(it->second.count()==1)
 			bytes+=it->second->getAllocatedMemory();
@@ -3014,8 +2985,8 @@ long long LongAnyDictionary::getAllocatedMemory() const {
 }
 
 bool LongAnyDictionary::containNotMarshallableObject() const{
-	unordered_map<long long,ConstantSP>::const_iterator it=dict_.begin();
-	unordered_map<long long,ConstantSP>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		if((*it).second->containNotMarshallableObject())
 			return true;
@@ -3029,8 +3000,8 @@ Int128Dictionary::Int128Dictionary(const unordered_map<Guid,U8>& dict, DATA_TYPE
 	:AbstractDictionary(keyType,type),dict_(dict){
 	if(type_!=DT_STRING)
 		return;
-	unordered_map<Guid,U8>::iterator it=dict_.begin();
-	unordered_map<Guid,U8>::iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	size_t len;
 	char* tmp;
 	while(it!=end){
@@ -3043,35 +3014,36 @@ Int128Dictionary::Int128Dictionary(const unordered_map<Guid,U8>& dict, DATA_TYPE
 }
 
 Int128Dictionary::~Int128Dictionary(){
-	if(type_!=DT_STRING)
+	if(type_ != DT_STRING && type_ != DT_BLOB)
 		return;
-	unordered_map<Guid,U8>::const_iterator it=dict_.begin();
-	unordered_map<Guid,U8>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		delete[] it->second.pointer;
 		++it;
 	}
 }
 
-bool Int128Dictionary::remove(const ConstantSP& key){
-	if(key->isScalar())
-		dict_.erase(key->getInt128());
-	else{
-		int len=key->size();
-		int bufSize=std::min(len,Util::BUF_SIZE);
-		std::unique_ptr<unsigned char[]> buf(new unsigned char[bufSize*16]);//unsigned char buf[bufSize*16]; 
-		const Guid* pbuf;
-		int counts;
-		int start = 0;
-		while(start < len){
-			counts = std::min(len - start, bufSize);
-			pbuf = (const Guid*)key->getBinaryConst(start, counts, 16, buf.get());
-			for(int i=0; i<counts; ++i)
-				dict_.erase(pbuf[i]);
-			start += counts;
-		}
-	}
-	return true;
+bool Int128Dictionary::remove(const ConstantSP &key)
+{
+    if (key->isScalar()) {
+        dict_.erase(key->getInt128());
+        return true;
+    }
+    int len = key->size();
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<unsigned char> buf(bufSize * 16);
+    const Guid *pbuf;
+    int counts;
+    int start = 0;
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = (const Guid *)key->getBinaryConst(start, counts, 16, buf.data());
+        for (int i = 0; i < counts; ++i)
+            dict_.erase(pbuf[i]);
+        start += counts;
+    }
+    return true;
 }
 
 bool Int128Dictionary::set(const ConstantSP& key, const ConstantSP& value){
@@ -3081,81 +3053,78 @@ bool Int128Dictionary::set(const ConstantSP& key, const ConstantSP& value){
 		dict_[key->getInt128()]=tmp;
 		return true;
 	}
-	else{
-		int len=key->size();
-		if(len!=value->size())
-			return false;
+	int len = key->size();
+	if (len != value->size())
+		return false;
 
-		if(dict_.empty())
-			dict_.reserve((int)(len*1.33));
-		int bufSize=std::min(len,Util::BUF_SIZE);
-		std::unique_ptr<unsigned char> buf(new unsigned char[bufSize * 16]); //unsigned char buf[bufSize*16];
-		const Guid* pbuf;
-		std::unique_ptr<U8> tmp(new U8[bufSize]); //U8 tmp[bufSize];
-		int start=0;
-		int counts;
-		std::size_t dictSize=dict_.size();
-		while(start<len){
-			counts=std::min(len-start,bufSize);
-			pbuf=(const Guid*)key->getBinaryConst(start,counts,16,buf.get());
-			(*vreader_)(value,start,counts,tmp.get());
-			if(type_==DT_STRING){
-				for(int i=0;i<counts;++i){
-					U8& cur=dict_[pbuf[i]];
-					if(dict_.size()==dictSize)
-						delete[] cur.pointer;
-					else
-						++dictSize;
-					cur= tmp.get()[i];
-				}
+	if (dict_.empty())
+		dict_.reserve((int)(len * 1.33));
+	int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<unsigned char> buf(bufSize * 16);
+	const Guid *pbuf;
+    std::vector<U8> tmp(bufSize);
+	int start = 0;
+	int counts;
+	std::size_t dictSize = dict_.size();
+	while (start < len) {
+		counts = std::min(len - start, bufSize);
+		pbuf = (const Guid *)key->getBinaryConst(start, counts, 16, buf.data());
+		(*vreader_)(value, start, counts, tmp.data());
+		if (type_ == DT_STRING) {
+			for (int i = 0; i < counts; ++i) {
+				U8 &cur = dict_[pbuf[i]];
+				if (dict_.size() == dictSize)
+					delete[] cur.pointer;
+				else
+					++dictSize;
+				cur = tmp[i];
 			}
-			else{
-				for(int i=0;i<counts;++i)
-					dict_[pbuf[i]]=(tmp.get())[i];
-			}
-			start+=counts;
+		} else {
+			for (int i = 0; i < counts; ++i)
+				dict_[pbuf[i]] = tmp[i];
 		}
-		return true;
+		start += counts;
 	}
+	return true;
 }
 
-ConstantSP Int128Dictionary::getMember(const ConstantSP& key) const{
-	ConstantSP result=createValues(key);
-	if(key->isScalar()){
-		unordered_map<Guid,U8>::const_iterator it=dict_.find(key->getInt128());
-		if(it==dict_.end())
-			(*swriter_)(nullVal_,result);
-		else
-			(*swriter_)(it->second,result);
-	}
-	else{
-		int len=key->size();
-		int bufSize=std::min(len,Util::BUF_SIZE);
-		std::unique_ptr<unsigned char> buf(new unsigned char[bufSize * 16]); //unsigned char buf[bufSize*16];
-		const Guid* pbuf;
-		std::unique_ptr<U8> value(new U8[bufSize ]); //U8 value[bufSize];
-		int start=0;
-		int counts;
-		unordered_map<Guid,U8>::const_iterator it;
-		unordered_map<Guid,U8>::const_iterator end=dict_.end();
-		while(start<len){
-			counts=std::min(len-start,bufSize);
-			pbuf=(const Guid*)key->getBinaryConst(start,counts,16,buf.get());
-			for(int i=0;i<counts;++i){
-				it=dict_.find(pbuf[i]);
-				value.get()[i]=it==end?nullVal_:it->second;
-			}
-			(*vwriter_)(value.get(),result,start,counts);
-			start+=counts;
-		}
-		result->setNullFlag(result->hasNull());
-	}
-	return result;
+ConstantSP Int128Dictionary::getMember(const ConstantSP &key) const
+{
+    ConstantSP result = createValues(key);
+    if (key->isScalar()) {
+        auto it = dict_.find(key->getInt128());
+        if (it == dict_.end())
+            (*swriter_)(nullVal_, result);
+        else
+            (*swriter_)(it->second, result);
+        return result;
+    }
+    int len = key->size();
+    int bufSize = std::min(len, Util::BUF_SIZE);
+    std::vector<unsigned char> buf(bufSize * 16);
+    const Guid *pbuf;
+    std::vector<U8> value(bufSize);
+    int start = 0;
+    int counts;
+    unordered_map<Guid, U8>::const_iterator it;
+    auto end = dict_.end();
+    while (start < len) {
+        counts = std::min(len - start, bufSize);
+        pbuf = (const Guid *)key->getBinaryConst(start, counts, 16, buf.data());
+        for (int i = 0; i < counts; ++i) {
+            it = dict_.find(pbuf[i]);
+            value[i] = it == end ? nullVal_ : it->second;
+        }
+        (*vwriter_)(value.data(), result, start, counts);
+        start += counts;
+    }
+    result->setNullFlag(result->hasNull());
+    return result;
 }
 
 void Int128Dictionary::contain(const ConstantSP& target, const ConstantSP& resultSP) const{
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getInt128())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getInt128())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -3168,13 +3137,13 @@ void Int128Dictionary::contain(const ConstantSP& target, const ConstantSP& resul
 		int counts;
 
 		unordered_map<Guid,U8>::const_iterator it;
-		unordered_map<Guid,U8>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=std::min(len-start,bufSize);
 			pbuf=(const Guid*)target->getBinaryConst(start,counts,16,buf.get());
 			pret=resultSP->getBoolBuffer(start,counts,ret.get());
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
@@ -3182,18 +3151,18 @@ void Int128Dictionary::contain(const ConstantSP& target, const ConstantSP& resul
 }
 
 ConstantSP Int128Dictionary::keys() const {
-	unordered_map<Guid,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
 	int counts;
 	int bufSize=std::min(len,Util::BUF_SIZE);
-	std::unique_ptr<unsigned char> buf(new unsigned char[bufSize * 16]); //unsigned char buf[bufSize*16];
+    std::vector<unsigned char> buf(bufSize * 16);
 	Guid* pbuf;
 
 	while(start<len){
 		counts=std::min(len-start,bufSize);
-		pbuf=(Guid*)resultSP->getBinaryBuffer(start,counts,16,buf.get());
+		pbuf=(Guid*)resultSP->getBinaryBuffer(start,counts,16,buf.data());
 		for(int i=0;i<counts;++i){
 			pbuf[i]=it->first;
 			++it;
@@ -3205,32 +3174,32 @@ ConstantSP Int128Dictionary::keys() const {
 }
 
 ConstantSP Int128Dictionary::values() const {
-	unordered_map<Guid,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP= Util::createVector(type_,len);
 
 	int start=0;
 	int counts;
 	int bufSize=std::min(len,Util::BUF_SIZE);
-	std::unique_ptr<U8> buf(new U8[bufSize]); //U8 buf[bufSize];
+    std::vector<U8> buf(bufSize);
 
 	while(start<len){
 		counts=std::min(len-start,bufSize);
 		for(int i=0;i<counts;++i){
-			buf.get()[i]=it->second;
+			buf[i]=it->second;
 			++it;
 		}
-		(*vwriter_)(buf.get(),resultSP,start,counts);
+		(*vwriter_)(buf.data(),resultSP,start,counts);
 		start+=counts;
 	}
 	return resultSP;
 }
 
-string Int128Dictionary::getString() const {
+std::string Int128Dictionary::getString() const {
 	string content;
 	int len=std::min(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
-	unordered_map<Guid,U8>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	ConstantSP key=Util::createConstant(keyType_);
 	ConstantSP value=Util::createConstant(type_);
 	while(counts<len){
@@ -3248,10 +3217,10 @@ string Int128Dictionary::getString() const {
 }
 
 long long Int128Dictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(Int128Dictionary)+size()*24;
+	long long bytes=sizeof(Int128Dictionary)+(size()*24);
 	if(getType()==DT_STRING){
-		unordered_map<Guid,U8>::const_iterator it=dict_.begin();
-		unordered_map<Guid,U8>::const_iterator end=dict_.end();
+		auto it=dict_.begin();
+		auto end=dict_.end();
 		while(it!=end){
 			bytes += strlen(it->second.pointer);
 			++it;
@@ -3287,12 +3256,11 @@ bool Int128AnyDictionary::remove(const ConstantSP& key){
 bool Int128AnyDictionary::set(const ConstantSP& key, const ConstantSP& value){
 	if(key->getRawType() != DT_INT128)
 		throw RuntimeException("Key data type incompatible. Expecting INT128 or the like.");
-	else if(key->isScalar()){
+	if(key->isScalar()){
 		dict_[key->getInt128()]=value;
 		value->setIndependent(false);
 		value->setTemporary(false);
-	}
-	else{
+	} else{
 		int len=key->size();
 		if(len!=value->size())
 			return false;
@@ -3322,50 +3290,47 @@ bool Int128AnyDictionary::set(const ConstantSP& key, const ConstantSP& value){
 ConstantSP Int128AnyDictionary::getMember(const ConstantSP& key) const {
 	if(key->getRawType() != DT_INT128)
 		throw RuntimeException("Key data type incompatible. Expecting INT128 or the like.");
-	else if(key->isScalar()){
-		unordered_map<Guid,ConstantSP>::const_iterator it=dict_.find(key->getInt128());
+	if(key->isScalar()){
+		auto it=dict_.find(key->getInt128());
 		if(it==dict_.end())
 			return Constant::void_;
-		else
-			return it->second;
+		return it->second;
 	}
-	else{
-		ConstantSP result = Util::createVector(DT_ANY, key->size());
-		int len=key->size();
-		int bufSize=std::min(len,Util::BUF_SIZE);
-		std::unique_ptr<unsigned char[]> buf(new unsigned char[bufSize * 16]); //unsigned char buf[bufSize*16];
-		const Guid* pbuf;
-		int start=0;
-		int counts;
-		unordered_map<Guid,ConstantSP>::const_iterator it;
-		unordered_map<Guid,ConstantSP>::const_iterator end=dict_.end();
-		while(start<len){
-			counts=std::min(len-start,bufSize);
-			pbuf= (const Guid*)key->getBinaryConst(start,counts,16,buf.get());
-			for(int i=0;i<counts;++i){
-				it=dict_.find(pbuf[i]);
-				result->set(start + i, it==end ? Constant::void_ : it->second);
-			}
-			start+=counts;
+	ConstantSP result = Util::createVector(DT_ANY, key->size());
+	int len = key->size();
+	int bufSize = std::min(len, Util::BUF_SIZE);
+	std::unique_ptr<unsigned char[]> buf(new unsigned char[bufSize * 16]); // unsigned char buf[bufSize*16];
+	const Guid *pbuf;
+	int start = 0;
+	int counts;
+	unordered_map<Guid, ConstantSP>::const_iterator it;
+	auto end = dict_.end();
+	while (start < len) {
+		counts = std::min(len - start, bufSize);
+		pbuf = (const Guid *)key->getBinaryConst(start, counts, 16, buf.get());
+		for (int i = 0; i < counts; ++i) {
+			it = dict_.find(pbuf[i]);
+			result->set(start + i, it == end ? Constant::void_ : it->second);
 		}
-		result->setNullFlag(result->hasNull());
-		return result;
+		start += counts;
 	}
+	result->setNullFlag(result->hasNull());
+	return result;
 }
 
 ConstantSP Int128AnyDictionary::keys() const {
-	unordered_map<Guid,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP resultSP=Util::createVector(keyType_,len);
 	int start=0;
 	int counts;
 	int bufSize=std::min(len,Util::BUF_SIZE);
-	std::unique_ptr<unsigned char> buf(new unsigned char[bufSize * 16]); //unsigned char buf[bufSize*16];
+    std::vector<unsigned char> buf(bufSize * 16);
 	Guid* pbuf;
 
 	while(start<len){
 		counts=std::min(len-start,bufSize);
-		pbuf = (Guid*)resultSP->getBinaryBuffer(start,counts,16,buf.get());
+		pbuf = (Guid*)resultSP->getBinaryBuffer(start,counts,16,buf.data());
 		for(int i=0;i<counts;++i){
 			pbuf[i]=it->first;
 			++it;
@@ -3377,7 +3342,7 @@ ConstantSP Int128AnyDictionary::keys() const {
 }
 
 ConstantSP Int128AnyDictionary::values() const {
-	unordered_map<Guid,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	int len=size();
 	ConstantSP result=Util::createVector(DT_ANY,len);
 
@@ -3394,7 +3359,7 @@ void Int128AnyDictionary::contain(const ConstantSP& target, const ConstantSP& re
 	if(target->getRawType() != DT_INT128)
 		throw RuntimeException("Key data type incompatible. Expecting INT128 or the like.");
 	if(target->isScalar()){
-		resultSP->setBool(dict_.find(target->getInt128())!=dict_.end());
+		resultSP->setBool(static_cast<char>(dict_.find(target->getInt128())!=dict_.end()));
 	}
 	else{
 		int len=target->size();
@@ -3407,25 +3372,25 @@ void Int128AnyDictionary::contain(const ConstantSP& target, const ConstantSP& re
 		int counts;
 
 		unordered_map<Guid,ConstantSP>::const_iterator it;
-		unordered_map<Guid,ConstantSP>::const_iterator end=dict_.end();
+		auto end=dict_.end();
 		while(start<len){
 			counts=std::min(len-start,bufSize);
 			pbuf= (const Guid*)target->getBinaryConst(start, counts, 16, buf.get());
 			pret=resultSP->getBoolBuffer(start,counts,ret.get());
 			for(int i=0;i<counts;++i)
-				pret[i]=dict_.find(pbuf[i])!=end;
+				pret[i]=static_cast<char>(dict_.find(pbuf[i])!=end);
 			resultSP->setBool(start,counts,pret);
 			start+=counts;
 		}
 	}
 }
 
-string Int128AnyDictionary::getString() const {
+std::string Int128AnyDictionary::getString() const {
 	string content;
 	int len=std::min(Util::DISPLAY_ROWS,(int)dict_.size());
 	int counts=0;
 	ConstantSP key=Util::createConstant(keyType_);
-	unordered_map<Guid,ConstantSP>::const_iterator it=dict_.begin();
+	auto it=dict_.begin();
 	while(counts<len){
 		key->setBinary(it->first.bytes(), 16);
 		content.append(key->getString());
@@ -3448,10 +3413,10 @@ string Int128AnyDictionary::getString() const {
 }
 
 long long Int128AnyDictionary::getAllocatedMemory() const {
-	long long bytes=sizeof(IntAnyDictionary)+size()*(sizeof(ConstantSP)+16);
+	long long bytes=sizeof(IntAnyDictionary)+(size()*(sizeof(ConstantSP)+16));
 
-	unordered_map<Guid,ConstantSP>::const_iterator it=dict_.begin();
-	unordered_map<Guid,ConstantSP>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		if(it->second.count()==1)
 			bytes+=it->second->getAllocatedMemory();
@@ -3461,8 +3426,8 @@ long long Int128AnyDictionary::getAllocatedMemory() const {
 }
 
 bool Int128AnyDictionary::containNotMarshallableObject() const{
-	unordered_map<Guid,ConstantSP>::const_iterator it=dict_.begin();
-	unordered_map<Guid,ConstantSP>::const_iterator end=dict_.end();
+	auto it=dict_.begin();
+	auto end=dict_.end();
 	while(it!=end){
 		if((*it).second->containNotMarshallableObject())
 			return true;
@@ -3471,4 +3436,4 @@ bool Int128AnyDictionary::containNotMarshallableObject() const{
 	return false;
 }
 
-}
+} // namespace dolphindb

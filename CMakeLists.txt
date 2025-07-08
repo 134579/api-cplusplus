@@ -13,7 +13,11 @@ option(WITH_UNITTEST "Compile testcases." OFF)
 
 add_library(${CMAKE_PROJECT_NAME})
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_11)
-add_subdirectory(src)
+target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE c_std_99)
+
+if (API_TEST)
+    add_subdirectory(test)
+endif()
 
 if (USE_OPENSSL)
     if (NOT LINK_SHARED_LIBS)
@@ -22,9 +26,8 @@ if (USE_OPENSSL)
     # FindOpenSSL from cmake
     find_package(OpenSSL)
     if (OPENSSL_FOUND)
+        target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
         target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_OPENSSL)
-        target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${OPENSSL_INCLUDE_DIR})
-        target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY})
     else()
         message(WARNING
         "Failed to compile ${CMAKE_PROJECT_NAME} with OpenSSL. Encrypted communication features are unavailable.\n"
@@ -122,67 +125,13 @@ if (WITH_UNITTEST)
     )
 endif()
 
-if (API_TEST)
-    if (NOT DEFINED TEST_BINARY_NAME)
-        set(TEST_BINARY_NAME ${CMAKE_PROJECT_NAME}_test) # default test binary name is DolphinDBAPI_test
-    endif()
-    option(COMPATI "this is a compatibility testing parameter" OFF)
-    if (COMPATI AND DEFINED ENV{COMPATI_PATH})
-        set(COMPATI_PATH $ENV{COMPATI_PATH})
-        file(GLOB COMPATI_SRC "${COMPATI_PATH}/*_gtest.cpp" "${COMPATI_PATH}/gt_main.cpp")
-        add_executable(${TEST_BINARY_NAME}
-            ${COMPATI_SRC}
-            "test/config.cpp"
-        )
-    else()
-        file(GLOB TEST_SRC "test/*_gtest.cpp" "test/gt_main.cpp")
-        add_executable(${TEST_BINARY_NAME}
-            ${TEST_SRC}
-            "test/config.cpp"
-            "test/concurrent_testing/ConcurrentTest_gtest.cpp"
-            "test/HA_testing/HighAvailableTest_gtest.cpp"
-        )
-    endif()
-
-
-    if(USE_OPENSSL AND OPENSSL_FOUND)
-        target_compile_definitions(${TEST_BINARY_NAME} PRIVATE TEST_OPENSSL)
-    endif()
-    if(USE_AERON AND HAS_AERON)
-        target_compile_definitions(${TEST_BINARY_NAME} PRIVATE TEST_AERON)
-    endif()
-
-    if (MSVC)
-        target_compile_options(${TEST_BINARY_NAME} PRIVATE /W0 /utf-8 /MP /bigobj)
-        target_compile_definitions(${TEST_BINARY_NAME} PRIVATE WINDOWS NOMINMAX WIN32_LEAN_AND_MEAN)
-    elseif (MINGW)
-        target_compile_options(${TEST_BINARY_NAME} PRIVATE -w -Wa,-mbig-obj -pthread -std=c++11 -g -O0)
-        target_compile_definitions(${TEST_BINARY_NAME} PRIVATE WINDOWS _WIN32_WINNT=0x0600)
-    else()
-        target_compile_options(${TEST_BINARY_NAME} PRIVATE -w -pthread -std=c++11 -g -O0)
-    endif()
-
-    if(CMAKE_VERSION VERSION_GREATER "3.27.0")
-        cmake_policy(SET CMP0144 NEW)
-    endif()
-
-    find_package(GTest 1.12.0 REQUIRED)
-    if (NOT DEFINED API_INSTALL_DIR)
-        set(API_INSTALL_LIB ${CMAKE_PROJECT_NAME})
-    else()
-        if (MSVC)
-            set(LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}${CMAKE_PROJECT_NAME}.lib")
-        else()
-            set(LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}${CMAKE_PROJECT_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-        endif()
-        set(API_INSTALL_LIB ${API_INSTALL_DIR}/${LIB_NAME})
-    endif()
-    target_include_directories(${TEST_BINARY_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/include)
-
-    target_link_libraries(${TEST_BINARY_NAME} PRIVATE
-        ${API_INSTALL_LIB}
-        GTest::gtest
-        GTest::gmock
-        GTest::gtest_main
+if (UNIX)
+    file(GLOB HEADER_FILES "include/*.h")
+    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${HEADER_FILES}")
+    include(GNUInstallDirs)
+    install(TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolphindb
     )
 endif()
+
+add_subdirectory(src)

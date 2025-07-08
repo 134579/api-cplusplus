@@ -12,20 +12,20 @@ namespace dolphindb {
 template<class T>
 class AbstractSet : public Set {
 public:
-	AbstractSet(DATA_TYPE type, INDEX capacity = 0) : type_(type), category_(Util::getCategory(type_)){
+	explicit AbstractSet(DATA_TYPE type, INDEX capacity = 0) : type_(type), category_(Util::getCategory(type_)){
 		if(capacity > 0) data_.reserve(capacity);
 	}
 	AbstractSet(DATA_TYPE type, const std::unordered_set<T>& data) : type_(type), category_(Util::getCategory(type_)), data_(data){}
-	virtual bool sizeable() const {return true;}
-	virtual INDEX size() const {return static_cast<INDEX>(data_.size());}
-	virtual ConstantSP keys() const {
+	bool sizeable() const override {return true;}
+	INDEX size() const override {return static_cast<INDEX>(data_.size());}
+	ConstantSP keys() const override {
 		return getSubVector(0, static_cast<INDEX>(data_.size()));
 	}
-	virtual DATA_TYPE getType() const {return type_;}
-	virtual DATA_TYPE getRawType() const {return type_ == DT_SYMBOL ? DT_INT : Util::convertToIntegralDataType(type_);}
-	virtual DATA_CATEGORY getCategory() const {return category_;}
-	virtual long long getAllocatedMemory() const { return sizeof(T) * data_.bucket_count();}
-	virtual std::string getString() const {
+	DATA_TYPE getType() const override {return type_;}
+	DATA_TYPE getRawType() const override {return type_ == DT_SYMBOL ? DT_INT : Util::convertToIntegralDataType(type_);}
+	DATA_CATEGORY getCategory() const override {return category_;}
+	long long getAllocatedMemory() const override { return sizeof(T) * data_.bucket_count();}
+	std::string getString() const override {
 		int len=(std::min)(Util::DISPLAY_ROWS,size());
 		ConstantSP key = getSubVector(0, len);
 		std::string str("set(");
@@ -54,35 +54,35 @@ public:
 		str.append(")");
 		return str;
 	}
-	virtual void clear(){ data_.clear();}
-	virtual ConstantSP get(const ConstantSP& index) const
+	void clear() override{ data_.clear();}
+	ConstantSP get(const ConstantSP& index) const override
 	{
 		std::ignore = index;
 		throw RuntimeException("set doesn't support random access.");
 	}
-	virtual const std::string& getStringRef() const {throw RuntimeException("set doesn't support random access.");}
-	virtual ConstantSP get(INDEX index) const
+	const std::string& getStringRef() const override {throw RuntimeException("set doesn't support random access.");}
+	ConstantSP get(INDEX index) const override
 	{
 		std::ignore = index;
 		throw RuntimeException("set doesn't support random access.");
 	}
-	virtual ConstantSP get(INDEX column, INDEX row) const
+	ConstantSP get(INDEX column, INDEX row) const override
 	{
 		std::ignore = column;
 		std::ignore = row;
 		throw RuntimeException("set doesn't support random access.");
 	}
-	virtual ConstantSP getColumn(INDEX index) const
+	ConstantSP getColumn(INDEX index) const override
 	{
 		std::ignore = index;
 		throw RuntimeException("set doesn't support random access.");
 	}
-	virtual ConstantSP getRow(INDEX index) const
+	ConstantSP getRow(INDEX index) const override
 	{
 		std::ignore = index;
 		throw RuntimeException("set doesn't support random access.");
 	}
-	virtual ConstantSP getItem(INDEX index) const
+	ConstantSP getItem(INDEX index) const override
 	{
 		std::ignore = index;
 		throw RuntimeException("set doesn't support random access.");
@@ -96,115 +96,115 @@ protected:
 
 class CharSet : public AbstractSet<char> {
 public:
-	CharSet(INDEX capacity = 0) : AbstractSet<char>(DT_CHAR, capacity){}
-	CharSet(const std::unordered_set<char>& data) : AbstractSet<char>(DT_CHAR, data){}
-	virtual ConstantSP getInstance() const { return new CharSet();}
-	virtual ConstantSP getValue() const { return new CharSet(data_);}
-	virtual void contain(const ConstantSP& target, const ConstantSP& resultSP) const;
-	virtual bool remove(const ConstantSP& value) { return manipulate(value, true);}
-	virtual bool append(const ConstantSP& value) { return manipulate(value, false);}
-	virtual bool inverse(const ConstantSP& value);
-	virtual bool isSuperset(const ConstantSP& target) const;
-	virtual ConstantSP interaction(const ConstantSP& target) const;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const;
+	explicit CharSet(INDEX capacity = 0) : AbstractSet<char>(DT_CHAR, capacity){}
+	explicit CharSet(const std::unordered_set<char>& data) : AbstractSet<char>(DT_CHAR, data){}
+	ConstantSP getInstance() const override { return new CharSet();}
+	ConstantSP getValue() const override { return new CharSet(data_);}
+	void contain(const ConstantSP& target, const ConstantSP& resultSP) const override;
+	bool remove(const ConstantSP& value) override { return manipulate(value, true);}
+	bool append(const ConstantSP& value) override { return manipulate(value, false);}
+	bool inverse(const ConstantSP& value) override;
+	bool isSuperset(const ConstantSP& target) const override;
+	ConstantSP interaction(const ConstantSP& target) const override;
+	ConstantSP getSubVector(INDEX start, INDEX length) const override;
 	bool manipulate(const ConstantSP& value, bool deletion);
 };
 
 class ShortSet : public AbstractSet<short> {
 public:
-	ShortSet(INDEX capacity = 0) : AbstractSet<short>(DT_SHORT, capacity){}
-	ShortSet(const std::unordered_set<short>& data) : AbstractSet<short>(DT_SHORT, data){}
-	virtual ConstantSP getInstance() const { return new ShortSet();}
-	virtual ConstantSP getValue() const { return new ShortSet(data_);}
-	virtual void contain(const ConstantSP& target, const ConstantSP& resultSP) const;
-	virtual bool remove(const ConstantSP& value) { return manipulate(value, true);}
-	virtual bool append(const ConstantSP& value) { return manipulate(value, false);}
-	virtual bool inverse(const ConstantSP& value);
-	virtual bool isSuperset(const ConstantSP& target) const;
-	virtual ConstantSP interaction(const ConstantSP& target) const;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const;
+	explicit ShortSet(INDEX capacity = 0) : AbstractSet<short>(DT_SHORT, capacity){}
+	explicit ShortSet(const std::unordered_set<short>& data) : AbstractSet<short>(DT_SHORT, data){}
+	ConstantSP getInstance() const override { return new ShortSet();}
+	ConstantSP getValue() const override { return new ShortSet(data_);}
+	void contain(const ConstantSP& target, const ConstantSP& resultSP) const override;
+	bool remove(const ConstantSP& value) override { return manipulate(value, true);}
+	bool append(const ConstantSP& value) override { return manipulate(value, false);}
+	bool inverse(const ConstantSP& value) override;
+	bool isSuperset(const ConstantSP& target) const override;
+	ConstantSP interaction(const ConstantSP& target) const override;
+	ConstantSP getSubVector(INDEX start, INDEX length) const override;
 	bool manipulate(const ConstantSP& value, bool deletion);
 };
 
 class IntSet : public AbstractSet<int> {
 public:
-	IntSet(DATA_TYPE type = DT_INT, INDEX capacity = 0) : AbstractSet<int>(type, capacity){}
+	explicit IntSet(DATA_TYPE type = DT_INT, INDEX capacity = 0) : AbstractSet<int>(type, capacity){}
 	IntSet(DATA_TYPE type, const std::unordered_set<int>& data) : AbstractSet<int>(type, data){}
-	virtual ConstantSP getInstance() const { return new IntSet(type_);}
-	virtual ConstantSP getValue() const { return new IntSet(type_, data_);}
-	virtual void contain(const ConstantSP& target, const ConstantSP& resultSP) const;
-	virtual bool remove(const ConstantSP& value) { return manipulate(value, true);}
-	virtual bool append(const ConstantSP& value) { return manipulate(value, false);}
-	virtual bool inverse(const ConstantSP& value);
-	virtual bool isSuperset(const ConstantSP& target) const;
-	virtual ConstantSP interaction(const ConstantSP& target) const;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const;
+	ConstantSP getInstance() const override { return new IntSet(type_);}
+	ConstantSP getValue() const override { return new IntSet(type_, data_);}
+	void contain(const ConstantSP& target, const ConstantSP& resultSP) const override;
+	bool remove(const ConstantSP& value) override { return manipulate(value, true);}
+	bool append(const ConstantSP& value) override { return manipulate(value, false);}
+	bool inverse(const ConstantSP& value) override;
+	bool isSuperset(const ConstantSP& target) const override;
+	ConstantSP interaction(const ConstantSP& target) const override;
+	ConstantSP getSubVector(INDEX start, INDEX length) const override;
 	bool manipulate(const ConstantSP& value, bool deletion);
 };
 
 class LongSet : public AbstractSet<long long> {
 public:
-	LongSet(DATA_TYPE type = DT_LONG, INDEX capacity = 0) : AbstractSet<long long>(type, capacity){}
+	explicit LongSet(DATA_TYPE type = DT_LONG, INDEX capacity = 0) : AbstractSet<long long>(type, capacity){}
 	LongSet(DATA_TYPE type, const std::unordered_set<long long>& data) : AbstractSet<long long>(type, data){}
-	virtual ConstantSP getInstance() const { return new LongSet(type_);}
-	virtual ConstantSP getValue() const { return new LongSet(type_, data_);}
-	virtual void contain(const ConstantSP& target, const ConstantSP& resultSP) const;
-	virtual bool remove(const ConstantSP& value) { return manipulate(value, true);}
-	virtual bool append(const ConstantSP& value) { return manipulate(value, false);}
-	virtual bool inverse(const ConstantSP& value);
-	virtual bool isSuperset(const ConstantSP& target) const;
-	virtual ConstantSP interaction(const ConstantSP& target) const;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const;
+	ConstantSP getInstance() const override { return new LongSet(type_);}
+	ConstantSP getValue() const override { return new LongSet(type_, data_);}
+	void contain(const ConstantSP& target, const ConstantSP& resultSP) const override;
+	bool remove(const ConstantSP& value) override { return manipulate(value, true);}
+	bool append(const ConstantSP& value) override { return manipulate(value, false);}
+	bool inverse(const ConstantSP& value) override;
+	bool isSuperset(const ConstantSP& target) const override;
+	ConstantSP interaction(const ConstantSP& target) const override;
+	ConstantSP getSubVector(INDEX start, INDEX length) const override;
 	bool manipulate(const ConstantSP& value, bool deletion);
 };
 
 class FloatSet : public AbstractSet<float> {
 public:
-	FloatSet(INDEX capacity = 0) : AbstractSet<float>(DT_FLOAT, capacity){}
-	FloatSet(const std::unordered_set<float>& data) : AbstractSet<float>(DT_FLOAT, data){}
-	virtual ConstantSP getInstance() const { return new FloatSet();}
-	virtual ConstantSP getValue() const { return new FloatSet(data_);}
-	virtual void contain(const ConstantSP& target, const ConstantSP& resultSP) const;
-	virtual bool remove(const ConstantSP& value) { return manipulate(value, true);}
-	virtual bool append(const ConstantSP& value) { return manipulate(value, false);}
-	virtual bool inverse(const ConstantSP& value);
-	virtual bool isSuperset(const ConstantSP& target) const;
-	virtual ConstantSP interaction(const ConstantSP& target) const;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const;
+	explicit FloatSet(INDEX capacity = 0) : AbstractSet<float>(DT_FLOAT, capacity){}
+	explicit FloatSet(const std::unordered_set<float>& data) : AbstractSet<float>(DT_FLOAT, data){}
+	ConstantSP getInstance() const override { return new FloatSet();}
+	ConstantSP getValue() const override { return new FloatSet(data_);}
+	void contain(const ConstantSP& target, const ConstantSP& resultSP) const override;
+	bool remove(const ConstantSP& value) override { return manipulate(value, true);}
+	bool append(const ConstantSP& value) override { return manipulate(value, false);}
+	bool inverse(const ConstantSP& value) override;
+	bool isSuperset(const ConstantSP& target) const override;
+	ConstantSP interaction(const ConstantSP& target) const override;
+	ConstantSP getSubVector(INDEX start, INDEX length) const override;
 	bool manipulate(const ConstantSP& value, bool deletion);
 };
 
 class DoubleSet : public AbstractSet<double> {
 public:
-	DoubleSet(INDEX capacity = 0) : AbstractSet<double>(DT_DOUBLE, capacity){}
-	DoubleSet(const std::unordered_set<double>& data) : AbstractSet<double>(DT_DOUBLE, data){}
-	virtual ConstantSP getInstance() const { return new DoubleSet();}
-	virtual ConstantSP getValue() const { return new DoubleSet(data_);}
-	virtual void contain(const ConstantSP& target, const ConstantSP& resultSP) const;
-	virtual bool remove(const ConstantSP& value) { return manipulate(value, true);}
-	virtual bool append(const ConstantSP& value) { return manipulate(value, false);}
-	virtual bool inverse(const ConstantSP& value);
-	virtual bool isSuperset(const ConstantSP& target) const;
-	virtual ConstantSP interaction(const ConstantSP& target) const;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const;
+	explicit DoubleSet(INDEX capacity = 0) : AbstractSet<double>(DT_DOUBLE, capacity){}
+	explicit DoubleSet(const std::unordered_set<double>& data) : AbstractSet<double>(DT_DOUBLE, data){}
+	ConstantSP getInstance() const override { return new DoubleSet();}
+	ConstantSP getValue() const override { return new DoubleSet(data_);}
+	void contain(const ConstantSP& target, const ConstantSP& resultSP) const override;
+	bool remove(const ConstantSP& value) override { return manipulate(value, true);}
+	bool append(const ConstantSP& value) override { return manipulate(value, false);}
+	bool inverse(const ConstantSP& value) override;
+	bool isSuperset(const ConstantSP& target) const override;
+	ConstantSP interaction(const ConstantSP& target) const override;
+	ConstantSP getSubVector(INDEX start, INDEX length) const override;
 	bool manipulate(const ConstantSP& value, bool deletion);
 };
 
 class StringSet : public AbstractSet<std::string> {
 public:
-	StringSet(INDEX capacity = 0, bool isBlob = false, bool isSymbol = false)
+	explicit StringSet(INDEX capacity = 0, bool isBlob = false, bool isSymbol = false)
 		: AbstractSet<std::string>(isBlob ? DT_BLOB : isSymbol ? DT_SYMBOL : DT_STRING, capacity), isBlob_(isBlob), isSymbol_(isSymbol){}
-	StringSet(const std::unordered_set<std::string>& data, bool isBlob = false, bool isSymbol = false)
+	explicit StringSet(const std::unordered_set<std::string>& data, bool isBlob = false, bool isSymbol = false)
 		: AbstractSet<std::string>(isBlob ? DT_BLOB : isSymbol ? DT_SYMBOL : DT_STRING, data), isBlob_(isBlob), isSymbol_(isSymbol){}
-	virtual ConstantSP getInstance() const { return new StringSet(0, isBlob_, isSymbol_);}
-	virtual ConstantSP getValue() const { return new StringSet(data_, isBlob_, isSymbol_);}
-	virtual void contain(const ConstantSP& target, const ConstantSP& resultSP) const;
-	virtual bool remove(const ConstantSP& value) { return manipulate(value, true);}
-	virtual bool append(const ConstantSP& value) { return manipulate(value, false);}
-	virtual bool inverse(const ConstantSP& value);
-	virtual bool isSuperset(const ConstantSP& target) const;
-	virtual ConstantSP interaction(const ConstantSP& target) const;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const;
+	ConstantSP getInstance() const override { return new StringSet(0, isBlob_, isSymbol_);}
+	ConstantSP getValue() const override { return new StringSet(data_, isBlob_, isSymbol_);}
+	void contain(const ConstantSP& target, const ConstantSP& resultSP) const override;
+	bool remove(const ConstantSP& value) override { return manipulate(value, true);}
+	bool append(const ConstantSP& value) override { return manipulate(value, false);}
+	bool inverse(const ConstantSP& value) override;
+	bool isSuperset(const ConstantSP& target) const override;
+	ConstantSP interaction(const ConstantSP& target) const override;
+	ConstantSP getSubVector(INDEX start, INDEX length) const override;
 	bool manipulate(const ConstantSP& value, bool deletion);
 private:
 	bool isBlob_;
@@ -213,18 +213,18 @@ private:
 
 class Int128Set : public AbstractSet<Guid> {
 public:
-	Int128Set(DATA_TYPE type = DT_INT128, INDEX capacity = 0) : AbstractSet<Guid>(type, capacity){}
+	explicit Int128Set(DATA_TYPE type = DT_INT128, INDEX capacity = 0) : AbstractSet<Guid>(type, capacity){}
 	Int128Set(DATA_TYPE type, const std::unordered_set<Guid>& data) : AbstractSet<Guid>(type, data){}
-	virtual ConstantSP getInstance() const { return new Int128Set(type_);}
-	virtual ConstantSP getValue() const { return new Int128Set(type_, data_);}
-	virtual void contain(const ConstantSP& target, const ConstantSP& resultSP) const;
-	virtual bool remove(const ConstantSP& value) { return manipulate(value, true);}
-	virtual bool append(const ConstantSP& value) { return manipulate(value, false);}
-	virtual bool inverse(const ConstantSP& value);
-	virtual bool isSuperset(const ConstantSP& target) const;
-	virtual ConstantSP interaction(const ConstantSP& target) const;
-	virtual ConstantSP getSubVector(INDEX start, INDEX length) const;
+	ConstantSP getInstance() const override { return new Int128Set(type_);}
+	ConstantSP getValue() const override { return new Int128Set(type_, data_);}
+	void contain(const ConstantSP& target, const ConstantSP& resultSP) const override;
+	bool remove(const ConstantSP& value) override { return manipulate(value, true);}
+	bool append(const ConstantSP& value) override { return manipulate(value, false);}
+	bool inverse(const ConstantSP& value) override;
+	bool isSuperset(const ConstantSP& target) const override;
+	ConstantSP interaction(const ConstantSP& target) const override;
+	ConstantSP getSubVector(INDEX start, INDEX length) const override;
 	bool manipulate(const ConstantSP& value, bool deletion);
 };
 
-}
+} // namespace dolphindb

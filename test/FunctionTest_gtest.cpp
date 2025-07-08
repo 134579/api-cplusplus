@@ -1,668 +1,665 @@
+#include <gtest/gtest.h>
 #include "config.h"
+#include "Set.h"
+#include "ConstantImp.h"
+#include "DFSChunkMeta.h"
+#include "ConstantMarshall.h"
+#include "TableImp.h"
 
 class FunctionTest:public testing::Test
 {
-public:
-    //Suite
-    static void SetUpTestCase() {
-        //DBConnection conn;
-		conn.initialize();
-        bool ret = conn.connect(hostName, port, "admin", "123456");
-        if (!ret) {
-            cout << "Failed to connect to the server" << endl;
+    public:
+        static dolphindb::DBConnection conn;
+        // Suite
+        static void SetUpTestSuite() {
+            bool ret = conn.connect(HOST, PORT, USER, PASSWD);
+            if (!ret) {
+                std::cout << "Failed to connect to the server" << std::endl;
+            }
+            else {
+                std::string script = "a=int(1);\
+                        b=bool(1);\
+                        c=char(1);\
+                        d=NULL;\
+                        ee=short(1);\
+                        f=long(1);\
+                        g=date(1);\
+                        h=month(1);\
+                        i=time(1);\
+                        j=minute(1);\
+                        k=second(1);\
+                        l=datetime(1);\
+                        m=timestamp(1);\
+                        n=nanotime(1);\
+                        o=nanotimestamp(1);\
+                        p=float(1);\
+                        q=double(1);\
+                        r=\"1\";\
+                        s=uuid(\"5d212a78-cc48-e3b1-4235-b4d91473ee87\");\
+                        t=blob(string[1]);\
+                        u=table(1 2 3 as col1, `a`b`c as col2);\
+                        v=arrayVector(1 2 3 , 9 9 9);\
+                        w=set(1 2 3);\
+                        x=matrix([0],[0]);\
+                        y={\"sym\":123};\
+                        z=int128(\"e1671797c52e15f763380b45e841ec32\");\
+                        vec=1 2 3;\
+                        sym=symbol(`a`b`c`d);";
+                conn.run(script);
+                std::cout << "connect to " + HOST + ":" + std::to_string(PORT) << std::endl;
+            }
         }
-        else {
-            string script = "a=int(1);\
-                    b=bool(1);\
-                    c=char(1);\
-                    d=NULL;\
-                    ee=short(1);\
-                    f=long(1);\
-                    g=date(1);\
-                    h=month(1);\
-                    i=time(1);\
-                    j=minute(1);\
-                    k=second(1);\
-                    l=datetime(1);\
-                    m=timestamp(1);\
-                    n=nanotime(1);\
-                    o=nanotimestamp(1);\
-                    p=float(1);\
-                    q=double(1);\
-                    r=\"1\";\
-                    s=uuid(\"5d212a78-cc48-e3b1-4235-b4d91473ee87\");\
-                    t=blob(string[1]);\
-                    u=table(1 2 3 as col1, `a`b`c as col2);\
-                    v=arrayVector(1 2 3 , 9 9 9);\
-                    w=set(1 2 3);\
-                    x=matrix([0],[0]);\
-                    y={\"sym\":123};\
-                    z=int128(\"e1671797c52e15f763380b45e841ec32\");\
-                    vec=1 2 3;\
-                    sym=symbol(`a`b`c`d);";
-	        conn.run(script);
-            cout << "connect to " + hostName + ":" + std::to_string(port)<< endl;
+        static void TearDownTestSuite(){
+            conn.close();
         }
-    }
-    static void TearDownTestCase(){
-        CLEAR_ENV(conn);
-        conn.close();
-    }
 
-    //Case
-    virtual void SetUp()
-    {
-        cout<<"check connect...";
-		try
-		{
-			ConstantSP res = conn.run("1+1");
-		}
-		catch(const std::exception& e)
-		{
-			conn.connect(hostName, port, "admin", "123456");
-		}
-		
-        cout<<"ok"<<endl;
-    }
-    virtual void TearDown()
-    {
-    }
+    protected:
+        // Case
+        virtual void SetUp()
+        {
+
+        }
+        virtual void TearDown()
+        {
+
+        }
 };
 
+dolphindb::DBConnection FunctionTest::conn(false, false);
 
 TEST_F(FunctionTest,test_function_get){
-    TableSP tab1=conn.run("u");
-    ConstantSP intval=conn.run("a");
-    VectorSP vec1= conn.run("vec"); // 1 2 3
-    VectorSP av1=conn.run("v"); // 1 2 3 9 9 9
-    SetSP set1=conn.run("w"); // set(1 2 3)
-    DictionarySP dict1=conn.run("y"); // {"sym":123}
-    ConstantSP voidval=conn.run("d"); // NULL
-    ConstantSP uuidval=conn.run("s");
-    ConstantSP symval=conn.run("sym"); // symbol(`a`b`c`d)
+    dolphindb::TableSP tab1=conn.run("u");
+    dolphindb::ConstantSP intval=conn.run("a");
+    dolphindb::VectorSP vec1= conn.run("vec"); // 1 2 3
+    dolphindb::VectorSP av1=conn.run("v"); // 1 2 3 9 9 9
+    dolphindb::SetSP set1=conn.run("w"); // set(1 2 3)
+    dolphindb::DictionarySP dict1=conn.run("y"); // {"sym":123}
+    dolphindb::ConstantSP voidval=conn.run("d"); // NULL
+    dolphindb::ConstantSP uuidval=conn.run("s");
+    dolphindb::ConstantSP symval=conn.run("sym"); // symbol(`a`b`c`d)
 
-    // const vector<string> ex_sym = {"a", "b", "c", "d"};
-    // for(auto i=0;i<symval->getSymbolBase()->size();i++)
-    //     EXPECT_EQ(symval->getSymbolBase()->getSymbol(i), ex_sym[i]);
-    EXPECT_EQ(tab1->getObjectType(), CONSTOBJ);
-    EXPECT_EQ(Util::getTableTypeString(tab1->getTableType()), "BASIC");
-    EXPECT_EQ(vec1->getInstance()->getString(), Util::createVector(DT_INT, 3)->getString());
-    EXPECT_EQ(vec1->get(0,0,1)->getString(), "[1]");
-    EXPECT_EQ(vec1->getWindow(0,1,0,1)->getString(), "[1]");
-    EXPECT_EQ(vec1->getSubVector(0,2,3)->getString(), "[1,2]");
-    EXPECT_EQ(vec1->getSubVector(0,3)->getString(), "[1,2,3]");
+    // const std::vector<std::string> ex_sym = {"a", "b", "c", "d"};
+    // for(auto i=0;i<symval->getdolphindb::SymbolBase()->size();i++)
+    //     ASSERT_EQ(symval->getdolphindb::SymbolBase()->getSymbol(i), ex_sym[i]);
+    ASSERT_EQ(tab1->getObjectType(), dolphindb::CONSTOBJ);
+    ASSERT_EQ(dolphindb::Util::getTableTypeString(tab1->getTableType()), "BASIC");
+    ASSERT_EQ(vec1->get(0,0,1)->getString(), "[1]");
+    ASSERT_EQ(vec1->getWindow(0,1,0,1)->getString(), "[1]");
+    ASSERT_EQ(vec1->getSubVector(0,2,3)->getString(), "[1,2]");
+    ASSERT_EQ(vec1->getSubVector(0,3)->getString(), "[1,2,3]");
 
-    cout<<vec1->getAllocatedMemory(3)<<endl;
-    EXPECT_EQ(Util::getDataTypeString(dict1->getRawType()), "ANY");
-    EXPECT_EQ(Util::getCategoryString(dict1->getCategory()), "MIXED");
-    EXPECT_EQ(Util::getDataTypeString(dict1->getKeyType()), "STRING");
-    cout<<"----------------------------------------------"<<endl;
+    std::cout<<vec1->getAllocatedMemory(3)<<std::endl;
+    ASSERT_EQ(dolphindb::Util::getDataTypeString(dict1->getRawType()), "ANY");
+    ASSERT_EQ(dolphindb::Util::getCategoryString(dict1->getCategory()), "MIXED");
+    ASSERT_EQ(dolphindb::Util::getDataTypeString(dict1->getKeyType()), "STRING");
+    std::cout<<"----------------------------------------------"<<std::endl;
 
-    EXPECT_THROW(dict1->getString(0),RuntimeException);
+    ASSERT_THROW(dict1->getString(0),dolphindb::RuntimeException);
 
-    EXPECT_ANY_THROW(tab1->getBool());
-    EXPECT_ANY_THROW(tab1->getChar());
-    EXPECT_ANY_THROW(tab1->getShort());
-    EXPECT_ANY_THROW(tab1->getInt());
-    EXPECT_ANY_THROW(tab1->getLong());
-    EXPECT_ANY_THROW(voidval->getIndex());
-    EXPECT_ANY_THROW(tab1->getFloat());
-    EXPECT_ANY_THROW(tab1->getDouble());
-    EXPECT_ANY_THROW(tab1->getBinary());
-    EXPECT_ANY_THROW(vec1->getValueSize());
-    EXPECT_ANY_THROW(dict1->getStringRef());
-    EXPECT_ANY_THROW(dict1->get(1,1));
-    EXPECT_ANY_THROW(dict1->getColumn(1));
-    EXPECT_ANY_THROW(dict1->getRow(1));
-    EXPECT_ANY_THROW(dict1->getItem(1));
+    ASSERT_ANY_THROW(tab1->getBool());
+    ASSERT_ANY_THROW(tab1->getChar());
+    ASSERT_ANY_THROW(tab1->getShort());
+    ASSERT_ANY_THROW(tab1->getInt());
+    ASSERT_ANY_THROW(tab1->getLong());
+    ASSERT_ANY_THROW(voidval->getIndex());
+    ASSERT_ANY_THROW(tab1->getFloat());
+    ASSERT_ANY_THROW(tab1->getDouble());
+    ASSERT_ANY_THROW(tab1->getBinary());
+    ASSERT_ANY_THROW(vec1->getValueSize());
+    ASSERT_ANY_THROW(dict1->getStringRef());
+    ASSERT_ANY_THROW(dict1->get(1,1));
+    ASSERT_ANY_THROW(dict1->getColumn(1));
+    ASSERT_ANY_THROW(dict1->getRow(1));
+    ASSERT_ANY_THROW(dict1->getItem(1));
 
     int buckets=2;
-    EXPECT_EQ(voidval->getHash(buckets),-1);
-    EXPECT_EQ(voidval->getString(),"");
-    EXPECT_EQ(voidval->getStringRef(),Constant::EMPTY);
-    EXPECT_EQ(voidval->getStringRef(0),Constant::EMPTY);
+    ASSERT_EQ(voidval->getHash(buckets),-1);
+    ASSERT_EQ(voidval->getString(),"");
+    ASSERT_EQ(voidval->getStringRef(),dolphindb::Constant::EMPTY);
+    ASSERT_EQ(voidval->getStringRef(0),dolphindb::Constant::EMPTY);
     
-    EXPECT_EQ(intval->getIndex(0),1);
-    EXPECT_EQ(intval->get(0)->getInt(),1);
-    EXPECT_EQ(intval->get(0,0)->getInt(),1);
-    EXPECT_EQ(intval->get(Util::createInt(0))->getInt(),1);
-    EXPECT_EQ(intval->getColumn(0)->getInt(),1);
-    EXPECT_EQ(intval->getWindow(0,1,0,1)->getInt(),1);
+    ASSERT_EQ(intval->getIndex(0),1);
+    ASSERT_EQ(intval->get(0)->getInt(),1);
+    ASSERT_EQ(intval->get(0,0)->getInt(),1);
+    ASSERT_EQ(intval->get(dolphindb::Util::createInt(0))->getInt(),1);
+    ASSERT_EQ(intval->getColumn(0)->getInt(),1);
+    ASSERT_EQ(intval->getWindow(0,1,0,1)->getInt(),1);
     vec1->setName("vec");
-    EXPECT_EQ(vec1->getName(),"vec");
-    EXPECT_EQ(set1->getRawType(),DT_INT);
-    EXPECT_EQ(tab1->getRawType(),DT_DICTIONARY);
-    EXPECT_EQ(Util::getCategoryString(intval->getCategory()),"INTEGRAL");
-    EXPECT_EQ(Util::getCategoryString(set1->getCategory()),"INTEGRAL");
-    EXPECT_EQ(Util::getCategoryString(tab1->getCategory()),"MIXED");
+    ASSERT_EQ(vec1->getName(),"vec");
+    ASSERT_EQ(set1->getRawType(),dolphindb::DT_INT);
+    ASSERT_EQ(tab1->getRawType(),dolphindb::DT_DICTIONARY);
+    ASSERT_EQ(dolphindb::Util::getCategoryString(intval->getCategory()),"INTEGRAL");
+    ASSERT_EQ(dolphindb::Util::getCategoryString(set1->getCategory()),"INTEGRAL");
+    ASSERT_EQ(dolphindb::Util::getCategoryString(tab1->getCategory()),"MIXED");
 
     char *buf = new char[2]; 
     short *buf1 = new short[2];
     int *buf2 = new int[2];
-    INDEX *buf4 = new INDEX[2];
+    dolphindb::INDEX *buf4 = new dolphindb::INDEX[2];
     long long *buf3 = new long long[2];
     float *buf5 = new float[2];
     double *buf6 = new double[2];
-    string **buf8 = new string*[2];
+    std::string **buf8 = new std::string*[2];
     char **buf9 = new char*[2];
     unsigned char *buf10 = new unsigned char[2];
-    SymbolBase *symbase= new SymbolBase(1);
+    dolphindb::SymbolBase *symbase= new dolphindb::SymbolBase(1);
     void *buf11=NULL;
 
-    EXPECT_FALSE(uuidval->getBool(0,1,buf));
-    EXPECT_FALSE(uuidval->getChar(0,1,buf));
-    EXPECT_FALSE(uuidval->getShort(0,1,buf1)); 
-    EXPECT_FALSE(uuidval->getInt(0,1,buf2));
-    EXPECT_FALSE(uuidval->getLong(0,1,buf3));
-    EXPECT_FALSE(uuidval->getIndex(0,1,buf4));
-    EXPECT_FALSE(uuidval->getFloat(0,1,buf5));
-    EXPECT_FALSE(uuidval->getDouble(0,1,buf6));   
-    EXPECT_FALSE(uuidval->getSymbol(0,1,buf2,symbase,false)); 
-    EXPECT_FALSE(uuidval->getString(0,1,buf8));
-    EXPECT_FALSE(uuidval->getString(0,1,buf9));
-    EXPECT_TRUE(voidval->getBinary(0,1,1,buf10));
-    EXPECT_FALSE(voidval->getHash(0,1,buckets,buf2));
+    ASSERT_FALSE(uuidval->getBool(0,1,buf));
+    ASSERT_FALSE(uuidval->getChar(0,1,buf));
+    ASSERT_FALSE(uuidval->getShort(0,1,buf1)); 
+    ASSERT_FALSE(uuidval->getInt(0,1,buf2));
+    ASSERT_FALSE(uuidval->getLong(0,1,buf3));
+    ASSERT_FALSE(uuidval->getIndex(0,1,buf4));
+    ASSERT_FALSE(uuidval->getFloat(0,1,buf5));
+    ASSERT_FALSE(uuidval->getDouble(0,1,buf6));   
+    ASSERT_FALSE(uuidval->getSymbol(0,1,buf2,symbase,false)); 
+    ASSERT_FALSE(uuidval->getString(0,1,buf8));
+    ASSERT_FALSE(uuidval->getString(0,1,buf9));
+    ASSERT_TRUE(voidval->getBinary(0,1,1,buf10));
+    ASSERT_FALSE(voidval->getHash(0,1,buckets,buf2));
 
-    EXPECT_ANY_THROW(uuidval->getBoolConst(0,1,buf));
-    EXPECT_ANY_THROW(uuidval->getCharConst(0,1,buf));
-    EXPECT_ANY_THROW(uuidval->getShortConst(0,1,buf1)); 
-    EXPECT_ANY_THROW(uuidval->getIntConst(0,1,buf2));
-    EXPECT_ANY_THROW(uuidval->getLongConst(0,1,buf3));
-    EXPECT_ANY_THROW(uuidval->getIndexConst(0,1,buf4));
-    EXPECT_ANY_THROW(uuidval->getFloatConst(0,1,buf5));
-    EXPECT_ANY_THROW(uuidval->getDoubleConst(0,1,buf6));   
-    EXPECT_ANY_THROW(uuidval->getSymbolConst(0,1,buf2,symbase,false)); 
-    EXPECT_ANY_THROW(uuidval->getStringConst(0,1,buf8));
-    EXPECT_ANY_THROW(uuidval->getStringConst(0,1,buf9));
-    EXPECT_ANY_THROW(voidval->getBinaryConst(0,1,1,buf10));
-    EXPECT_ANY_THROW(set1->get(Util::createInt(0)));
-    EXPECT_ANY_THROW(set1->getStringRef());
-    EXPECT_ANY_THROW(set1->get(0));
-    EXPECT_ANY_THROW(set1->get(0,1));
-    EXPECT_ANY_THROW(set1->getColumn(0));
-    EXPECT_ANY_THROW(set1->getRow(0));
-    EXPECT_ANY_THROW(set1->getItem(0));
+    ASSERT_ANY_THROW(uuidval->getBoolConst(0,1,buf));
+    ASSERT_ANY_THROW(uuidval->getCharConst(0,1,buf));
+    ASSERT_ANY_THROW(uuidval->getShortConst(0,1,buf1)); 
+    ASSERT_ANY_THROW(uuidval->getIntConst(0,1,buf2));
+    ASSERT_ANY_THROW(uuidval->getLongConst(0,1,buf3));
+    ASSERT_ANY_THROW(uuidval->getIndexConst(0,1,buf4));
+    ASSERT_ANY_THROW(uuidval->getFloatConst(0,1,buf5));
+    ASSERT_ANY_THROW(uuidval->getDoubleConst(0,1,buf6));   
+    ASSERT_ANY_THROW(uuidval->getSymbolConst(0,1,buf2,symbase,false)); 
+    ASSERT_ANY_THROW(uuidval->getStringConst(0,1,buf8));
+    ASSERT_ANY_THROW(uuidval->getStringConst(0,1,buf9));
+    ASSERT_ANY_THROW(voidval->getBinaryConst(0,1,1,buf10));
+    ASSERT_ANY_THROW(set1->get(dolphindb::Util::createInt(0)));
+    ASSERT_ANY_THROW(set1->getStringRef());
+    ASSERT_ANY_THROW(set1->get(0));
+    ASSERT_ANY_THROW(set1->get(0,1));
+    ASSERT_ANY_THROW(set1->getColumn(0));
+    ASSERT_ANY_THROW(set1->getRow(0));
+    ASSERT_ANY_THROW(set1->getItem(0));
 
-    cout<<uuidval->getBoolBuffer(0,1,buf)<<endl;
-    cout<<uuidval->getCharBuffer(0,1,buf)<<endl;
-    cout<<uuidval->getShortBuffer(0,1,buf1)<<endl; 
-    cout<<uuidval->getIntBuffer(0,1,buf2)<<endl;
-    cout<<uuidval->getLongBuffer(0,1,buf3)<<endl;
-    cout<<uuidval->getIndexBuffer(0,1,buf4)<<endl;
-    cout<<uuidval->getFloatBuffer(0,1,buf5)<<endl;
-    cout<<uuidval->getDoubleBuffer(0,1,buf6)<<endl;   
-    cout<<voidval->getBinaryBuffer(0,1,1,buf10)<<endl;
-    cout<<voidval->getDataBuffer(0,1,buf11)<<endl;
-    cout<<uuidval->getAllocatedMemory()<<endl;
-    cout<<set1->getAllocatedMemory()<<endl;
+    std::cout<<uuidval->getBoolBuffer(0,1,buf)<<std::endl;
+    std::cout<<uuidval->getCharBuffer(0,1,buf)<<std::endl;
+    std::cout<<uuidval->getShortBuffer(0,1,buf1)<<std::endl; 
+    std::cout<<uuidval->getIntBuffer(0,1,buf2)<<std::endl;
+    std::cout<<uuidval->getLongBuffer(0,1,buf3)<<std::endl;
+    std::cout<<uuidval->getIndexBuffer(0,1,buf4)<<std::endl;
+    std::cout<<uuidval->getFloatBuffer(0,1,buf5)<<std::endl;
+    std::cout<<uuidval->getDoubleBuffer(0,1,buf6)<<std::endl;   
+    std::cout<<voidval->getBinaryBuffer(0,1,1,buf10)<<std::endl;
+    std::cout<<voidval->getDataBuffer(0,1,buf11)<<std::endl;
+    std::cout<<uuidval->getAllocatedMemory()<<std::endl;
+    std::cout<<set1->getAllocatedMemory()<<std::endl;
 
-    EXPECT_ANY_THROW(uuidval->getMember(Util::createConstant(DT_INT)));
-    EXPECT_ANY_THROW(uuidval->keys());
-    EXPECT_ANY_THROW(uuidval->values());
+    ASSERT_ANY_THROW(uuidval->getMember(dolphindb::Util::createConstant(dolphindb::DT_INT)));
+    ASSERT_ANY_THROW(uuidval->keys());
+    ASSERT_ANY_THROW(uuidval->values());
 
-    EXPECT_EQ(uuidval->getDataArray(),(void* )0);
-    EXPECT_EQ(uuidval->getDataSegment(),(void** )0);
-    EXPECT_EQ(uuidval->getIndexArray(),(INDEX* )NULL);
-    EXPECT_EQ(uuidval->getHugeIndexArray(),(INDEX** )NULL);
-    EXPECT_EQ(uuidval->getSegmentSize(),1);
-    EXPECT_EQ(uuidval->getSegmentSizeInBit(),0);
-    EXPECT_ANY_THROW(uuidval->castTemporal(DT_INT128));
+    ASSERT_EQ(uuidval->getDataArray(),(void* )0);
+    ASSERT_EQ(uuidval->getDataSegment(),(void** )0);
+    ASSERT_EQ(uuidval->getIndexArray(),(dolphindb::INDEX* )NULL);
+    ASSERT_EQ(uuidval->getHugeIndexArray(),(dolphindb::INDEX** )NULL);
+    ASSERT_EQ(uuidval->getSegmentSize(),1);
+    ASSERT_EQ(uuidval->getSegmentSizeInBit(),0);
+    ASSERT_ANY_THROW(uuidval->castTemporal(dolphindb::DT_INT128));
 
-	EXPECT_ANY_THROW(tab1->getColumn("abcd"));
-	tab1->setName("table1");
-    EXPECT_EQ(tab1->get(0)->getString(),"col2->a\ncol1->1\n");
-	EXPECT_EQ(tab1->getColumn("table1","col1")->getString(),"[1,2,3]");
-	EXPECT_EQ(tab1->getColumn("table1","col1",0)->getString(),"[1,2,3]");
-	EXPECT_EQ(tab1->getColumn(1,0)->getString(),"[\"a\",\"b\",\"c\"]");
-    EXPECT_ANY_THROW(tab1->getColumn("table2","col2"));
+    ASSERT_ANY_THROW(tab1->getColumn("abcd"));
+    tab1->setName("table1");
+    #ifndef _MSC_VER
+        ASSERT_EQ(tab1->get(0)->getString(),"col2->a\ncol1->1\n");
+    #else
+        ASSERT_EQ(tab1->get(0)->getString(),"col1->1\ncol2->a\n");
+    #endif
+    ASSERT_EQ(tab1->getColumn("table1","col1")->getString(),"[1,2,3]");
+    ASSERT_EQ(tab1->getColumn("table1","col1",0)->getString(),"[1,2,3]");
+    ASSERT_EQ(tab1->getColumn(1,0)->getString(),"[\"a\",\"b\",\"c\"]");
+    ASSERT_ANY_THROW(tab1->getColumn("table2","col2"));
 
     tab1->setColumnName(0, "col111");
-	EXPECT_EQ(tab1->getColumnName(0),"col111");
-    EXPECT_EQ(tab1->getColumnIndex("col111"),0);
-    EXPECT_EQ(tab1->getColumnIndex("col1111"),-1);
-    EXPECT_TRUE(tab1->contain("col111"));
-	
-    EXPECT_EQ(tab1->getColumnLabel()->getString(),"[\"col111\",\"col2\"]");
-    EXPECT_EQ(tab1->values()->getString(),"([1,2,3],[\"a\",\"b\",\"c\"])");
+    ASSERT_EQ(tab1->getColumnName(0),"col111");
+    ASSERT_EQ(tab1->getColumnIndex("col111"),0);
+    ASSERT_EQ(tab1->getColumnIndex("col1111"),-1);
+    ASSERT_TRUE(tab1->contain("col111"));
+    
+    ASSERT_EQ(tab1->getColumnLabel()->getString(),"[\"col111\",\"col2\"]");
+    ASSERT_EQ(tab1->values()->getString(),"([1,2,3],[\"a\",\"b\",\"c\"])");
 
-    cout<<"-------------------------------------"<<endl;
-    EXPECT_EQ(tab1->getWindow(0,2,0,2)->getColumn(0)->getValue()->getString(),"[1,2]");
-    EXPECT_EQ(tab1->getWindow(0,2,0,2)->getColumn(1)->getValue()->getString(),"[\"a\",\"b\"]");
+    std::cout<<"-------------------------------------"<<std::endl;
+    ASSERT_EQ(tab1->getWindow(0,2,0,2)->getColumn(0)->getValue()->getString(),"[1,2]");
+    ASSERT_EQ(tab1->getWindow(0,2,0,2)->getColumn(1)->getValue()->getString(),"[\"a\",\"b\"]");
 
-    EXPECT_EQ(tab1->getWindow(0,-1,0,2)->getColumn(0)->getValue()->getString(),"[1,2]");
-    EXPECT_EQ(tab1->getWindow(0,1,0,1)->getColumn(0)->getValue()->getString(),"[1]");
-    EXPECT_EQ(tab1->getMember(Util::createString("col111"))->getString(),"[1,2,3]");
-    VectorSP memvec=Util::createVector(DT_STRING,2,2);
-    memvec->set(0,Util::createString("col111"));
-    memvec->set(1,Util::createString("col2"));
-    EXPECT_EQ(tab1->getMember(memvec)->get(0)->getString(),"[1,2,3]");
-    EXPECT_EQ(tab1->getMember(memvec)->get(1)->getString(),"[\"a\",\"b\",\"c\"]");
-    EXPECT_EQ(tab1->getValue()->getColumn(0)->getString(),"[1,2,3]");
-    EXPECT_EQ(tab1->getValue()->getColumn(1)->getString(),"[\"a\",\"b\",\"c\"]");
-    EXPECT_EQ(tab1->getValue(0)->getColumn(0)->getString(),"[1,2,3]");
-    EXPECT_EQ(tab1->getValue(0)->getColumn(1)->getString(),"[\"a\",\"b\",\"c\"]");
-    EXPECT_EQ(tab1->getValue(2)->getColumn(0)->getString(),"[1,2,3]");
-    EXPECT_EQ(tab1->getValue(2)->getColumn(1)->getString(),"[\"a\",\"b\",\"c\"]");
-    EXPECT_EQ(tab1->getSubTable({0})->getForm(),DF_TABLE);
-    EXPECT_EQ(tab1->getSubTable({0})->getRow(0)->getString(),tab1->getRow(0)->getString());
+    ASSERT_EQ(tab1->getWindow(0,-1,0,2)->getColumn(0)->getValue()->getString(),"[1,2]");
+    ASSERT_EQ(tab1->getWindow(0,1,0,1)->getColumn(0)->getValue()->getString(),"[1]");
+    ASSERT_EQ(tab1->getMember(dolphindb::Util::createString("col111"))->getString(),"[1,2,3]");
+    dolphindb::VectorSP memvec=dolphindb::Util::createVector(dolphindb::DT_STRING,2,2);
+    memvec->set(0,dolphindb::Util::createString("col111"));
+    memvec->set(1,dolphindb::Util::createString("col2"));
+    ASSERT_EQ(tab1->getMember(memvec)->get(0)->getString(),"[1,2,3]");
+    ASSERT_EQ(tab1->getMember(memvec)->get(1)->getString(),"[\"a\",\"b\",\"c\"]");
+    ASSERT_EQ(tab1->getValue()->getColumn(0)->getString(),"[1,2,3]");
+    ASSERT_EQ(tab1->getValue()->getColumn(1)->getString(),"[\"a\",\"b\",\"c\"]");
+    ASSERT_EQ(tab1->getValue(0)->getColumn(0)->getString(),"[1,2,3]");
+    ASSERT_EQ(tab1->getValue(0)->getColumn(1)->getString(),"[\"a\",\"b\",\"c\"]");
+    ASSERT_EQ(tab1->getValue(2)->getColumn(0)->getString(),"[1,2,3]");
+    ASSERT_EQ(tab1->getValue(2)->getColumn(1)->getString(),"[\"a\",\"b\",\"c\"]");
+    ASSERT_EQ(tab1->getSubTable({0})->getForm(),dolphindb::DF_TABLE);
+    ASSERT_EQ(tab1->getSubTable({0})->getRow(0)->getString(),tab1->getRow(0)->getString());
 
-    cout<<tab1->getInstance(tab1->size())->getColumn(0)->getString()<<endl;
-    cout<<tab1->getInstance(tab1->size())->getColumn(1)->getString()<<endl;
+    std::cout<<tab1->getInstance(tab1->size())->getColumn(0)->getString()<<std::endl;
+    std::cout<<tab1->getInstance(tab1->size())->getColumn(1)->getString()<<std::endl;
 
 }
 
 TEST_F(FunctionTest,test_function_is){
-    TableSP tab1=conn.run("u");
-    ConstantSP intval=conn.run("a");
-    VectorSP vec1= conn.run("vec");
-    VectorSP av1=conn.run("v");
-    SetSP set1=conn.run("w");
-    DictionarySP dict1=conn.run("y");
-    ConstantSP voidval=conn.run("d");
-    ConstantSP uuidval=conn.run("s");
-    VectorSP matrixval=conn.run("x");
-    EXPECT_FALSE(tab1->isDatabase());
-    EXPECT_FALSE(intval->isDatabase());
-    EXPECT_TRUE(intval->isNumber());
+    dolphindb::TableSP tab1=conn.run("u");
+    dolphindb::ConstantSP intval=conn.run("a");
+    dolphindb::VectorSP vec1= conn.run("vec");
+    dolphindb::VectorSP av1=conn.run("v");
+    dolphindb::SetSP set1=conn.run("w");
+    dolphindb::DictionarySP dict1=conn.run("y");
+    dolphindb::ConstantSP voidval=conn.run("d");
+    dolphindb::ConstantSP uuidval=conn.run("s");
+    dolphindb::VectorSP matrixval=conn.run("x");
+    ASSERT_FALSE(tab1->isDatabase());
+    ASSERT_FALSE(intval->isDatabase());
+    ASSERT_TRUE(intval->isNumber());
     char *buf = new char[2];
-    EXPECT_FALSE(dict1->isValid(0,1,buf));
-    EXPECT_FALSE(dict1->isNull(0,1,buf));
-    EXPECT_FALSE(intval->isLargeConstant());
-    EXPECT_FALSE(intval->isIndexArray());
-    EXPECT_FALSE(vec1->isHugeIndexArray());
-    EXPECT_ANY_THROW(av1->isSorted(true));
-    EXPECT_TRUE(set1->isLargeConstant());
-    EXPECT_TRUE(dict1->isLargeConstant());
-    EXPECT_TRUE(tab1->isLargeConstant());
+    ASSERT_FALSE(dict1->isValid(0,1,buf));
+    ASSERT_FALSE(dict1->isNull(0,1,buf));
+    ASSERT_FALSE(intval->isLargeConstant());
+    ASSERT_FALSE(intval->isIndexArray());
+    ASSERT_FALSE(vec1->isHugeIndexArray());
+    ASSERT_ANY_THROW(av1->isSorted(true));
+    ASSERT_TRUE(set1->isLargeConstant());
+    ASSERT_TRUE(dict1->isLargeConstant());
+    ASSERT_TRUE(tab1->isLargeConstant());
 
-    EXPECT_FALSE(uuidval->isIndexArray());
-    EXPECT_FALSE(uuidval->isHugeIndexArray());
-    EXPECT_TRUE(matrixval->isLargeConstant());
-    EXPECT_FALSE(vec1->isLargeConstant());
+    ASSERT_FALSE(uuidval->isIndexArray());
+    ASSERT_FALSE(uuidval->isHugeIndexArray());
+    ASSERT_TRUE(matrixval->isLargeConstant());
+    ASSERT_FALSE(vec1->isLargeConstant());
 }
 
 TEST_F(FunctionTest,test_function_set){
-    VectorSP vec1= conn.run("vec");
-    ConstantSP uuidval=conn.run("s");
-    DictionarySP dict1=conn.run("y");
-    ConstantSP voidval=conn.run("d");
-    ConstantSP intval=conn.run("a");
-    TableSP tab1=conn.run("u");
+    dolphindb::VectorSP vec1= conn.run("vec");
+    dolphindb::ConstantSP uuidval=conn.run("s");
+    dolphindb::DictionarySP dict1=conn.run("y");
+    dolphindb::ConstantSP voidval=conn.run("d");
+    dolphindb::ConstantSP intval=conn.run("a");
+    dolphindb::TableSP tab1=conn.run("u");
 
     intval->setChar((char)5);
-    EXPECT_EQ(intval->getChar(),(char)5);
+    ASSERT_EQ(intval->getChar(),(char)5);
     intval->setLong((long long)5);
-    EXPECT_EQ(intval->getLong(),(long long)5);
-    intval->setIndex((INDEX)5);
-    EXPECT_EQ(intval->getIndex(),(INDEX)5);
+    ASSERT_EQ(intval->getLong(),(long long)5);
+    intval->setIndex((dolphindb::INDEX)5);
+    ASSERT_EQ(intval->getIndex(),(dolphindb::INDEX)5);
     intval->setFloat((float)5);
-    EXPECT_EQ(intval->getFloat(),(float)5);
+    ASSERT_EQ(intval->getFloat(),(float)5);
     unsigned char* val=new unsigned char[1];
     intval->setBinary(val,1);
 
     vec1->setChar(0,1);
-    EXPECT_EQ(vec1->get(0)->getChar(),(char)1);
+    ASSERT_EQ(vec1->get(0)->getChar(),(char)1);
     vec1->setLong(0,1);
-    EXPECT_EQ(vec1->get(0)->getLong(),(long long)1);
+    ASSERT_EQ(vec1->get(0)->getLong(),(long long)1);
     vec1->setIndex(0,1);
-    EXPECT_EQ(vec1->get(0)->getIndex(),(INDEX)1);
+    ASSERT_EQ(vec1->get(0)->getIndex(),(dolphindb::INDEX)1);
     vec1->setFloat(0,1);
-    EXPECT_EQ(vec1->get(0)->getFloat(),(float)1);
+    ASSERT_EQ(vec1->get(0)->getFloat(),(float)1);
     vec1->setNull(0);
-    EXPECT_TRUE(vec1->get(0)->isNull());
-    vec1->setItem(0,Util::createInt(6));
-    EXPECT_EQ(vec1->get(0)->getInt(),6); 
+    ASSERT_TRUE(vec1->get(0)->isNull());
+    vec1->setItem(0,dolphindb::Util::createInt(6));
+    ASSERT_EQ(vec1->get(0)->getInt(),6); 
 
-    EXPECT_FALSE(uuidval->set(0,Util::createInt(1)));
-    EXPECT_FALSE(uuidval->set(0,0,Util::createInt(1)));
-    EXPECT_FALSE(uuidval->set(Util::createInt(0),Util::createInt(1)));
-    EXPECT_FALSE(uuidval->setColumn(0,Util::createInt(1)));
-    uuidval->setRowLabel(Util::createInt(1));
-    uuidval->setColumnLabel(Util::createInt(1));
+    ASSERT_FALSE(uuidval->set(0,dolphindb::Util::createInt(1)));
+    ASSERT_FALSE(uuidval->set(0,0,dolphindb::Util::createInt(1)));
+    ASSERT_FALSE(uuidval->set(dolphindb::Util::createInt(0),dolphindb::Util::createInt(1)));
+    ASSERT_FALSE(uuidval->setColumn(0,dolphindb::Util::createInt(1)));
+    uuidval->setRowLabel(dolphindb::Util::createInt(1));
+    uuidval->setColumnLabel(dolphindb::Util::createInt(1));
     uuidval->setNullFlag(false);
 
     char *buf = new char[2]; 
     short *buf1 = new short[2];
     int *buf2 = new int[2];
-    INDEX *buf4 = new INDEX[2];
+    dolphindb::INDEX *buf4 = new dolphindb::INDEX[2];
     long long *buf3 = new long long[2];
     float *buf5 = new float[2];
     double *buf6 = new double[2];
     char **buf9 = new char*[2];
     unsigned char *buf10 = new unsigned char[2];
-    SymbolBase *symbase= new SymbolBase(1);
+    dolphindb::SymbolBase *symbase= new dolphindb::SymbolBase(1);
     void *buf11=NULL;
 
-    EXPECT_FALSE(uuidval->setBool(0,1,buf));
-    EXPECT_FALSE(uuidval->setChar(0,1,buf));
-    EXPECT_FALSE(uuidval->setShort(0,1,buf1)); 
-    EXPECT_FALSE(uuidval->setInt(0,1,buf2));
-    EXPECT_FALSE(uuidval->setLong(0,1,buf3));
-    EXPECT_FALSE(uuidval->setIndex(0,1,buf4));
-    EXPECT_FALSE(uuidval->setFloat(0,1,buf5));
-    EXPECT_FALSE(uuidval->setDouble(0,1,buf6));   
-    EXPECT_FALSE(uuidval->setString(0,1,buf9));
-    EXPECT_FALSE(voidval->setBinary(0,1,1,buf10));
-    EXPECT_FALSE(voidval->setData(0,1,buf2));
+    ASSERT_FALSE(uuidval->setBool(0,1,buf));
+    ASSERT_FALSE(uuidval->setChar(0,1,buf));
+    ASSERT_FALSE(uuidval->setShort(0,1,buf1)); 
+    ASSERT_FALSE(uuidval->setInt(0,1,buf2));
+    ASSERT_FALSE(uuidval->setLong(0,1,buf3));
+    ASSERT_FALSE(uuidval->setIndex(0,1,buf4));
+    ASSERT_FALSE(uuidval->setFloat(0,1,buf5));
+    ASSERT_FALSE(uuidval->setDouble(0,1,buf6));   
+    ASSERT_FALSE(uuidval->setString(0,1,buf9));
+    ASSERT_FALSE(voidval->setBinary(0,1,1,buf10));
+    ASSERT_FALSE(voidval->setData(0,1,buf2));
 
-    dict1->set("123",Util::createInt(1));
-    EXPECT_FALSE(tab1->set(0,Util::createInt(5)));
-    cout<<tab1->getString();
+    dict1->set("123",dolphindb::Util::createInt(1));
+    ASSERT_FALSE(tab1->set(0,dolphindb::Util::createInt(5)));
+    std::cout<<tab1->getString();
 
 }
 
 TEST_F(FunctionTest,test_function_has){}
 
 TEST_F(FunctionTest,test_function_append){
-    TableSP tab1=conn.run("u");
-    string errMsg1;
-    INDEX insertedRows=1;
-    vector<ConstantSP> cols4={Util::createInt(4),Util::createString("d")};
+    dolphindb::TableSP tab1=conn.run("u");
+    std::string errMsg1;
+    dolphindb::INDEX insertedRows=1;
+    std::vector<dolphindb::ConstantSP> cols4={dolphindb::Util::createInt(4),dolphindb::Util::createString("d")};
 
     tab1->setReadOnly(true);
-    EXPECT_FALSE(tab1->append(cols4,insertedRows,errMsg1));
-    EXPECT_EQ(errMsg1,"Can't modify read only table.");
+    ASSERT_FALSE(tab1->append(cols4,insertedRows,errMsg1));
+    ASSERT_EQ(errMsg1,"Can't modify read only table.");
     tab1->setReadOnly(false);
 
     //append constant
-    vector<string> colNames = { "col1", "col2" };
-    vector<ConstantSP> err_colnum_values={Util::createInt(4)};
-    EXPECT_FALSE(tab1->append(err_colnum_values,insertedRows,errMsg1));
-    EXPECT_EQ(errMsg1, "The number of table columns doesn't match the number of columns to append.");
+    std::vector<std::string> colNames = { "col1", "col2" };
+    std::vector<dolphindb::ConstantSP> err_colnum_values={dolphindb::Util::createInt(4)};
+    ASSERT_FALSE(tab1->append(err_colnum_values,insertedRows,errMsg1));
+    ASSERT_EQ(errMsg1, "The number of table columns doesn't match the number of columns to append.");
 
     errMsg1.clear();
-    VectorSP tempVec=Util::createVector(DT_STRING,2,2);
-    vector<ConstantSP> err_colsize_values={Util::createInt(4),tempVec};
-    EXPECT_FALSE(tab1->append(err_colsize_values,insertedRows,errMsg1));
-    EXPECT_EQ(errMsg1, "Inconsistent length of values to insert.");
+    dolphindb::VectorSP tempVec=dolphindb::Util::createVector(dolphindb::DT_STRING,2,2);
+    std::vector<dolphindb::ConstantSP> err_colsize_values={dolphindb::Util::createInt(4),tempVec};
+    ASSERT_FALSE(tab1->append(err_colsize_values,insertedRows,errMsg1));
+    ASSERT_EQ(errMsg1, "Inconsistent length of values to insert.");
 
     errMsg1.clear();
-    vector<ConstantSP> err_coltype_values={Util::createString("2"),Util::createString("d")};
-    EXPECT_FALSE(tab1->append(err_coltype_values,insertedRows,errMsg1));
-    EXPECT_EQ(errMsg1, "Failed to append data to column 'col1' with error: Incompatible type. Expected: INT, Actual: STRING");
+    std::vector<dolphindb::ConstantSP> err_coltype_values={dolphindb::Util::createString("2"),dolphindb::Util::createString("d")};
+    ASSERT_FALSE(tab1->append(err_coltype_values,insertedRows,errMsg1));
+    ASSERT_EQ(errMsg1, "Failed to append data to column 'col1' with error: Incompatible type. Expected: INT, Actual: STRING");
 
 
-    //append tuple
+    //append std::tuple
     errMsg1.clear();
-    VectorSP tuple_value=Util::createVector(DT_ANY,2,2);
-    tuple_value->set(0,Util::createInt(4));
-    tuple_value->set(1,Util::createString("d"));
-    VectorSP err_colnum_tuple=Util::createVector(DT_ANY,1,2);
-    err_colnum_tuple->set(0,Util::createInt(4));
-    VectorSP err_coltype_tuple=Util::createVector(DT_ANY,2,2);
-    err_coltype_tuple->set(0,Util::createString("4"));
-    err_coltype_tuple->set(1,Util::createInt(5));
+    dolphindb::VectorSP tuple_value=dolphindb::Util::createVector(dolphindb::DT_ANY,2,2);
+    tuple_value->set(0,dolphindb::Util::createInt(4));
+    tuple_value->set(1,dolphindb::Util::createString("d"));
+    dolphindb::VectorSP err_colnum_tuple=dolphindb::Util::createVector(dolphindb::DT_ANY,1,2);
+    err_colnum_tuple->set(0,dolphindb::Util::createInt(4));
+    dolphindb::VectorSP err_coltype_tuple=dolphindb::Util::createVector(dolphindb::DT_ANY,2,2);
+    err_coltype_tuple->set(0,dolphindb::Util::createString("4"));
+    err_coltype_tuple->set(1,dolphindb::Util::createInt(5));
 
-    vector<ConstantSP> tuple_values={tuple_value};
-	EXPECT_TRUE(tab1->append(tuple_values,insertedRows,errMsg1));
-    vector<ConstantSP> tuple_values1={err_colnum_tuple};
-	EXPECT_FALSE(tab1->append(tuple_values1,insertedRows,errMsg1));
-    vector<ConstantSP> tuple_values2={err_coltype_tuple};
-	EXPECT_FALSE(tab1->append(tuple_values2,insertedRows,errMsg1));
+    std::vector<dolphindb::ConstantSP> tuple_values={tuple_value};
+    ASSERT_TRUE(tab1->append(tuple_values,insertedRows,errMsg1));
+    std::vector<dolphindb::ConstantSP> tuple_values1={err_colnum_tuple};
+    ASSERT_FALSE(tab1->append(tuple_values1,insertedRows,errMsg1));
+    std::vector<dolphindb::ConstantSP> tuple_values2={err_coltype_tuple};
+    ASSERT_FALSE(tab1->append(tuple_values2,insertedRows,errMsg1));
 
     //append table
-    cout<<tab1->getString();
+    std::cout<<tab1->getString();
     errMsg1.clear();
-    vector<ConstantSP> tabVec={};
+    std::vector<dolphindb::ConstantSP> tabVec={};
   
-    vector<ConstantSP> errSizeCols={Util::createInt(4),Util::createString("d"),Util::createInt(0)};
-    vector<string> errSizecolNames = { "col1", "col2", "col3"};
-    TableSP tab_3_cols=Util::createTable(errSizecolNames, errSizeCols);
+    std::vector<dolphindb::ConstantSP> errSizeCols={dolphindb::Util::createInt(4),dolphindb::Util::createString("d"),dolphindb::Util::createInt(0)};
+    std::vector<std::string> errSizecolNames = { "col1", "col2", "col3"};
+    dolphindb::TableSP tab_3_cols=dolphindb::Util::createTable(errSizecolNames, errSizeCols);
     tabVec.emplace_back(tab_3_cols);
-    EXPECT_FALSE(tab1->append(tabVec,insertedRows,errMsg1));
-    EXPECT_EQ(errMsg1,"Number of columns for the original table and the table to insert are different.");
+    ASSERT_FALSE(tab1->append(tabVec,insertedRows,errMsg1));
+    ASSERT_EQ(errMsg1,"Number of columns for the original table and the table to insert are different.");
 
     errMsg1.clear();
     tabVec.clear();
-    vector<ConstantSP> errTypeCols={Util::createString("2"),Util::createString("d")};
-    TableSP tab_errType_cols=Util::createTable(colNames, errTypeCols);
+    std::vector<dolphindb::ConstantSP> errTypeCols={dolphindb::Util::createString("2"),dolphindb::Util::createString("d")};
+    dolphindb::TableSP tab_errType_cols=dolphindb::Util::createTable(colNames, errTypeCols);
     tabVec.emplace_back(tab_errType_cols);
-    EXPECT_FALSE(tab1->append(tabVec,insertedRows,errMsg1));
-    EXPECT_EQ(errMsg1,"Failed to append data to column 'col1' with error: Incompatible type. Expected: INT, Actual: STRING");
+    ASSERT_FALSE(tab1->append(tabVec,insertedRows,errMsg1));
+    ASSERT_EQ(errMsg1,"Failed to append data to column 'col1' with error: Incompatible type. Expected: INT, Actual: STRING");
 
 }
 
 TEST_F(FunctionTest,test_function_update){
-    TableSP tab1=conn.run("u");
-    vector<string> colNames = { "col1", "col2" };
-    VectorSP indexs = Util::createIndexVector(0,1);
+    dolphindb::TableSP tab1=conn.run("u");
+    std::vector<std::string> colNames = { "col1", "col2" };
+    dolphindb::VectorSP indexs = dolphindb::Util::createIndexVector(0,1);
 
-    VectorSP val1 = Util::createVector(DT_INT,1,1);
-    val1->set(0,Util::createInt(5));
-    VectorSP val2 = Util::createVector(DT_STRING,1,1);
-    val2->set(0,Util::createString("f"));
-    vector<ConstantSP> vector_cols={val1,val2};
-    vector<ConstantSP> row={Util::createInt(4),Util::createString("d")};
-    vector<ConstantSP> errtype_cols={Util::createString("4"),Util::createString("d")};
-    vector<ConstantSP> err_colnum_values={Util::createVector(DT_INT,2,2)};
-    string errMsg1;
-    INDEX insertedRows=1;
+    dolphindb::VectorSP val1 = dolphindb::Util::createVector(dolphindb::DT_INT,1,1);
+    val1->set(0,dolphindb::Util::createInt(5));
+    dolphindb::VectorSP val2 = dolphindb::Util::createVector(dolphindb::DT_STRING,1,1);
+    val2->set(0,dolphindb::Util::createString("f"));
+    std::vector<dolphindb::ConstantSP> vector_cols={val1,val2};
+    std::vector<dolphindb::ConstantSP> row={dolphindb::Util::createInt(4),dolphindb::Util::createString("d")};
+    std::vector<dolphindb::ConstantSP> errtype_cols={dolphindb::Util::createString("4"),dolphindb::Util::createString("d")};
+    std::vector<dolphindb::ConstantSP> err_colnum_values={dolphindb::Util::createVector(dolphindb::DT_INT,2,2)};
+    std::string errMsg1;
+    dolphindb::INDEX insertedRows=1;
 
     tab1->setReadOnly(true);
-    EXPECT_FALSE(tab1->update(row,Util::createInt(0),colNames,errMsg1));
-    EXPECT_EQ(errMsg1,"Can't modify read only table.");
+    ASSERT_FALSE(tab1->update(row,dolphindb::Util::createInt(0),colNames,errMsg1));
+    ASSERT_EQ(errMsg1,"Can't modify read only table.");
     errMsg1.clear();
     tab1->setReadOnly(false); 
 
-    EXPECT_TRUE(tab1->update(row,Util::createInt(2),colNames,errMsg1));
-    // EXPECT_ANY_THROW(tab1->update(row,Util::createInt(3),colNames,errMsg1));
-    tab1->update(errtype_cols,Util::createInt(2),colNames,errMsg1);
-    EXPECT_EQ(errMsg1,"The category of the value to update does not match the column col1");
+    ASSERT_TRUE(tab1->update(row,dolphindb::Util::createInt(2),colNames,errMsg1));
+    // ASSERT_ANY_THROW(tab1->update(row,dolphindb::Util::createInt(3),colNames,errMsg1));
+    tab1->update(errtype_cols,dolphindb::Util::createInt(2),colNames,errMsg1);
+    ASSERT_EQ(errMsg1,"The category of the value to update does not match the column col1");
 
     errMsg1.clear();
-    vector<string> err_colname={"col3","col2"};
-    tab1->update(row,Util::createInt(2),err_colname,errMsg1);
-    EXPECT_EQ(errMsg1,"The column col3 does not exist. To add a new column, the table shouldn't be shared and the value size must match the table.");
+    std::vector<std::string> err_colname={"col3","col2"};
+    tab1->update(row,dolphindb::Util::createInt(2),err_colname,errMsg1);
+    ASSERT_EQ(errMsg1,"The column col3 does not exist. To add a new column, the table shouldn't be shared and the value size must match the table.");
 
     errMsg1.clear();
-    tab1->update(err_colnum_values,Util::createInt(2),colNames,errMsg1);
-    EXPECT_EQ(errMsg1,"Inconsistent length of values to update.");
+    tab1->update(err_colnum_values,dolphindb::Util::createInt(2),colNames,errMsg1);
+    ASSERT_EQ(errMsg1,"Inconsistent length of values to update.");
 
     errMsg1.clear();
-    cout<<tab1->getString()<<endl;
-    EXPECT_TRUE(tab1->update(row,indexs,colNames,errMsg1));
-    cout<<tab1->getString()<<endl;
-    EXPECT_EQ(tab1->getRow(0)->getMember(Util::createString("col1"))->getInt(),4);
-    EXPECT_EQ(tab1->getRow(0)->getMember(Util::createString("col2"))->getString(),"d");
+    std::cout<<tab1->getString()<<std::endl;
+    ASSERT_TRUE(tab1->update(row,indexs,colNames,errMsg1));
+    std::cout<<tab1->getString()<<std::endl;
+    ASSERT_EQ(tab1->getRow(0)->getMember(dolphindb::Util::createString("col1"))->getInt(),4);
+    ASSERT_EQ(tab1->getRow(0)->getMember(dolphindb::Util::createString("col2"))->getString(),"d");
 
     errMsg1.clear();
     tab1->update(vector_cols,indexs,colNames,errMsg1);
-    EXPECT_EQ(tab1->getRow(0)->getMember(Util::createString("col1"))->getInt(),5);
-    EXPECT_EQ(tab1->getRow(0)->getMember(Util::createString("col2"))->getString(),"f");
+    ASSERT_EQ(tab1->getRow(0)->getMember(dolphindb::Util::createString("col1"))->getInt(),5);
+    ASSERT_EQ(tab1->getRow(0)->getMember(dolphindb::Util::createString("col2"))->getString(),"f");
 
 }
 
 TEST_F(FunctionTest,test_function_remove){
-    TableSP tab1=conn.run("u");
+    dolphindb::TableSP tab1=conn.run("u");
     
-    string errMsg1;
-    VectorSP vec1=Util::createVector(DT_INT,0,1);
-    vec1->append(Util::createInt(1));
+    std::string errMsg1;
+    dolphindb::VectorSP vec1=dolphindb::Util::createVector(dolphindb::DT_INT,0,1);
+    vec1->append(dolphindb::Util::createInt(1));
 
     tab1->setReadOnly(true);
-    EXPECT_FALSE(tab1->remove(vec1,errMsg1));
-    EXPECT_EQ(errMsg1,"Can't remove rows from a read only in-memory table.");
+    ASSERT_FALSE(tab1->remove(vec1,errMsg1));
+    ASSERT_EQ(errMsg1,"Can't remove rows from a read only in-memory table.");
     errMsg1.clear();
     tab1->setReadOnly(false);
 
-    EXPECT_ANY_THROW(tab1->remove(Util::createInt(1),errMsg1)); //not surport remove with scalar parameter.
-    EXPECT_TRUE(tab1->remove(vec1,errMsg1));
+    ASSERT_ANY_THROW(tab1->remove(dolphindb::Util::createInt(1),errMsg1)); //not surport remove with scalar parameter.
+    ASSERT_TRUE(tab1->remove(vec1,errMsg1));
 
     errMsg1.clear();
-    EXPECT_EQ(tab1->rows(),2);
-    EXPECT_TRUE(tab1->remove(NULL,errMsg1));
+    ASSERT_EQ(tab1->rows(),2);
+    ASSERT_TRUE(tab1->remove(NULL,errMsg1));
 
     errMsg1.clear();
-    EXPECT_EQ(tab1->rows(),0);
+    ASSERT_EQ(tab1->rows(),0);
 }
 
 TEST_F(FunctionTest,test_function_drop){
-    TableSP tab1=conn.run("u");
+    dolphindb::TableSP tab1=conn.run("u");
 
     tab1->setReadOnly(true);
-    vector<int> *dropColsIndex=new vector<int>;
+    std::vector<int> *dropColsIndex=new std::vector<int>;
     dropColsIndex->push_back(1);
-    EXPECT_ANY_THROW(tab1->drop(*dropColsIndex));
+    ASSERT_ANY_THROW(tab1->drop(*dropColsIndex));
     tab1->setReadOnly(false);
 
     dropColsIndex->clear();
     dropColsIndex->push_back(1);
     tab1->drop(*dropColsIndex);
-    EXPECT_EQ(tab1->columns(),1);
+    ASSERT_EQ(tab1->columns(),1);
 
-    TableSP tab2=conn.run("u");
+    dolphindb::TableSP tab2=conn.run("u");
     dropColsIndex->clear();
     dropColsIndex->push_back(2);
     tab2->drop(*dropColsIndex);
-    EXPECT_EQ(tab2->columns(),2);
+    ASSERT_EQ(tab2->columns(),2);
 
-    TableSP tab3=conn.run("u");
+    dolphindb::TableSP tab3=conn.run("u");
     dropColsIndex->clear();
     dropColsIndex->push_back(0);
     dropColsIndex->push_back(1);
     tab3->drop(*dropColsIndex);
-    EXPECT_EQ(tab3->columns(),0);
+    ASSERT_EQ(tab3->columns(),0);
 
 }
 
-
-TEST_F(FunctionTest,test_function_add){}
-
 TEST_F(FunctionTest,test_Util_functions){
-    cout << Util::escape((char)14)<<endl;
+    std::cout << dolphindb::Util::escape((char)14)<<std::endl;
 
-    EXPECT_EQ(Util::getMonthEnd(1),30);
-    EXPECT_EQ(Util::getMonthEnd(31),58);
-    EXPECT_EQ(Util::getMonthStart(1),0);
-    EXPECT_EQ(Util::getMonthStart(60),59);
+    ASSERT_EQ(dolphindb::Util::getMonthEnd(1),30);
+    ASSERT_EQ(dolphindb::Util::getMonthEnd(31),58);
+    ASSERT_EQ(dolphindb::Util::getMonthStart(1),0);
+    ASSERT_EQ(dolphindb::Util::getMonthStart(60),59);
 
-    const char *buf = Util::allocateMemory(10);
+    const char *buf = dolphindb::Util::allocateMemory(10);
     buf="0123456789";
-    EXPECT_TRUE(Util::allocateMemory(-1,false)==NULL);
-    EXPECT_ANY_THROW(Util::allocateMemory(-1));
+    ASSERT_TRUE(dolphindb::Util::allocateMemory(-1,false)==NULL);
+    ASSERT_ANY_THROW(dolphindb::Util::allocateMemory(-1));
 
-    DictionarySP dict1=Util::createDictionary(DT_TIME,DT_ANY);
-    DictionarySP dict2=Util::createDictionary(DT_STRING,DT_ANY);
-    DictionarySP dict3=Util::createDictionary(DT_STRING,DT_DATEHOUR);
-    EXPECT_FALSE(Util::isFlatDictionary(dict1.get()));
-    EXPECT_TRUE(Util::isFlatDictionary(dict2.get()));
-    EXPECT_TRUE(Util::isFlatDictionary(dict3.get()));
-    dict2->set(Util::createString("str1"),Util::createNullConstant(DT_INT));
-    EXPECT_FALSE(Util::isFlatDictionary(dict2.get()));
-    dict3->set(Util::createString("str1"),Util::createDateHour(1000));
-    EXPECT_FALSE(Util::isFlatDictionary(dict3.get()));
+    dolphindb::DictionarySP dict1=dolphindb::Util::createDictionary(dolphindb::DT_TIME,dolphindb::DT_ANY);
+    dolphindb::DictionarySP dict2=dolphindb::Util::createDictionary(dolphindb::DT_STRING,dolphindb::DT_ANY);
+    dolphindb::DictionarySP dict3=dolphindb::Util::createDictionary(dolphindb::DT_STRING,dolphindb::DT_DATEHOUR);
+    ASSERT_FALSE(dolphindb::Util::isFlatDictionary(dict1.get()));
+    ASSERT_TRUE(dolphindb::Util::isFlatDictionary(dict2.get()));
+    ASSERT_TRUE(dolphindb::Util::isFlatDictionary(dict3.get()));
+    dict2->set(dolphindb::Util::createString("str1"),dolphindb::Util::createNullConstant(dolphindb::DT_INT));
+    ASSERT_FALSE(dolphindb::Util::isFlatDictionary(dict2.get()));
+    dict3->set(dolphindb::Util::createString("str1"),dolphindb::Util::createDateHour(1000));
+    ASSERT_FALSE(dolphindb::Util::isFlatDictionary(dict3.get()));
 
-    EXPECT_EQ(Util::getDataType("int"),DT_INT);
-    EXPECT_EQ(Util::getDataForm("vector"),DF_VECTOR);
-    EXPECT_EQ(Util::getDataTypeString(DT_INT),"INT");
-    EXPECT_EQ(Util::getDataFormString(DF_VECTOR),"VECTOR");
+    ASSERT_EQ(dolphindb::Util::getDataType("int"),dolphindb::DT_INT);
+    ASSERT_EQ(dolphindb::Util::getDataForm("vector"),dolphindb::DF_VECTOR);
+    ASSERT_EQ(dolphindb::Util::getDataTypeString(dolphindb::DT_INT),"INT");
+    ASSERT_EQ(dolphindb::Util::getDataFormString(dolphindb::DF_VECTOR),"VECTOR");
 
-    EXPECT_EQ(Util::getDataType('v'),DT_VOID);
-    EXPECT_EQ(Util::getDataType('b'),DT_BOOL);
-    EXPECT_EQ(Util::getDataType('c'),DT_CHAR);
-    EXPECT_EQ(Util::getDataType('h'),DT_SHORT);
-    EXPECT_EQ(Util::getDataType('i'),DT_INT);
-    EXPECT_EQ(Util::getDataType('f'),DT_FLOAT);
-    EXPECT_EQ(Util::getDataType('F'),DT_DOUBLE);
-    EXPECT_EQ(Util::getDataType('d'),DT_DATE);
-    EXPECT_EQ(Util::getDataType('M'),DT_MONTH);
-    EXPECT_EQ(Util::getDataType('m'),DT_MINUTE);
-    EXPECT_EQ(Util::getDataType('s'),DT_SECOND);
-    EXPECT_EQ(Util::getDataType('t'),DT_TIME);
-    EXPECT_EQ(Util::getDataType('D'),DT_DATETIME);
-    EXPECT_EQ(Util::getDataType('T'),DT_TIMESTAMP);
-    EXPECT_EQ(Util::getDataType('n'),DT_NANOTIME);
-    EXPECT_EQ(Util::getDataType('N'),DT_NANOTIMESTAMP);
-    EXPECT_EQ(Util::getDataType('S'),DT_SYMBOL);
-    EXPECT_EQ(Util::getDataType('W'),DT_STRING);
-    EXPECT_EQ(Util::getDataType('l'),DT_LONG);
+    ASSERT_EQ(dolphindb::Util::getDataType('v'),dolphindb::DT_VOID);
+    ASSERT_EQ(dolphindb::Util::getDataType('b'),dolphindb::DT_BOOL);
+    ASSERT_EQ(dolphindb::Util::getDataType('c'),dolphindb::DT_CHAR);
+    ASSERT_EQ(dolphindb::Util::getDataType('h'),dolphindb::DT_SHORT);
+    ASSERT_EQ(dolphindb::Util::getDataType('i'),dolphindb::DT_INT);
+    ASSERT_EQ(dolphindb::Util::getDataType('f'),dolphindb::DT_FLOAT);
+    ASSERT_EQ(dolphindb::Util::getDataType('F'),dolphindb::DT_DOUBLE);
+    ASSERT_EQ(dolphindb::Util::getDataType('d'),dolphindb::DT_DATE);
+    ASSERT_EQ(dolphindb::Util::getDataType('M'),dolphindb::DT_MONTH);
+    ASSERT_EQ(dolphindb::Util::getDataType('m'),dolphindb::DT_MINUTE);
+    ASSERT_EQ(dolphindb::Util::getDataType('s'),dolphindb::DT_SECOND);
+    ASSERT_EQ(dolphindb::Util::getDataType('t'),dolphindb::DT_TIME);
+    ASSERT_EQ(dolphindb::Util::getDataType('D'),dolphindb::DT_DATETIME);
+    ASSERT_EQ(dolphindb::Util::getDataType('T'),dolphindb::DT_TIMESTAMP);
+    ASSERT_EQ(dolphindb::Util::getDataType('n'),dolphindb::DT_NANOTIME);
+    ASSERT_EQ(dolphindb::Util::getDataType('N'),dolphindb::DT_NANOTIMESTAMP);
+    ASSERT_EQ(dolphindb::Util::getDataType('S'),dolphindb::DT_SYMBOL);
+    ASSERT_EQ(dolphindb::Util::getDataType('W'),dolphindb::DT_STRING);
+    ASSERT_EQ(dolphindb::Util::getDataType('l'),dolphindb::DT_LONG);
 
-    VectorSP matrixval = Util::createDoubleMatrix(1,1);
-    string ex_martval=conn.run("matrix(DOUBLE,1,1)")->getString();
-    EXPECT_EQ(ex_martval,matrixval->getString());
-    EXPECT_TRUE(matrixval->isMatrix());
-    EXPECT_EQ(matrixval->getForm(),DF_MATRIX);
-    EXPECT_EQ(matrixval->getType(),DT_DOUBLE);
+    dolphindb::VectorSP matrixval = dolphindb::Util::createDoubleMatrix(1,1);
+    std::string ex_martval=conn.run("matrix(DOUBLE,1,1)")->getString();
+    ASSERT_EQ(ex_martval,matrixval->getString());
+    ASSERT_TRUE(matrixval->isMatrix());
+    ASSERT_EQ(matrixval->getForm(),dolphindb::DF_MATRIX);
+    ASSERT_EQ(matrixval->getType(),dolphindb::DT_DOUBLE);
 
-    VectorSP indexvec=Util::createIndexVector(-1,-1);
-    VectorSP indexvec1=Util::createIndexVector(0,1);
-    cout<<indexvec->getString()<<endl;
-    string ex_indexvec=conn.run("array(INDEX,1,1)")->getString();
-    EXPECT_EQ(indexvec1->getString(),ex_indexvec);
+    dolphindb::VectorSP indexvec=dolphindb::Util::createIndexVector(-1,-1);
+    dolphindb::VectorSP indexvec1=dolphindb::Util::createIndexVector(0,1);
+    std::cout<<indexvec->getString()<<std::endl;
+    std::string ex_indexvec=conn.run("array(INDEX,1,1)")->getString();
+    ASSERT_EQ(indexvec1->getString(),ex_indexvec);
 
-    EXPECT_EQ(Util::trim(" 1 2 3      "),"1 2 3");
-    EXPECT_EQ(Util::ltrim("   1 2 3      "), "1 2 3      ");
+    ASSERT_EQ(dolphindb::Util::trim(" 1 2 3      "),"1 2 3");
+    ASSERT_EQ(dolphindb::Util::ltrim("   1 2 3      "), "1 2 3      ");
 
-    EXPECT_EQ(Util::strip(" \t\r\n 1 2 3 \t\n\r"),"1 2 3");
-    EXPECT_EQ(Util::wc("1 23 4 abc A *&^%$#!\t\n\r"),5);
+    ASSERT_EQ(dolphindb::Util::strip(" \t\r\n 1 2 3 \t\n\r"),"1 2 3");
+    ASSERT_EQ(dolphindb::Util::wc("1 23 4 abc A *&^%$#!\t\n\r"),5);
 
-    EXPECT_EQ(Util::replace("abc","d","e"),"abc");
-    EXPECT_EQ(Util::replace("abc","c","e"),"abe");
-    EXPECT_EQ(Util::replace("abc","a","cba"),"cbabc");
+    ASSERT_EQ(dolphindb::Util::replace("abc","d","e"),"abc");
+    ASSERT_EQ(dolphindb::Util::replace("abc","c","e"),"abe");
+    ASSERT_EQ(dolphindb::Util::replace("abc","a","cba"),"cbabc");
 
-    EXPECT_EQ(Util::replace("abc",'d','e'),"abc");
-    EXPECT_EQ(Util::replace("abc",'c','e'),"abe");
-    // EXPECT_EQ(Util::replace("abc",'a','cba'),"cbabc");
+    ASSERT_EQ(dolphindb::Util::replace("abc",'d','e'),"abc");
+    ASSERT_EQ(dolphindb::Util::replace("abc",'c','e'),"abe");
+    // ASSERT_EQ(dolphindb::Util::replace("abc",'a','cba'),"cbabc");
 
-    EXPECT_EQ(Util::upper("abc"),"ABC");
-    EXPECT_EQ(Util::toUpper('a'),'A');
+    ASSERT_EQ(dolphindb::Util::upper("abc"),"ABC");
+    ASSERT_EQ(dolphindb::Util::toUpper('a'),'A');
 
-    EXPECT_EQ(Util::longToString((long long)999999999999999),"999999999999999");
-    EXPECT_EQ(Util::doubleToString((double)2.321597810),"2.321598");
+    ASSERT_EQ(dolphindb::Util::longToString((long long)999999999999999),"999999999999999");
+    ASSERT_EQ(dolphindb::Util::doubleToString((double)2.321597810),"2.321598");
 
-    EXPECT_FALSE(Util::endWith("dolphindb", ""));
-    EXPECT_FALSE(Util::endWith("dolphindb", "nihao"));
-    EXPECT_TRUE(Util::endWith("dolphindb", "db"));
+    ASSERT_FALSE(dolphindb::Util::endWith("dolphindb", ""));
+    ASSERT_FALSE(dolphindb::Util::endWith("dolphindb", "nihao"));
+    ASSERT_TRUE(dolphindb::Util::endWith("dolphindb", "db"));
 
-    EXPECT_FALSE(Util::startWith("dolphindb", ""));
-    EXPECT_FALSE(Util::startWith("dolphindb", "nihao"));
-    EXPECT_TRUE(Util::startWith("dolphindb", "dolphin"));
+    ASSERT_FALSE(dolphindb::Util::startWith("dolphindb", ""));
+    ASSERT_FALSE(dolphindb::Util::startWith("dolphindb", "nihao"));
+    ASSERT_TRUE(dolphindb::Util::startWith("dolphindb", "dolphin"));
 
-    string teststrval="abc\"123\" dolphindb";
-    EXPECT_EQ(Util::literalConstant(teststrval),"\"abc\\\"123\\\" dolphindb\"");
+    std::string teststrval="abc\"123\" dolphindb";
+    ASSERT_EQ(dolphindb::Util::literalConstant(teststrval),"\"abc\\\"123\\\" dolphindb\"");
 
-    cout<<Util::getNanoBenchmark()<<endl;
-    cout<<Util::getNanoEpochTime()<<endl;
+    std::cout<<dolphindb::Util::getNanoBenchmark()<<std::endl;
+    std::cout<<dolphindb::Util::getNanoEpochTime()<<std::endl;
     tm local_time;
-    Util::getLocalTime(local_time);
-    cout<<to_string(1900+local_time.tm_year)+"."+to_string(1+local_time.tm_mon)+"."+to_string(local_time.tm_mday)+" "+to_string(local_time.tm_hour)+":"+to_string(local_time.tm_min)+":"+to_string(local_time.tm_sec)<<endl;
+    dolphindb::Util::getLocalTime(local_time);
+    std::cout<<std::to_string(1900+local_time.tm_year)+"."+std::to_string(1+local_time.tm_mon)+"."+std::to_string(local_time.tm_mday)+" "+std::to_string(local_time.tm_hour)+":"+std::to_string(local_time.tm_min)+":"+std::to_string(local_time.tm_sec)<<std::endl;
     
     int* timeval_int=new int[1];
     timeval_int[0]=60;
-    Util::toLocalDateTime(timeval_int,1);
-    EXPECT_EQ(timeval_int[0],Util::toLocalDateTime(60));
+    dolphindb::Util::toLocalDateTime(timeval_int,1);
+    ASSERT_EQ(timeval_int[0],dolphindb::Util::toLocalDateTime(60));
 
     // long long* timeval_long=new long long[1];
     // timeval_long[0]=(long long)10000000000;
-    // Util::toLocalNanoTimestamp(timeval_long,1);
-    // EXPECT_EQ(timeval_long[0],Util::toLocalNanoTimestamp((long long)10000000000));
+    // dolphindb::Util::toLocalNanoTimestamp(timeval_long,1);
+    // ASSERT_EQ(timeval_long[0],dolphindb::Util::toLocalNanoTimestamp((long long)10000000000));
 
     long long* timeval_long2=new long long[1];
     timeval_long2[0]=(long long)10000000000;
-    Util::toLocalTimestamp(timeval_long2,1);
-    EXPECT_EQ(timeval_long2[0],Util::toLocalTimestamp((long long)10000000000));
+    dolphindb::Util::toLocalTimestamp(timeval_long2,1);
+    ASSERT_EQ(timeval_long2[0],dolphindb::Util::toLocalTimestamp((long long)10000000000));
 
-    EXPECT_FALSE(Util::strWildCmp("dolphindb","DolphinDB"));
-    EXPECT_TRUE(Util::strWildCmp("DolphinDB","DolphinDB"));
+    ASSERT_FALSE(dolphindb::Util::strWildCmp("dolphindb","DolphinDB"));
+    ASSERT_TRUE(dolphindb::Util::strWildCmp("DolphinDB","DolphinDB"));
 
-    string dest = "dolphindb";
-    string source = "1";
-    Util::writeDoubleQuotedString(dest,source);
-    EXPECT_EQ(dest,"dolphindb\"1\"");
+    std::string dest = "dolphindb";
+    std::string source = "1";
+    dolphindb::Util::writeDoubleQuotedString(dest,source);
+    ASSERT_EQ(dest,"dolphindb\"1\"");
 
-    cout<<Util::getLastErrorCode()<<endl;
-    cout<<Util::getLastErrorMessage()<<endl;
-    cout<<Util::getErrorMessage(Util::getLastErrorCode())<<endl;
+    std::cout<<dolphindb::Util::getLastErrorCode()<<std::endl;
+    std::cout<<dolphindb::Util::getLastErrorMessage()<<std::endl;
+    std::cout<<dolphindb::Util::getErrorMessage(dolphindb::Util::getLastErrorCode())<<std::endl;
 
-    EXPECT_EQ(Util::getPartitionTypeString(VALUE),"VALUE");
+    ASSERT_EQ(dolphindb::Util::getPartitionTypeString(dolphindb::VALUE),"VALUE");
 
-    cout<<"-----------test Util::createObject()--------------"<<endl;
-    nullptr_t voidconst = nullptr;
+    std::cout<<"-----------test dolphindb::Util::createObject()--------------"<<std::endl;
+    std::nullptr_t voidconst = nullptr;
     bool boolconst = true;
     char charconst = 1;
     short shortconst = 1;
     const char* pcharconst = "1";
-    string strconst = "dolphindb";
+    std::string strconst = "dolphindb";
     // unsigned char charconst2 = 1;
     // const unsigned char* pval = "1";
     unsigned char charconstvec[] = {1};
@@ -671,403 +668,394 @@ TEST_F(FunctionTest,test_Util_functions){
     int intconst = 1;
     float floatconst = 1;
     double doubleconst = 1;
-    vector<DATA_TYPE> testTypes = {DT_BOOL,DT_CHAR,DT_SHORT,DT_INT,DT_LONG,DT_DATE,DT_MONTH,DT_TIME,
-                                    DT_MINUTE,DT_SECOND,DT_DATETIME,DT_TIMESTAMP,DT_NANOTIME,DT_NANOTIMESTAMP,
-                                    DT_FLOAT,DT_DOUBLE,DT_SYMBOL,DT_STRING,DT_UUID,DT_DATEHOUR,DT_IP,DT_INT128,DT_BLOB };
+    std::vector<dolphindb::DATA_TYPE> testTypes = {dolphindb::DT_BOOL,dolphindb::DT_CHAR,dolphindb::DT_SHORT,dolphindb::DT_INT,dolphindb::DT_LONG,dolphindb::DT_DATE,dolphindb::DT_MONTH,dolphindb::DT_TIME,
+                                    dolphindb::DT_MINUTE,dolphindb::DT_SECOND,dolphindb::DT_DATETIME,dolphindb::DT_TIMESTAMP,dolphindb::DT_NANOTIME,dolphindb::DT_NANOTIMESTAMP,
+                                    dolphindb::DT_FLOAT,dolphindb::DT_DOUBLE,dolphindb::DT_SYMBOL,dolphindb::DT_STRING,dolphindb::DT_UUID,dolphindb::DT_DATEHOUR,dolphindb::DT_IP,dolphindb::DT_INT128,dolphindb::DT_BLOB };
 
     for(int i =0;i<testTypes.size();i++){
-        ConstantSP ddbval=Util::createObject((DATA_TYPE)testTypes[i],voidconst);
-        EXPECT_TRUE(ddbval->getType()==(DATA_TYPE)testTypes[i] || ddbval->getType()==DT_STRING);
-        EXPECT_TRUE(ddbval->isNull());
+        dolphindb::ConstantSP ddbval=dolphindb::Util::createObject((dolphindb::DATA_TYPE)testTypes[i],voidconst);
+        ASSERT_TRUE(ddbval->getType()==(dolphindb::DATA_TYPE)testTypes[i] || ddbval->getType()==dolphindb::DT_STRING);
+        ASSERT_TRUE(ddbval->isNull());
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         switch (dataType) {
-        case DATA_TYPE::DT_BOOL:
+        case dolphindb::DATA_TYPE::DT_BOOL:
         {
-            ConstantSP ddbval=Util::createObject(dataType,boolconst);
-            EXPECT_EQ(ddbval->getBool(),boolconst);
-            EXPECT_TRUE(ddbval->getType()==dataType);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,boolconst);
+            ASSERT_EQ(ddbval->getBool(),boolconst);
+            ASSERT_TRUE(ddbval->getType()==dataType);
             break;
         }
-	    default:
+        default:
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,boolconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,boolconst));
             break;
         }
         }
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i<5){
-            ConstantSP ddbval=Util::createObject(dataType,charconst);
-            EXPECT_EQ(ddbval->getBool(),charconst);
-            EXPECT_TRUE(ddbval->getType()==dataType);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,charconst);
+            ASSERT_EQ(ddbval->getBool(),charconst);
+            ASSERT_TRUE(ddbval->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,charconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,charconst));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i<5 && i!=0){
-            ConstantSP ddbval=Util::createObject(dataType,shortconst);
-            EXPECT_EQ(ddbval->getShort(),shortconst);
-            EXPECT_TRUE(ddbval->getType()==dataType);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,shortconst);
+            ASSERT_EQ(ddbval->getShort(),shortconst);
+            ASSERT_TRUE(ddbval->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,shortconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,shortconst));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if((i<14 && i!=0) || i==19){
-            ConstantSP ddbval=Util::createObject(dataType,longconst);
-            EXPECT_EQ(ddbval->getLong(),longconst);
-            EXPECT_TRUE(ddbval->getType()==dataType);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,longconst);
+            ASSERT_EQ(ddbval->getLong(),longconst);
+            ASSERT_TRUE(ddbval->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,longconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,longconst));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if((i<14 && i!=0) || i==19){
-            ConstantSP ddbval=Util::createObject(dataType,longintconst);
-            EXPECT_EQ(ddbval->getInt(),longintconst);
-            EXPECT_TRUE(ddbval->getType()==dataType);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,longintconst);
+            ASSERT_EQ(ddbval->getInt(),longintconst);
+            ASSERT_TRUE(ddbval->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,longintconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,longintconst));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if((i<11 && i!=0) || i==19){
-            ConstantSP ddbval=Util::createObject(dataType,intconst);
-            EXPECT_EQ(ddbval->getInt(),intconst);
-            EXPECT_TRUE(ddbval->getType()==dataType);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,intconst);
+            ASSERT_EQ(ddbval->getInt(),intconst);
+            ASSERT_TRUE(ddbval->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,intconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,intconst));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i==14||i==15) {
-            ConstantSP ddbval=Util::createObject(dataType,doubleconst);
-            EXPECT_EQ(ddbval->getDouble(),doubleconst);
-            EXPECT_TRUE(ddbval->getType()==dataType);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,doubleconst);
+            ASSERT_EQ(ddbval->getDouble(),doubleconst);
+            ASSERT_TRUE(ddbval->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,doubleconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,doubleconst));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i==14||i==15) {
-            ConstantSP ddbval=Util::createObject(dataType,floatconst);
-            EXPECT_EQ(ddbval->getFloat(),floatconst);
-            EXPECT_TRUE(ddbval->getType()==dataType);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,floatconst);
+            ASSERT_EQ(ddbval->getFloat(),floatconst);
+            ASSERT_TRUE(ddbval->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,floatconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,floatconst));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if( i==16 || i==17 || i==22){
-            ConstantSP ddbval=Util::createObject(dataType,pcharconst);
-            EXPECT_EQ(ddbval->getString(),"1");
-            EXPECT_TRUE(ddbval->getType()==dataType || ddbval->getType()==DT_STRING);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,pcharconst);
+            ASSERT_EQ(ddbval->getString(),"1");
+            ASSERT_TRUE(ddbval->getType()==dataType || ddbval->getType()==dolphindb::DT_STRING);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,pcharconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,pcharconst));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i==16 || i==17 || i==22){
-            ConstantSP ddbval=Util::createObject(dataType,strconst);
-            EXPECT_EQ(ddbval->getString(),strconst);
-            EXPECT_TRUE(ddbval->getType()==dataType || ddbval->getType()==DT_STRING);
+            dolphindb::ConstantSP ddbval=dolphindb::Util::createObject(dataType,strconst);
+            ASSERT_EQ(ddbval->getString(),strconst);
+            ASSERT_TRUE(ddbval->getType()==dataType || ddbval->getType()==dolphindb::DT_STRING);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,strconst));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,strconst));
         }
 
     }
-
-    vector<nullptr_t> voidconstVec = {nullptr,nullptr};
-    vector<bool> boolconstVec = {true};
-    vector<char> charconstVec = {1};
-    vector<short> shortconstVec = {1};
-    vector<const char*> pcharconstVec = {"1"};
-    vector<string> strconstVec = {"dolphindb"};
-    vector<unsigned char> charconst2Vec = {1};
-    vector<const unsigned char*> pvalVec = {&charconst2Vec[0]};
-    vector<long long> longconstVec = {1};
-    vector<long int> longintconstVec = {1};
-    vector<int> intconstVec = {1};
-    vector<float> floatconstVec = {1};
-    vector<double> doubleconstVec = {1};
+    std::vector<std::nullptr_t> voidconstVec = {nullptr,nullptr};
+    std::vector<bool> boolconstVec = {true};
+    std::vector<char> charconstVec = {1};
+    std::vector<short> shortconstVec = {1};
+    std::vector<const char*> pcharconstVec = {"1"};
+    std::vector<std::string> strconstVec = {"dolphindb"};
+    std::vector<unsigned char> charconst2Vec = {1};
+    std::vector<const unsigned char*> pvalVec = {&charconst2Vec[0]};
+    std::vector<long long> longconstVec = {1};
+    std::vector<long int> longintconstVec = {1};
+    std::vector<int> intconstVec = {1};
+    std::vector<float> floatconstVec = {1};
+    std::vector<double> doubleconstVec = {1};
 
     for(int i =0;i<testTypes.size();i++){
-        VectorSP ddbval=Util::createObject(testTypes[i],voidconstVec);
-        EXPECT_EQ(ddbval->getForm(), DF_VECTOR);
-        EXPECT_TRUE(ddbval->get(0)->getType()==(DATA_TYPE)testTypes[i] || ddbval->getType()==DT_STRING);
-        EXPECT_TRUE(ddbval->get(0)->get(0)->isNull());
-        EXPECT_TRUE(ddbval->get(0)->get(1)->isNull());
-        // EXPECT_EQ(ddbval->get(0)->isNull());
+        dolphindb::VectorSP ddbval=dolphindb::Util::createObject(testTypes[i],voidconstVec);
+        ASSERT_EQ(ddbval->getForm(), dolphindb::DF_VECTOR);
+        ASSERT_TRUE(ddbval->get(0)->getType()==(dolphindb::DATA_TYPE)testTypes[i] || ddbval->getType()==dolphindb::DT_STRING);
+        ASSERT_TRUE(ddbval->get(0)->get(0)->isNull());
+        ASSERT_TRUE(ddbval->get(0)->get(1)->isNull());
+        // ASSERT_EQ(ddbval->get(0)->isNull());
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
-        {
-            EXPECT_ANY_THROW(Util::createObject(dataType,boolconstVec));
-        }
-
-    }
-
-    for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i<5){
-            VectorSP ddbval=Util::createObject(dataType,charconstVec);
-            EXPECT_EQ(ddbval->getForm(), DF_VECTOR);
-            EXPECT_EQ(ddbval->get(0)->getChar(),charconstVec[0]);
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,charconstVec);
+            ASSERT_EQ(ddbval->getForm(), dolphindb::DF_VECTOR);
+            ASSERT_EQ(ddbval->get(0)->getChar(),charconstVec[0]);
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,charconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,charconstVec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,charconst2Vec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,charconst2Vec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i<5 && i!=0){
-            VectorSP ddbval=Util::createObject(dataType,shortconstVec);
-            EXPECT_EQ(ddbval->getForm(), DF_VECTOR);
-            EXPECT_EQ(ddbval->get(0)->getShort(),shortconstVec[0]);
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,shortconstVec);
+            ASSERT_EQ(ddbval->getForm(), dolphindb::DF_VECTOR);
+            ASSERT_EQ(ddbval->get(0)->getShort(),shortconstVec[0]);
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,shortconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,shortconstVec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if((i<14 && i!=0) || i==19){
-            VectorSP ddbval=Util::createObject(dataType,longconstVec);
-            EXPECT_EQ(ddbval->getForm(), DF_VECTOR);
-            EXPECT_EQ(ddbval->get(0)->getLong(),longconstVec[0]);
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,longconstVec);
+            ASSERT_EQ(ddbval->getForm(), dolphindb::DF_VECTOR);
+            ASSERT_EQ(ddbval->get(0)->getLong(),longconstVec[0]);
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,longconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,longconstVec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if((i<14 && i!=0) || i==19){
-            VectorSP ddbval=Util::createObject(dataType,longintconstVec);
-            EXPECT_EQ(ddbval->getForm(), DF_VECTOR);
-            EXPECT_EQ(ddbval->get(0)->getInt(),longintconstVec[0]);
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,longintconstVec);
+            ASSERT_EQ(ddbval->getForm(), dolphindb::DF_VECTOR);
+            ASSERT_EQ(ddbval->get(0)->getInt(),longintconstVec[0]);
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,longintconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,longintconstVec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if((i<11 && i!=0) || i==19){
-            VectorSP ddbval=Util::createObject(dataType,intconstVec);
-            EXPECT_EQ(ddbval->getForm(), DF_VECTOR);
-            EXPECT_EQ(ddbval->get(0)->getInt(),intconstVec[0]);
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,intconstVec);
+            ASSERT_EQ(ddbval->getForm(), dolphindb::DF_VECTOR);
+            ASSERT_EQ(ddbval->get(0)->getInt(),intconstVec[0]);
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,intconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,intconstVec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i==14||i==15) {
-            VectorSP ddbval=Util::createObject(dataType,doubleconstVec);
-            EXPECT_EQ(ddbval->getForm(), DF_VECTOR);
-            EXPECT_EQ(ddbval->get(0)->getDouble(),doubleconstVec[0]);
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,doubleconstVec);
+            ASSERT_EQ(ddbval->getForm(), dolphindb::DF_VECTOR);
+            ASSERT_EQ(ddbval->get(0)->getDouble(),doubleconstVec[0]);
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,doubleconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,doubleconstVec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i==14||i==15) {
-            VectorSP ddbval=Util::createObject(dataType,floatconstVec);
-            EXPECT_EQ(ddbval->getForm(), DF_VECTOR);
-            EXPECT_EQ(ddbval->get(0)->getFloat(),floatconstVec[0]);
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,floatconstVec);
+            ASSERT_EQ(ddbval->getForm(), dolphindb::DF_VECTOR);
+            ASSERT_EQ(ddbval->get(0)->getFloat(),floatconstVec[0]);
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,floatconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,floatconstVec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if( i==16 || i==17 || i==22){
-            VectorSP ddbval=Util::createObject(dataType,pcharconstVec);
-            EXPECT_EQ(ddbval->get(0)->getString(),"[\"1\"]");
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType || ddbval->get(0)->getType()==DT_STRING);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,pcharconstVec);
+            ASSERT_EQ(ddbval->get(0)->getString(),"[\"1\"]");
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType || ddbval->get(0)->getType()==dolphindb::DT_STRING);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,pcharconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,pcharconstVec));
         }
 
     }
 
     for(int i =0;i<testTypes.size();i++){
-        DATA_TYPE dataType = (DATA_TYPE)testTypes[i];
+        dolphindb::DATA_TYPE dataType = (dolphindb::DATA_TYPE)testTypes[i];
         if(i==16 || i==17 || i==22){
-            VectorSP ddbval=Util::createObject(dataType,strconstVec);
-            EXPECT_EQ(ddbval->get(0)->getString(),"[\""+strconstVec[0]+"\"]");
-            EXPECT_TRUE(ddbval->get(0)->getType()==dataType || ddbval->get(0)->getType()==DT_STRING);
+            dolphindb::VectorSP ddbval=dolphindb::Util::createObject(dataType,strconstVec);
+            ASSERT_EQ(ddbval->get(0)->getString(),"[\""+strconstVec[0]+"\"]");
+            ASSERT_TRUE(ddbval->get(0)->getType()==dataType || ddbval->get(0)->getType()==dolphindb::DT_STRING);
         }
-	    else
+        else
         {
-            EXPECT_ANY_THROW(Util::createObject(dataType,strconstVec));
+            ASSERT_ANY_THROW(dolphindb::Util::createObject(dataType,strconstVec));
         }
 
     }
 
 
-    cout<<"-----------test Util::parseConstant()--------------"<<endl;
-    EXPECT_EQ(Util::parseYear(365),1971);
-    EXPECT_EQ(Util::parseYear(0),1970);
+    std::cout<<"-----------test dolphindb::Util::parseConstant()--------------"<<std::endl;
+    ASSERT_EQ(dolphindb::Util::parseYear(365),1971);
+    ASSERT_EQ(dolphindb::Util::parseYear(0),1970);
     int year,month,day;
-    Util::parseDate(365,year,month,day);
-    cout<<year<<month<<day<<endl;
-    EXPECT_EQ(year,1971);
-    EXPECT_EQ(month,1);
-    EXPECT_EQ(day,1);
+    dolphindb::Util::parseDate(365,year,month,day);
+    std::cout<<year<<month<<day<<std::endl;
+    ASSERT_EQ(year,1971);
+    ASSERT_EQ(month,1);
+    ASSERT_EQ(day,1);
 
-    ConstantSP voidval=Util::parseConstant(DT_VOID,"");
-    ConstantSP boolval=Util::parseConstant(DT_BOOL,"1");
-    ConstantSP charval=Util::parseConstant(DT_CHAR,"1");
-    ConstantSP shortval=Util::parseConstant(DT_SHORT,"1");
-    ConstantSP intval=Util::parseConstant(DT_INT,"1");
-    ConstantSP longval=Util::parseConstant(DT_LONG,"1");
-    ConstantSP dateval=Util::parseConstant(DT_DATE,"2013.06.13");
-    ConstantSP monthval=Util::parseConstant(DT_MONTH,"2012.06");
-    ConstantSP timeval=Util::parseConstant(DT_TIME,"13:30:10.008");
-    ConstantSP minuteval=Util::parseConstant(DT_MINUTE,"13:30");
-    ConstantSP secondval=Util::parseConstant(DT_SECOND,"13:30:10");
-    ConstantSP datetimeval=Util::parseConstant(DT_DATETIME,"2012.06.13T13:30:10");
-    ConstantSP timestampval=Util::parseConstant(DT_TIMESTAMP,"2012.06.13T13:30:10.008");
-    ConstantSP nanotimeval=Util::parseConstant(DT_NANOTIME,"13:30:10.008007006");
-    ConstantSP nanotimestampval=Util::parseConstant(DT_NANOTIMESTAMP,"2012.06.13T13:30:10.008007006");
-    ConstantSP floatval=Util::parseConstant(DT_FLOAT,"2.1");
-    ConstantSP doubleval=Util::parseConstant(DT_DOUBLE,"2.1");
-    // ConstantSP symbolval=Util::parseConstant(DT_SYMBOL,"sym"); //not support
-    ConstantSP stringval=Util::parseConstant(DT_STRING,"str");
-    ConstantSP uuidval=Util::parseConstant(DT_UUID,"5d212a78-cc48-e3b1-4235-b4d91473ee87");
-    // ConstantSP functiondefval=Util::parseConstant(DT_FUNCTIONDEF,"def f1(a,b) {return a+b;}"); //not support
-    ConstantSP datehourval=Util::parseConstant(DT_DATEHOUR,"2012.06.13T13");
-    ConstantSP ipaddrval=Util::parseConstant(DT_IP,"192.168.1.13");
-    ConstantSP int128val=Util::parseConstant(DT_INT128,"e1671797c52e15f763380b45e841ec32");
-    // ConstantSP blobval=Util::parseConstant(DT_BLOB,"blob1"); //not support
-    vector<string> nameVec = {"voidval","boolval","charval","shortval","intval","longval","dateval","monthval","timeval","minuteval","secondval",\
+    dolphindb::ConstantSP voidval=dolphindb::Util::parseConstant(dolphindb::DT_VOID,"");
+    dolphindb::ConstantSP boolval=dolphindb::Util::parseConstant(dolphindb::DT_BOOL,"1");
+    dolphindb::ConstantSP charval=dolphindb::Util::parseConstant(dolphindb::DT_CHAR,"1");
+    dolphindb::ConstantSP shortval=dolphindb::Util::parseConstant(dolphindb::DT_SHORT,"1");
+    dolphindb::ConstantSP intval=dolphindb::Util::parseConstant(dolphindb::DT_INT,"1");
+    dolphindb::ConstantSP longval=dolphindb::Util::parseConstant(dolphindb::DT_LONG,"1");
+    dolphindb::ConstantSP dateval=dolphindb::Util::parseConstant(dolphindb::DT_DATE,"2013.06.13");
+    dolphindb::ConstantSP monthval=dolphindb::Util::parseConstant(dolphindb::DT_MONTH,"2012.06");
+    dolphindb::ConstantSP timeval=dolphindb::Util::parseConstant(dolphindb::DT_TIME,"13:30:10.008");
+    dolphindb::ConstantSP minuteval=dolphindb::Util::parseConstant(dolphindb::DT_MINUTE,"13:30");
+    dolphindb::ConstantSP secondval=dolphindb::Util::parseConstant(dolphindb::DT_SECOND,"13:30:10");
+    dolphindb::ConstantSP datetimeval=dolphindb::Util::parseConstant(dolphindb::DT_DATETIME,"2012.06.13T13:30:10");
+    dolphindb::ConstantSP timestampval=dolphindb::Util::parseConstant(dolphindb::DT_TIMESTAMP,"2012.06.13T13:30:10.008");
+    dolphindb::ConstantSP nanotimeval=dolphindb::Util::parseConstant(dolphindb::DT_NANOTIME,"13:30:10.008007006");
+    dolphindb::ConstantSP nanotimestampval=dolphindb::Util::parseConstant(dolphindb::DT_NANOTIMESTAMP,"2012.06.13T13:30:10.008007006");
+    dolphindb::ConstantSP floatval=dolphindb::Util::parseConstant(dolphindb::DT_FLOAT,"2.1");
+    dolphindb::ConstantSP doubleval=dolphindb::Util::parseConstant(dolphindb::DT_DOUBLE,"2.1");
+    // dolphindb::ConstantSP symbolval=dolphindb::Util::parseConstant(dolphindb::DT_SYMBOL,"sym"); //not support
+    dolphindb::ConstantSP stringval=dolphindb::Util::parseConstant(dolphindb::DT_STRING,"str");
+    dolphindb::ConstantSP uuidval=dolphindb::Util::parseConstant(dolphindb::DT_UUID,"5d212a78-cc48-e3b1-4235-b4d91473ee87");
+    // dolphindb::ConstantSP functiondefval=dolphindb::Util::parseConstant(dolphindb::DT_FUNCTIONDEF,"def f1(a,b) {return a+b;}"); //not support
+    dolphindb::ConstantSP datehourval=dolphindb::Util::parseConstant(dolphindb::DT_DATEHOUR,"2012.06.13T13");
+    dolphindb::ConstantSP ipaddrval=dolphindb::Util::parseConstant(dolphindb::DT_IP,"192.168.1.13");
+    dolphindb::ConstantSP int128val=dolphindb::Util::parseConstant(dolphindb::DT_INT128,"e1671797c52e15f763380b45e841ec32");
+    // dolphindb::ConstantSP blobval=dolphindb::Util::parseConstant(dolphindb::DT_BLOB,"blob1"); //not support
+    std::vector<std::string> nameVec = {"voidval","boolval","charval","shortval","intval","longval","dateval","monthval","timeval","minuteval","secondval",\
                                 "datetimeval","timestampval","nanotimeval","nanotimestampval","floatval","doubleval","stringval","uuidval",\
                                 "datehourval","ipaddrval","int128val"};
-    vector<ConstantSP> valVec = {voidval,boolval,charval,shortval,intval,longval,dateval,monthval,timeval,minuteval,secondval,datetimeval,timestampval,\
+    std::vector<dolphindb::ConstantSP> valVec = {voidval,boolval,charval,shortval,intval,longval,dateval,monthval,timeval,minuteval,secondval,datetimeval,timestampval,\
                                     nanotimeval,nanotimestampval,floatval,doubleval,stringval,uuidval,datehourval,ipaddrval,int128val};
     conn.upload(nameVec,valVec);
 
-    EXPECT_TRUE(conn.run("eqObj(voidval,NULL)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(boolval,true)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(charval,char(1))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(shortval,short(1))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(intval,int(1))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(longval,long(1))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(dateval,2013.06.13)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(monthval,2012.06M)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(timeval,13:30:10.008)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(minuteval,13:30m)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(secondval,13:30:10)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(datetimeval,2012.06.13T13:30:10)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(timestampval,2012.06.13T13:30:10.008)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(nanotimeval,13:30:10.008007006)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(nanotimestampval,2012.06.13T13:30:10.008007006)")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(floatval,float(2.1))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(doubleval,double(2.1))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(stringval,\"str\")")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(uuidval,uuid('5d212a78-cc48-e3b1-4235-b4d91473ee87'))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(datehourval,datehour('2012.06.13T13'))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(ipaddrval,ipaddr('192.168.1.13'))")->getBool());
-    EXPECT_TRUE(conn.run("eqObj(int128val,int128('e1671797c52e15f763380b45e841ec32'))")->getBool());
-    cout<<"--------------All cases passed----------------"<<endl;
+    ASSERT_TRUE(conn.run("eqObj(voidval,NULL)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(boolval,true)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(charval,char(1))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(shortval,short(1))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(intval,int(1))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(longval,long(1))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(dateval,2013.06.13)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(monthval,2012.06M)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(timeval,13:30:10.008)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(minuteval,13:30m)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(secondval,13:30:10)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(datetimeval,2012.06.13T13:30:10)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(timestampval,2012.06.13T13:30:10.008)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(nanotimeval,13:30:10.008007006)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(nanotimestampval,2012.06.13T13:30:10.008007006)")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(floatval,float(2.1))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(doubleval,double(2.1))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(stringval,\"str\")")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(uuidval,uuid('5d212a78-cc48-e3b1-4235-b4d91473ee87'))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(datehourval,datehour('2012.06.13T13'))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(ipaddrval,ipaddr('192.168.1.13'))")->getBool());
+    ASSERT_TRUE(conn.run("eqObj(int128val,int128('e1671797c52e15f763380b45e841ec32'))")->getBool());
+    std::cout<<"--------------All cases passed----------------"<<std::endl;
 }
 #ifndef _WIN32
 TEST_F(FunctionTest,test_FastVector_get){
     // todo: when will the variable `index` not IndexArray
-    auto base = new SymbolBase(0);
+    auto base = new dolphindb::SymbolBase(0);
     base->findAndInsert("test1");
     base->findAndInsert("test2");
     int *test1 = new int[2];
@@ -1076,29 +1064,29 @@ TEST_F(FunctionTest,test_FastVector_get){
     double *test2 = new double[2];
     test2[0] = 1.1;
     test2[1] = 1.2;
-    auto fastSymbolVec = new FastSymbolVector(base, 2, 6, test1, true);
-    auto indexVec1 = Util::createIndexVector(0, 2);
-    auto indexVec2 = new FastDoubleVector(2, 2, test2, true);
-    EXPECT_EQ(indexVec1->isIndexArray(), true);
-    EXPECT_EQ(indexVec2->isIndexArray(), false);
-    EXPECT_EQ(indexVec1->size(), 2);
-    EXPECT_EQ(indexVec2->size(), 2);
+    auto fastSymbolVec = new dolphindb::FastSymbolVector(base, 2, 6, test1, true);
+    auto indexVec1 = dolphindb::Util::createIndexVector(0, 2);
+    auto indexVec2 = new dolphindb::FastDoubleVector(2, 2, test2, true);
+    ASSERT_EQ(indexVec1->isIndexArray(), true);
+    ASSERT_EQ(indexVec2->isIndexArray(), false);
+    ASSERT_EQ(indexVec1->size(), 2);
+    ASSERT_EQ(indexVec2->size(), 2);
 
     std::cout << fastSymbolVec->get(indexVec1)->getString() << std::endl;
     std::cout << fastSymbolVec->get(indexVec2)->getString() << std::endl;
 }
 
 TEST_F(FunctionTest,test_FastVector_fill){
-    auto base = new SymbolBase(0);
+    auto base = new dolphindb::SymbolBase(0);
     int *test1 = new int[2];
     test1[0] = 1;
     test1[1] = 2;
-    auto fastSymbolVec = new FastSymbolVector(base, 2, 6, test1, true);
-    auto val1 = ConstantSP(new String("test"));
+    auto fastSymbolVec = new dolphindb::FastSymbolVector(base, 2, 6, test1, true);
+    auto val1 = dolphindb::ConstantSP(new dolphindb::String("test"));
     fastSymbolVec->fill(0, 1, val1);
 
-    vector<string> test2 = {"test1", "test2"};
-    auto val2 = ConstantSP(new StringVector(test2, test2.size(), true));
+    std::vector<std::string> test2 = {"test1", "test2"};
+    auto val2 = dolphindb::ConstantSP(new dolphindb::StringVector(test2, test2.size(), true));
     fastSymbolVec->fill(0, 3, val2);
     fastSymbolVec->fill(0, 2, val2);
 
@@ -1106,160 +1094,160 @@ TEST_F(FunctionTest,test_FastVector_fill){
     double *test3 = new double[2];
     test3[0] = 1.1;
     test3[1] = 1.2;
-    auto val3 = ConstantSP(new FastDoubleVector(2, 2, test3, true));
-    EXPECT_ANY_THROW(fastSymbolVec->fill(0, 2, val3));
-    // EXPECT_NE(val3->getCategory(), LITERAL);
-    // EXPECT_EQ(val3->getCategory(), DT_DOUBLE);
+    auto val3 = dolphindb::ConstantSP(new dolphindb::FastDoubleVector(2, 2, test3, true));
+    ASSERT_ANY_THROW(fastSymbolVec->fill(0, 2, val3));
+    // ASSERT_NE(val3->getCategory(), LITERAL);
+    // ASSERT_EQ(val3->getCategory(), dolphindb::DT_DOUBLE);
 
 }
 
 
 TEST_F(FunctionTest,Guid){
-    Guid uuid(1, 0);
-    EXPECT_FALSE(uuid.isZero());
-    GuidHash hash;
+    dolphindb::Guid uuid(1, 0);
+    ASSERT_FALSE(uuid.isZero());
+    dolphindb::GuidHash hash;
     std::cout << hash(uuid) << std::endl;
-    VectorSP con = Util::createVector(DT_INT, 0, 1);
+    dolphindb::VectorSP con = dolphindb::Util::createVector(dolphindb::DT_INT, 0, 1);
     int num = 0, partial = 0;
-    EXPECT_ANY_THROW(con->Constant::serialize(nullptr, 0, 0, 0, num, partial));
-    EXPECT_ANY_THROW(con->Constant::serialize(nullptr, 0, 0, 0, 0, num, partial));
-    EXPECT_ANY_THROW(con->Constant::deserialize(nullptr, 0, 0, num));
-    EXPECT_EQ("", con->Constant::getRowLabel()->getString());
-    EXPECT_EQ("", con->Constant::getColumnLabel()->getString());
-    EXPECT_EQ("", con->Vector::getColumnLabel()->getString());
+    ASSERT_ANY_THROW(con->Constant::serialize(nullptr, 0, 0, 0, num, partial));
+    ASSERT_ANY_THROW(con->Constant::serialize(nullptr, 0, 0, 0, 0, num, partial));
+    ASSERT_ANY_THROW(con->Constant::deserialize(nullptr, 0, 0, num));
+    ASSERT_EQ("", con->Constant::getRowLabel()->getString());
+    ASSERT_EQ("", con->Constant::getColumnLabel()->getString());
+    ASSERT_EQ("", con->Vector::getColumnLabel()->getString());
 
-    VectorSP matrix = Util::createMatrix(DT_INT, 3, 3, 9);
+    dolphindb::VectorSP matrix = dolphindb::Util::createMatrix(dolphindb::DT_INT, 3, 3, 9);
     matrix->setName("123");
-    EXPECT_EQ("123", matrix->getScript());
+    ASSERT_EQ("123", matrix->getScript());
     int* data = new int[3]{1, 2, 3};
-    VectorSP vec = Util::createVector(DT_INT, 3, 3, true, 0, data);
-    EXPECT_EQ("[1,2,3]", vec->getScript());
-    VectorSP vec2 = Util::createIndexVector(0,200);
-    EXPECT_EQ("array()", vec2->getScript());
+    dolphindb::VectorSP vec = dolphindb::Util::createVector(dolphindb::DT_INT, 3, 3, true, 0, data);
+    ASSERT_EQ("[1,2,3]", vec->getScript());
+    dolphindb::VectorSP vec2 = dolphindb::Util::createIndexVector(0,200);
+    ASSERT_EQ("array()", vec2->getScript());
     vec2->setName("234");
-    EXPECT_EQ("234", vec2->getScript());
-    VectorSP vec3 = Util::createVector(DT_INT, 0, 3);
-    EXPECT_EQ("[]", vec3->getScript());
+    ASSERT_EQ("234", vec2->getScript());
+    dolphindb::VectorSP vec3 = dolphindb::Util::createVector(dolphindb::DT_INT, 0, 3);
+    ASSERT_EQ("[]", vec3->getScript());
 }
 
 TEST_F(FunctionTest,Matrix_reshape){
     int* data = new int[16]{1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8};
-    VectorSP matrix = Util::createMatrix(DT_INT, 4, 4, 16, 0, data);
+    dolphindb::VectorSP matrix = dolphindb::Util::createMatrix(dolphindb::DT_INT, 4, 4, 16, 0, data);
     std::vector<std::string> rowLabels{"row1", "row2", "row3", "row4"};
     std::vector<std::string> columnLabels{"col1", "col2", "col3", "col4"};
-    VectorSP rowVec = Util::createVector(DT_STRING, 0, 4);
+    dolphindb::VectorSP rowVec = dolphindb::Util::createVector(dolphindb::DT_STRING, 0, 4);
     rowVec->appendString(rowLabels.data(), rowLabels.size());
     rowVec->setTemporary(false);
-    VectorSP colVec = Util::createVector(DT_STRING, 0, 4);
+    dolphindb::VectorSP colVec = dolphindb::Util::createVector(dolphindb::DT_STRING, 0, 4);
     colVec->appendString(columnLabels.data(), columnLabels.size());
     colVec->setTemporary(false);
     matrix->setRowLabel(rowVec);
     matrix->setColumnLabel(colVec);
     matrix->getString();
-    EXPECT_TRUE(matrix->reshape(4, 4));
-    EXPECT_TRUE(matrix->reshape(3, 4));
-    EXPECT_TRUE(matrix->reshape(2, 6));
-    EXPECT_FALSE(matrix->reshape(2, 5));
+    ASSERT_TRUE(matrix->reshape(4, 4));
+    ASSERT_TRUE(matrix->reshape(3, 4));
+    ASSERT_TRUE(matrix->reshape(2, 6));
+    ASSERT_FALSE(matrix->reshape(2, 5));
 }
 
 TEST_F(FunctionTest,Matrix_getString){
     int* data = new int[48]{1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8};
-    VectorSP matrix = Util::createMatrix(DT_INT, 1, 48, 48, 0, data);
+    dolphindb::VectorSP matrix = dolphindb::Util::createMatrix(dolphindb::DT_INT, 1, 48, 48, 0, data);
     matrix->getString();
     matrix->getString(0);
-    EXPECT_TRUE(matrix->reshape(48, 1));
+    ASSERT_TRUE(matrix->reshape(48, 1));
     matrix->getString();
 }
 
 
 TEST_F(FunctionTest,Matrix_get){
     int* data = new int[16]{1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8};
-    VectorSP matrix = Util::createMatrix(DT_INT, 4, 4, 16, 0, data);
-    ConstantSP index = Util::createInt(1);
-    EXPECT_EQ("[5,6,7,8]", dynamic_cast<FastIntMatrix*>(matrix.get())->get(index)->getString());
-    ConstantSP index1 = Util::createInt(-1);
-    ConstantSP index2 = Util::createInt(10);
-    EXPECT_ANY_THROW(dynamic_cast<FastIntMatrix*>(matrix.get())->get(index1));
-    EXPECT_ANY_THROW(dynamic_cast<FastIntMatrix*>(matrix.get())->get(index2));
+    dolphindb::VectorSP matrix = dolphindb::Util::createMatrix(dolphindb::DT_INT, 4, 4, 16, 0, data);
+    dolphindb::ConstantSP index = dolphindb::Util::createInt(1);
+    ASSERT_EQ("[5,6,7,8]", dynamic_cast<dolphindb::FastIntMatrix*>(matrix.get())->get(index)->getString());
+    dolphindb::ConstantSP index1 = dolphindb::Util::createInt(-1);
+    dolphindb::ConstantSP index2 = dolphindb::Util::createInt(10);
+    ASSERT_ANY_THROW(dynamic_cast<dolphindb::FastIntMatrix*>(matrix.get())->get(index1));
+    ASSERT_ANY_THROW(dynamic_cast<dolphindb::FastIntMatrix*>(matrix.get())->get(index2));
 
-    ConstantSP index3 = Util::createPair(DT_INT);
+    dolphindb::ConstantSP index3 = dolphindb::Util::createPair(dolphindb::DT_INT);
     index3->setInt(0, 0);
     index3->setInt(1, 1);
-    dynamic_cast<FastIntMatrix*>(matrix.get())->get(index3)->getString();
+    dynamic_cast<dolphindb::FastIntMatrix*>(matrix.get())->get(index3)->getString();
     index3->setInt(0, INT_MIN);
     index3->setInt(1, INT_MIN);
-    dynamic_cast<FastIntMatrix*>(matrix.get())->get(index3)->getString();
+    dynamic_cast<dolphindb::FastIntMatrix*>(matrix.get())->get(index3)->getString();
     index3->setInt(0, 1);
     index3->setInt(1, 0);
-    dynamic_cast<FastIntMatrix*>(matrix.get())->get(index3)->getString();
+    dynamic_cast<dolphindb::FastIntMatrix*>(matrix.get())->get(index3)->getString();
 
-    ConstantSP index4 = Util::createVector(DT_INT, 2, 2);
+    dolphindb::ConstantSP index4 = dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2);
     index4->setInt(0, -1);
     index4->setInt(1, 0);
-    EXPECT_ANY_THROW(dynamic_cast<FastIntMatrix*>(matrix.get())->get(index4));
+    ASSERT_ANY_THROW(dynamic_cast<dolphindb::FastIntMatrix*>(matrix.get())->get(index4));
     index4->setInt(0, 6);
     index4->setInt(1, 0);
-    EXPECT_ANY_THROW(dynamic_cast<FastIntMatrix*>(matrix.get())->get(index4));
+    ASSERT_ANY_THROW(dynamic_cast<dolphindb::FastIntMatrix*>(matrix.get())->get(index4));
 }
 
 
 TEST_F(FunctionTest,Matrix_set){
     int* data = new int[16]{1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8};
-    VectorSP matrix = Util::createMatrix(DT_INT, 4, 4, 16, 0, data);
+    dolphindb::VectorSP matrix = dolphindb::Util::createMatrix(dolphindb::DT_INT, 4, 4, 16, 0, data);
     
-    ConstantSP index = Util::createIndexVector(0, 3);
-    ConstantSP value = Util::createInt(9);
-    EXPECT_TRUE(matrix->set(index, value));
-    ConstantSP index1 = Util::createIndexVector(0, 6);
-    EXPECT_ANY_THROW(matrix->set(index1, value));
-    ConstantSP index2 = Util::createIndexVector(-1, 6);
-    EXPECT_ANY_THROW(matrix->set(index2, value));
+    dolphindb::ConstantSP index = dolphindb::Util::createIndexVector(0, 3);
+    dolphindb::ConstantSP value = dolphindb::Util::createInt(9);
+    ASSERT_TRUE(matrix->set(index, value));
+    dolphindb::ConstantSP index1 = dolphindb::Util::createIndexVector(0, 6);
+    ASSERT_ANY_THROW(matrix->set(index1, value));
+    dolphindb::ConstantSP index2 = dolphindb::Util::createIndexVector(-1, 6);
+    ASSERT_ANY_THROW(matrix->set(index2, value));
 }
 
 TEST_F(FunctionTest, DFSChunkMeta_Constructor){
-    IO_ERR ret;
+    dolphindb::IO_ERR ret;
     short flag = 0, size = 0;
-    vector<string> sites1 = {"192.168.0.16:9002:datanode1", "192.168.0.16:9003:datanode2", "192.168.0.16:9004:datanode3", "192.168.0.16:9005:datanode4"};
-    vector<string> sites2;
-    Guid id("314");
-    DFSChunkMetaSP chunk = new DFSChunkMeta("/home/appadmin/data", id, 3, 1, SPLIT_TABLET_CHUNK, sites2, 315);
+    std::vector<std::string> sites1 = {"192.168.0.16:9002:datanode1", "192.168.0.16:9003:datanode2", "192.168.0.16:9004:datanode3", "192.168.0.16:9005:datanode4"};
+    std::vector<std::string> sites2;
+    dolphindb::Guid id("314");
+    dolphindb::DFSChunkMetaSP chunk = new dolphindb::DFSChunkMeta("/home/appadmin/data", id, 3, 1, dolphindb::SPLIT_TABLET_CHUNK, sites2, 315);
     chunk->getString();
-    chunk = new DFSChunkMeta("/home/appadmin/data", id, 3, 1, TABLET_CHUNK, sites1, 315);
+    chunk = new dolphindb::DFSChunkMeta("/home/appadmin/data", id, 3, 1, dolphindb::TABLET_CHUNK, sites1, 315);
     chunk->getString();
     std::cout << chunk->getAllocatedMemory() << std::endl;
-    chunk = new DFSChunkMeta("/home/appadmin/data", id, 3, 1, FILE_CHUNK, sites1.data(), 0, 315);
+    chunk = new dolphindb::DFSChunkMeta("/home/appadmin/data", id, 3, 1, dolphindb::FILE_CHUNK, sites1.data(), 0, 315);
 
-    DataOutputStreamSP outStream1 = new DataOutputStream(1024);
-    ConstantMarshallSP marshall1 = ConstantMarshallFactory::getInstance(DF_CHUNK, outStream1);
-    EXPECT_TRUE(marshall1->start(chunk, false, false, ret));
-    DataInputStreamSP inStream1 = new DataInputStream(outStream1->getBuffer(), outStream1->size());
+    dolphindb::DataOutputStreamSP outStream1 = new dolphindb::DataOutputStream(1024);
+    dolphindb::ConstantMarshallSP marshall1 = dolphindb::ConstantMarshallFactory::getInstance(dolphindb::DF_CHUNK, outStream1);
+    ASSERT_TRUE(marshall1->start(chunk, false, false, ret));
+    dolphindb::DataInputStreamSP inStream1 = new dolphindb::DataInputStream(outStream1->getBuffer(), outStream1->size());
     inStream1->readShort(flag);
     inStream1->readShort(size);
-    DFSChunkMetaSP chunk1 = new DFSChunkMeta(inStream1);
-    EXPECT_ANY_THROW(new DFSChunkMeta(inStream1));
+    dolphindb::DFSChunkMetaSP chunk1 = new dolphindb::DFSChunkMeta(inStream1);
+    ASSERT_ANY_THROW(new dolphindb::DFSChunkMeta(inStream1));
 
-    chunk = new DFSChunkMeta("/home/appadmin/data", id, 3, 1, FILE_CHUNK, sites1.data(), 4, 315);
-    DataOutputStreamSP outStream2 = new DataOutputStream(1024);
-    ConstantMarshallSP marshall2 = ConstantMarshallFactory::getInstance(DF_CHUNK, outStream2);
-    EXPECT_TRUE(marshall2->start(chunk, false, false, ret));
-    DataInputStreamSP inStream2 = new DataInputStream(outStream2->getBuffer(), outStream2->size());
+    chunk = new dolphindb::DFSChunkMeta("/home/appadmin/data", id, 3, 1, dolphindb::FILE_CHUNK, sites1.data(), 4, 315);
+    dolphindb::DataOutputStreamSP outStream2 = new dolphindb::DataOutputStream(1024);
+    dolphindb::ConstantMarshallSP marshall2 = dolphindb::ConstantMarshallFactory::getInstance(dolphindb::DF_CHUNK, outStream2);
+    ASSERT_TRUE(marshall2->start(chunk, false, false, ret));
+    dolphindb::DataInputStreamSP inStream2 = new dolphindb::DataInputStream(outStream2->getBuffer(), outStream2->size());
     inStream2->readShort(flag);
     inStream2->readShort(size);
-    DFSChunkMetaSP chunk2 = new DFSChunkMeta(inStream2);
+    dolphindb::DFSChunkMetaSP chunk2 = new dolphindb::DFSChunkMeta(inStream2);
 }
 
 TEST_F(FunctionTest, DFSChunkMeta_getMember){
-    vector<string> sites1 = {"192.168.0.16:9002:datanode1", "192.168.0.16:9003:datanode2", "192.168.0.16:9004:datanode3", "192.168.0.16:9005:datanode4"};
-    Guid id("314");
-    DFSChunkMetaSP chunk = new DFSChunkMeta("/home/appadmin/data", id, 3, 1, FILE_CHUNK, sites1, 315);
+    std::vector<std::string> sites1 = {"192.168.0.16:9002:datanode1", "192.168.0.16:9003:datanode2", "192.168.0.16:9004:datanode3", "192.168.0.16:9005:datanode4"};
+    dolphindb::Guid id("314");
+    dolphindb::DFSChunkMetaSP chunk = new dolphindb::DFSChunkMeta("/home/appadmin/data", id, 3, 1, dolphindb::FILE_CHUNK, sites1, 315);
     
-    ConstantSP key1 = Util::createInt(1);
-    EXPECT_ANY_THROW(chunk->getMember(key1));
-    ConstantSP key2 = Util::createString("path");
-    EXPECT_EQ("/home/appadmin/data", chunk->getMember(key2)->getString());
-    ConstantSP key3 = Util::createPair(DT_STRING);
-    EXPECT_ANY_THROW(chunk->getMember(key3));
-    VectorSP key4 = Util::createVector(DT_STRING, 0, 8);
+    dolphindb::ConstantSP key1 = dolphindb::Util::createInt(1);
+    ASSERT_ANY_THROW(chunk->getMember(key1));
+    dolphindb::ConstantSP key2 = dolphindb::Util::createString("path");
+    ASSERT_EQ("/home/appadmin/data", chunk->getMember(key2)->getString());
+    dolphindb::ConstantSP key3 = dolphindb::Util::createPair(dolphindb::DT_STRING);
+    ASSERT_ANY_THROW(chunk->getMember(key3));
+    dolphindb::VectorSP key4 = dolphindb::Util::createVector(dolphindb::DT_STRING, 0, 8);
     std::vector<std::string> vec{"id", "cid", "version", "sites", "size", "isTablet", "splittable", "none"};
     key4->appendString(vec.data(), vec.size());
     chunk->getMember(key4);
@@ -1268,279 +1256,278 @@ TEST_F(FunctionTest, DFSChunkMeta_getMember){
 }
 
 TEST_F(FunctionTest, DBConnection_upload){
-    ConstantSP value = Util::createInt(1);
-    EXPECT_ANY_THROW(conn.upload("0123", value));
-    std::vector<ConstantSP> obj{value};
+    dolphindb::ConstantSP value = dolphindb::Util::createInt(1);
+    ASSERT_ANY_THROW(conn.upload("0123", value));
+    std::vector<dolphindb::ConstantSP> obj{value};
     std::vector<std::string> names{"123"};
-    EXPECT_ANY_THROW(conn.upload(names, obj));
+    ASSERT_ANY_THROW(conn.upload(names, obj));
     names.push_back("234");
-    EXPECT_ANY_THROW(conn.upload(names, obj));
+    ASSERT_ANY_THROW(conn.upload(names, obj));
     obj.clear();
     names.clear();
     conn.upload(names, obj);
-    EXPECT_ANY_THROW(conn.run("1+1", 4, 2, 100));
-    DBConnection dc;
-    DBConnection dd;
-    EXPECT_ANY_THROW(dc.run("1+1"));
+    ASSERT_ANY_THROW(conn.run("1+1", 4, 2, 100));
+    dolphindb::DBConnection dc;
+    dolphindb::DBConnection dd;
+    ASSERT_ANY_THROW(dc.run("1+1"));
     dc = std::move(dc);
     dd = std::move(dc);
 }
 
 
-BasicTableSP createTable(){
+dolphindb::BasicTableSP createTable(){
     int* data1 = new int[2]{1, 2};
     int* data2 = new int[2]{3, 4};
-    std::vector<ConstantSP> cols ={Util::createVector(DT_INT, 2, 2, true, 0, data1), Util::createVector(DT_INT, 2, 2, true, 0, data2)};
-    vector<string> colNames = { "col1", "col2"};
-    return new BasicTable(cols, colNames);
+    std::vector<dolphindb::ConstantSP> cols ={dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data1), dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data2)};
+    std::vector<std::string> colNames = { "col1", "col2"};
+    return new dolphindb::BasicTable(cols, colNames);
 }
 
 TEST_F(FunctionTest, Table_Constuctor){
-    BasicTableSP t = createTable();
-    ConstantSP value = new Int(1);
-    EXPECT_ANY_THROW(t->AbstractTable::set(1, value));
-    EXPECT_ANY_THROW(t->AbstractTable::setColumnName(1, "123"));
-    ConstantSP emptyFilter;
-    EXPECT_EQ("[3,4]", t->AbstractTable::getColumn(std::string("col2"), emptyFilter)->getString());
-    EXPECT_EQ("4", t->AbstractTable::get(1, 1)->getString());
+    dolphindb::BasicTableSP t = createTable();
+    dolphindb::ConstantSP value = new dolphindb::Int(1);
+    ASSERT_ANY_THROW(t->AbstractTable::set(1, value));
+    ASSERT_ANY_THROW(t->AbstractTable::setColumnName(1, "123"));
+    dolphindb::ConstantSP emptyFilter;
+    ASSERT_EQ("[3,4]", t->AbstractTable::getColumn(std::string("col2"), emptyFilter)->getString());
+    ASSERT_EQ("4", t->AbstractTable::get(1, 1)->getString());
     t->setName("Harry");
-    EXPECT_FALSE(t->contain("Tom", "col1"));
-    EXPECT_FALSE(t->contain("Tom", "col3"));
+    ASSERT_FALSE(t->contain("Tom", "col1"));
+    ASSERT_FALSE(t->contain("Tom", "col3"));
 
-    vector<string> colNames2 = { "col1", "col2", "col3", "col4", "col5", "col6", "col7", "col8", "col9", "col0", "col1", "col2", "col3"};
-    std::vector<ConstantSP> cols2;
+    std::vector<std::string> colNames2 = { "col1", "col2", "col3", "col4", "col5", "col6", "col7", "col8", "col9", "col0", "col1", "col2", "col3"};
+    std::vector<dolphindb::ConstantSP> cols2;
     for(int i = 0; i < 13; ++i){
-        VectorSP v = Util::createVector(DT_STRING, 0, 1);
+        dolphindb::VectorSP v = dolphindb::Util::createVector(dolphindb::DT_STRING, 0, 1);
         std::string content = "12345678901234567890";
         v->appendString(&content, 1);
         cols2.push_back(v);
     }
-    BasicTableSP t1 = new BasicTable(cols2, colNames2);
+    dolphindb::BasicTableSP t1 = new dolphindb::BasicTable(cols2, colNames2);
     t1->getString(0);
     t1->getString();
-    EXPECT_EQ(COMPRESS_NONE, t1->getColumnCompressMethod(2));
+    ASSERT_EQ(dolphindb::COMPRESS_NONE, t1->getColumnCompressMethod(2));
 }
 
 TEST_F(FunctionTest, Table_setColumnCompressMethods){
-    BasicTableSP t = createTable();
-    std::vector<COMPRESS_METHOD> methods{COMPRESS_DELTA, COMPRESS_NONE};
-    EXPECT_ANY_THROW(t->setColumnCompressMethods(methods));
+    dolphindb::BasicTableSP t = createTable();
+    std::vector<dolphindb::COMPRESS_METHOD> methods{dolphindb::COMPRESS_DELTA, dolphindb::COMPRESS_NONE};
+    ASSERT_ANY_THROW(t->setColumnCompressMethods(methods));
 }
 
 TEST_F(FunctionTest, Table_getInternal){
     int* data1 = new int[2]{1, 2};
     int* data2 = new int[2]{3, 4};
-    std::vector<ConstantSP> cols ={Util::createVector(DT_INT, 2, 2, true, 0, data1), Util::createVector(DT_INT, 2, 2, true, 0, data2)};
-    vector<string> colNames = { "col1", "col2"};
-    BasicTableSP t = new BasicTable(cols, colNames);
-
-    ConstantSP index = Util::createPair(DT_INT);
+    std::vector<dolphindb::ConstantSP> cols ={dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data1), dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data2)};
+    std::vector<std::string> colNames = { "col1", "col2"};
+    dolphindb::BasicTableSP t = new dolphindb::BasicTable(cols, colNames);
+    dolphindb::ConstantSP index = dolphindb::Util::createPair(dolphindb::DT_INT);
     index->setInt(0, INT_MIN);
     index->setInt(1, INT_MIN);
     t->get(index);
-    index->setInt(0, 1);
-    index->setInt(1, 0);
+    index->setInt(0, 0);
+    index->setInt(1, 1);
     t->get(index);
     t->getWindow(1, 1, 1, 1);
-    EXPECT_ANY_THROW(t->AbstractTable::getInstance(1));
-    EXPECT_ANY_THROW(t->AbstractTable::getValue());
-    EXPECT_ANY_THROW(t->AbstractTable::getValue(1));
+    ASSERT_ANY_THROW(t->AbstractTable::getInstance(1));
+    ASSERT_ANY_THROW(t->AbstractTable::getValue());
+    ASSERT_ANY_THROW(t->AbstractTable::getValue(1));
     std::string errMsg;
-    INDEX rows = 0;
-    std::vector<ConstantSP> values;
-    EXPECT_FALSE(t->AbstractTable::append(values, rows, errMsg));
-    EXPECT_FALSE(t->AbstractTable::update(values, index, colNames, errMsg));
-    EXPECT_FALSE(t->AbstractTable::remove(index, errMsg));
+    dolphindb::INDEX rows = 0;
+    std::vector<dolphindb::ConstantSP> values;
+    ASSERT_FALSE(t->AbstractTable::append(values, rows, errMsg));
+    ASSERT_FALSE(t->AbstractTable::update(values, index, colNames, errMsg));
+    ASSERT_FALSE(t->AbstractTable::remove(index, errMsg));
 }
 
 TEST_F(FunctionTest, BasicTable_init){
     int* data1 = new int[2]{1, 2};
     int* data2 = new int[2]{3, 4};
-    std::vector<ConstantSP> cols(2);
-    vector<string> colNames = { "col1", "col2"};
-    EXPECT_ANY_THROW(new BasicTable(cols, colNames));
-    cols[0] = Util::createVector(DT_INT, 2, 2, true, 0, data1);
-    cols[1] = Util::createVector(DT_INT, 2, 2, true, 0, data2);
-    BasicTableSP t = new BasicTable(cols, colNames);
-    ConstantSP value = Util::createDictionary(DT_INT, DT_INT);
-    EXPECT_FALSE(t->set(0, value));
+    std::vector<dolphindb::ConstantSP> cols(2);
+    std::vector<std::string> colNames = { "col1", "col2"};
+    ASSERT_ANY_THROW(new dolphindb::BasicTable(cols, colNames));
+    cols[0] = dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data1);
+    cols[1] = dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data2);
+    dolphindb::BasicTableSP t = new dolphindb::BasicTable(cols, colNames);
+    dolphindb::ConstantSP value = dolphindb::Util::createDictionary(dolphindb::DT_INT, dolphindb::DT_INT);
+    ASSERT_FALSE(t->set(0, value));
 }
 
 TEST_F(FunctionTest, BasicTable_appendTable){
     int* data1 = new int[2]{1, 2};
     int* data2 = new int[2]{3, 4};
-    std::vector<ConstantSP> cols ={Util::createVector(DT_INT, 2, 2, true, 0, data1), Util::createVector(DT_INT, 2, 2, true, 0, data2)};
-    vector<string> colNames = { "col1", "col2"};
-    BasicTableSP t = new BasicTable(cols, colNames);
+    std::vector<dolphindb::ConstantSP> cols ={dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data1), dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data2)};
+    std::vector<std::string> colNames = { "col1", "col2"};
+    dolphindb::BasicTableSP t = new dolphindb::BasicTable(cols, colNames);
 
     std::vector<std::string> data3{"123", "456"};
     int* data4 = new int[2]{3, 4};
-    std::vector<ConstantSP> cols2(2);
-    VectorSP vec = Util::createVector(DT_STRING, 0, 2);
+    std::vector<dolphindb::ConstantSP> cols2(2);
+    dolphindb::VectorSP vec = dolphindb::Util::createVector(dolphindb::DT_STRING, 0, 2);
     vec->appendString(data3.data(), data3.size());
     cols2[1] = vec;
-    cols2[0] = Util::createVector(DT_INT, 2, 2, true, 0, data4);
-    vector<string> colNames2 = { "col1", "col2"};
-    BasicTableSP t2 = new BasicTable(cols2, colNames2);
+    cols2[0] = dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data4);
+    std::vector<std::string> colNames2 = { "col1", "col2"};
+    dolphindb::BasicTableSP t2 = new dolphindb::BasicTable(cols2, colNames2);
 
-    std::vector<ConstantSP> values{t2};
+    std::vector<dolphindb::ConstantSP> values{t2};
     std::string errMsg;
-    INDEX rows = 0;
-    EXPECT_FALSE(t->append(values, rows, errMsg));
+    dolphindb::INDEX rows = 0;
+    ASSERT_FALSE(t->append(values, rows, errMsg));
     
     t2 = t->getValue();
     values[0] = t2;
-    EXPECT_TRUE(t->append(values, rows, errMsg));
+    ASSERT_TRUE(t->append(values, rows, errMsg));
 }
 
 TEST_F(FunctionTest, BasicTable_appendTuple){
     std::string errMsg;
-    INDEX rows = 0;
-    BasicTableSP t = createTable();
+    dolphindb::INDEX rows = 0;
+    dolphindb::BasicTableSP t = createTable();
     
-    VectorSP vec = Util::createVector(DT_ANY, 0, 2);
-    vec->append(Util::createVector(DT_INT, 2, 2));
-    vec->append(Util::createString("123"));
-    std::vector<ConstantSP> values{vec};
-    EXPECT_FALSE(t->append(values, rows, errMsg));
+    dolphindb::VectorSP vec = dolphindb::Util::createVector(dolphindb::DT_ANY, 0, 2);
+    vec->append(dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2));
+    vec->append(dolphindb::Util::createString("123"));
+    std::vector<dolphindb::ConstantSP> values{vec};
+    ASSERT_FALSE(t->append(values, rows, errMsg));
     
-    VectorSP vec1 = Util::createVector(DT_ANY, 0, 2);
-    vec1->append(Util::createInt(2));
-    vec1->append(Util::createString("123"));
+    dolphindb::VectorSP vec1 = dolphindb::Util::createVector(dolphindb::DT_ANY, 0, 2);
+    vec1->append(dolphindb::Util::createInt(2));
+    vec1->append(dolphindb::Util::createString("123"));
     values[0] = vec1;
-    EXPECT_FALSE(t->append(values, rows, errMsg));
+    ASSERT_FALSE(t->append(values, rows, errMsg));
 
-    VectorSP vec2 = Util::createVector(DT_ANY, 0, 2);
-    vec2->append(Util::createInt(2));
-    vec2->append(Util::createInt(2));
+    dolphindb::VectorSP vec2 = dolphindb::Util::createVector(dolphindb::DT_ANY, 0, 2);
+    vec2->append(dolphindb::Util::createInt(2));
+    vec2->append(dolphindb::Util::createInt(2));
     values[0] = vec2;
-    EXPECT_TRUE(t->append(values, rows, errMsg));
+    ASSERT_TRUE(t->append(values, rows, errMsg));
 
-    VectorSP vec3 = Util::createVector(DT_ANY, 0, 2);
-    vec3->append(Util::createVector(DT_INT, 2, 2));
-    vec3->append(Util::createVector(DT_STRING, 2, 2));
+    dolphindb::VectorSP vec3 = dolphindb::Util::createVector(dolphindb::DT_ANY, 0, 2);
+    vec3->append(dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2));
+    vec3->append(dolphindb::Util::createVector(dolphindb::DT_STRING, 2, 2));
     values[0] = vec3;
-    EXPECT_FALSE(t->append(values, rows, errMsg));
+    ASSERT_FALSE(t->append(values, rows, errMsg));
 }
 
 TEST_F(FunctionTest, BasicTable_appendNormal){
     std::string errMsg;
-    INDEX rows = 0;
-    BasicTableSP t = createTable();
+    dolphindb::INDEX rows = 0;
+    dolphindb::BasicTableSP t = createTable();
     
-    std::vector<ConstantSP> values;
-    values.push_back(Util::createVector(DT_INT, 2, 2));
-    values.push_back(Util::createString("123"));
-    EXPECT_FALSE(t->append(values, rows, errMsg));
+    std::vector<dolphindb::ConstantSP> values;
+    values.push_back(dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2));
+    values.push_back(dolphindb::Util::createString("123"));
+    ASSERT_FALSE(t->append(values, rows, errMsg));
     
-    values[0] = Util::createInt(2);
-    values[1] = Util::createString("123");
-    EXPECT_FALSE(t->append(values, rows, errMsg));
+    values[0] = dolphindb::Util::createInt(2);
+    values[1] = dolphindb::Util::createString("123");
+    ASSERT_FALSE(t->append(values, rows, errMsg));
 
-    values[0] = Util::createInt(2);
-    values[1] = Util::createInt(2);
-    EXPECT_TRUE(t->append(values, rows, errMsg));
+    values[0] = dolphindb::Util::createInt(2);
+    values[1] = dolphindb::Util::createInt(2);
+    ASSERT_TRUE(t->append(values, rows, errMsg));
 
-    values[0] = Util::createVector(DT_INT, 2, 2);
+    values[0] = dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2);
     std::vector<std::string> columnLabels{"col1", "col2"};
-    VectorSP rowVec = Util::createVector(DT_STRING, 0, 4);
+    dolphindb::VectorSP rowVec = dolphindb::Util::createVector(dolphindb::DT_STRING, 0, 4);
     rowVec->appendString(columnLabels.data(), columnLabels.size());
     values[1] = rowVec;
-    EXPECT_FALSE(t->append(values, rows, errMsg));
+    ASSERT_FALSE(t->append(values, rows, errMsg));
 }
 
 TEST_F(FunctionTest, BasicTable_update){
-    BasicTableSP t = createTable();
+    dolphindb::BasicTableSP t = createTable();
 
-    ConstantSP index = Util::createIndexVector(0, 1);
+    dolphindb::ConstantSP index = dolphindb::Util::createIndexVector(0, 1);
     index->setNothing(true);
-    std::vector<ConstantSP> values{Util::createVector(DT_INT, 3, 3)};
+    std::vector<dolphindb::ConstantSP> values{dolphindb::Util::createVector(dolphindb::DT_INT, 3, 3)};
     std::vector<std::string> colName{"col3"};
     std::string errMsg;
-    EXPECT_FALSE(t->update(values, index, colName, errMsg));
-    values[0] = Util::createInt(1);
-    EXPECT_TRUE(t->update(values, index, colName, errMsg));
+    ASSERT_FALSE(t->update(values, index, colName, errMsg));
+    values[0] = dolphindb::Util::createInt(1);
+    ASSERT_TRUE(t->update(values, index, colName, errMsg));
     colName[0] = "col4";
-    values[0] = Util::createIndexVector(0, 2);
-    EXPECT_TRUE(t->update(values, index, colName, errMsg));
+    values[0] = dolphindb::Util::createIndexVector(0, 2);
+    ASSERT_TRUE(t->update(values, index, colName, errMsg));
     colName[0] = "col5";
-    values[0] = Util::createIndexVector(0, 2);
+    values[0] = dolphindb::Util::createIndexVector(0, 2);
     values[0]->setTemporary(false);
-    EXPECT_TRUE(t->update(values, index, colName, errMsg));
+    ASSERT_TRUE(t->update(values, index, colName, errMsg));
 
     colName[0] = "col1";
-    values[0] = Util::createIndexVector(0, 2);
-    EXPECT_TRUE(t->update(values, index, colName, errMsg));
+    values[0] = dolphindb::Util::createIndexVector(0, 2);
+    ASSERT_TRUE(t->update(values, index, colName, errMsg));
 
-    values[0] = Util::createPair(DT_STRING);
-    EXPECT_FALSE(t->update(values, index, colName, errMsg));
+    values[0] = dolphindb::Util::createPair(dolphindb::DT_STRING);
+    ASSERT_FALSE(t->update(values, index, colName, errMsg));
 }
 
 TEST_F(FunctionTest, BasicTable_updateVector){
     int* data1 = new int[2]{1, 2};
     std::vector<std::string> columnLabels{"col1", "col2"};
-    VectorSP rowVec = Util::createVector(DT_STRING, 0, 2);
+    dolphindb::VectorSP rowVec = dolphindb::Util::createVector(dolphindb::DT_STRING, 0, 2);
     rowVec->appendString(columnLabels.data(), columnLabels.size());
-    std::vector<ConstantSP> cols ={Util::createVector(DT_INT, 2, 2, true, 0, data1), rowVec};
-    vector<string> colNames = { "col1", "col2"};
-    BasicTableSP t = new BasicTable(cols, colNames);
+    std::vector<dolphindb::ConstantSP> cols ={dolphindb::Util::createVector(dolphindb::DT_INT, 2, 2, true, 0, data1), rowVec};
+    std::vector<std::string> colNames = { "col1", "col2"};
+    dolphindb::BasicTableSP t = new dolphindb::BasicTable(cols, colNames);
     
-    std::vector<ConstantSP> values;
-    values.push_back(Util::createIndexVector(0, 2));
-    ConstantSP index = Util::createIndexVector(0, 1);
+    std::vector<dolphindb::ConstantSP> values;
+    values.push_back(dolphindb::Util::createIndexVector(0, 2));
+    dolphindb::ConstantSP index = dolphindb::Util::createIndexVector(0, 1);
     std::string errMsg;
     std::vector<std::string> colName{"col2"};
-    EXPECT_FALSE(t->update(values, index, colName, errMsg));
+    ASSERT_FALSE(t->update(values, index, colName, errMsg));
 
     colName[0] = "col1";
-    values[0] = new Void();
-    EXPECT_TRUE(t->update(values, index, colName, errMsg));
+    values[0] = new dolphindb::Void();
+    ASSERT_TRUE(t->update(values, index, colName, errMsg));
  
-    values[0] = Util::createVector(DT_FLOAT, 2, 2);
-    EXPECT_FALSE(t->update(values, index, colName, errMsg));
-    values[0] = Util::createInt(1);
+    values[0] = dolphindb::Util::createVector(dolphindb::DT_FLOAT, 2, 2);
+    ASSERT_FALSE(t->update(values, index, colName, errMsg));
+    values[0] = dolphindb::Util::createInt(1);
     index->setNothing(true);
-    EXPECT_TRUE(t->update(values, index, colName, errMsg));
+    ASSERT_TRUE(t->update(values, index, colName, errMsg));
 }
 
 TEST_F(FunctionTest, BasicTable_remove){
-    BasicTableSP t = createTable();
+    dolphindb::BasicTableSP t = createTable();
 
     std::string errMsg;
-    ConstantSP index = Util::createIndexVector(0, 1);
+    dolphindb::ConstantSP index = dolphindb::Util::createIndexVector(0, 1);
     index->setNothing(true);
-    EXPECT_TRUE(t->remove(index, errMsg));
+    ASSERT_TRUE(t->remove(index, errMsg));
 }
 
 TEST_F(FunctionTest, BasicTable_join){
-    BasicTableSP t = createTable();
+    dolphindb::BasicTableSP t = createTable();
     t->setReadOnly(true);
 
-    std::vector<ConstantSP> columns;
-    EXPECT_FALSE(t->join(columns));
+    std::vector<dolphindb::ConstantSP> columns;
+    ASSERT_FALSE(t->join(columns));
     t->updateSize();
-    EXPECT_FALSE(t->clear());
-    columns.push_back(Util::createPair(DT_INT));
+    ASSERT_FALSE(t->clear());
+    columns.push_back(dolphindb::Util::createPair(dolphindb::DT_INT));
     t->setReadOnly(false);
-    EXPECT_FALSE(t->join(columns));
-    columns[0] = Util::createIndexVector(0, 3);
-    EXPECT_FALSE(t->join(columns));
-    columns[0] = Util::createIndexVector(0, 2);
-    EXPECT_FALSE(t->join(columns));
-    dynamic_cast<Vector*>(columns[0].get())->setName("col1");
-    EXPECT_FALSE(t->join(columns));
-    dynamic_cast<Vector*>(columns[0].get())->setName("col3");
-    EXPECT_TRUE(t->join(columns));
-    ((Vector*)t->getColumn(0).get())->append(Util::createIndexVector(0, 2));
-    EXPECT_ANY_THROW(t->updateSize());
+    ASSERT_FALSE(t->join(columns));
+    columns[0] = dolphindb::Util::createIndexVector(0, 3);
+    ASSERT_FALSE(t->join(columns));
+    columns[0] = dolphindb::Util::createIndexVector(0, 2);
+    ASSERT_FALSE(t->join(columns));
+    dynamic_cast<dolphindb::Vector*>(columns[0].get())->setName("col1");
+    ASSERT_FALSE(t->join(columns));
+    dynamic_cast<dolphindb::Vector*>(columns[0].get())->setName("col3");
+    ASSERT_TRUE(t->join(columns));
+    ((dolphindb::Vector*)t->getColumn(0).get())->append(dolphindb::Util::createIndexVector(0, 2));
+    ASSERT_ANY_THROW(t->updateSize());
 }
 
 TEST_F(FunctionTest,test_FastFixedLengthVector_getDataArray){
     unsigned char data[5] = "abcd";
-    auto fastIntVec = new FastInt128Vector(DT_INT, 2, 4, data, false);
-    auto fastIntVec1 = new FastInt128Vector(DT_INT, 2, 4, data, true);
+    auto fastIntVec = new dolphindb::FastInt128Vector(dolphindb::DT_INT, 2, 4, data, false);
+    auto fastIntVec1 = new dolphindb::FastInt128Vector(dolphindb::DT_INT, 2, 4, data, true);
     bool hasNull = false;
-    auto idx1 = Util::createIndexVector(1, 2);
+    auto idx1 = dolphindb::Util::createIndexVector(1, 2);
     fastIntVec->get(idx1);
     double *vec1 = new double[2];
     vec1[0] = 0.1;
@@ -1548,8 +1535,8 @@ TEST_F(FunctionTest,test_FastFixedLengthVector_getDataArray){
     double *vec2 = new double[2];
     vec2[0] = 3.1;
     vec2[1] = 3.2;
-    auto idx2 = new FastDoubleVector(2, 2, vec1, true);
-    auto idx3 = new FastDoubleVector(2, 2, vec2, true);
+    auto idx2 = new dolphindb::FastDoubleVector(2, 2, vec1, true);
+    auto idx3 = new dolphindb::FastDoubleVector(2, 2, vec2, true);
     fastIntVec1->get(idx2);
     fastIntVec1->get(idx3);
 }
@@ -1558,18 +1545,18 @@ TEST_F(FunctionTest,test_FastFixedLengthVector_getDataArray){
 
 
 TEST_F(FunctionTest,test_upload_not_initialized_constant){
-    ConstantSP data;
-    EXPECT_ANY_THROW(conn.upload({"data"}, {data}));
+    dolphindb::ConstantSP data;
+    ASSERT_ANY_THROW(conn.upload({"data"}, {data}));
 }
 
 
 TEST_F(FunctionTest, test_createDate){
-    auto date_min = Util::createDate(INT_MIN);
-    auto date_max = Util::createDate(INT_MAX);
-    auto date0 = Util::createDate(0);
-    auto date1 = Util::createDate(9999, 12, 31);
-    EXPECT_EQ(date_min->getString(), "");
-    EXPECT_EQ(date_max->getString(), "5881580.07.11");
-    EXPECT_EQ(date0->getString(), "1970.01.01");
-    EXPECT_EQ(date1->getString(), "9999.12.31");
+    auto date_min = dolphindb::Util::createDate(INT_MIN);
+    auto date_max = dolphindb::Util::createDate(INT_MAX);
+    auto date0 = dolphindb::Util::createDate(0);
+    auto date1 = dolphindb::Util::createDate(9999, 12, 31);
+    ASSERT_EQ(date_min->getString(), "");
+    ASSERT_EQ(date_max->getString(), "5881580.07.11");
+    ASSERT_EQ(date0->getString(), "1970.01.01");
+    ASSERT_EQ(date1->getString(), "9999.12.31");
 }

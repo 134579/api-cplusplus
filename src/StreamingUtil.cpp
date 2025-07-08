@@ -1,13 +1,28 @@
 #include "StreamingUtil.h"
-#include "Util.h"
+#include "Concurrent.h"
+#include "Constant.h"
+#include "Dictionary.h"
 #include "DolphinDB.h"
+#include "ErrorCodeInfo.h"
+#include "SmartPointer.h"
 #include "SysIO.h"
+#include "Table.h"
+#include "Types.h"
+#include "Util.h"
+#include "Vector.h"
+
+#include <cstdlib>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace dolphindb {
 
 StreamDeserializer::StreamDeserializer(const std::unordered_map<std::string, std::pair<std::string, std::string>> &sym2tableName, DBConnection *pconn)
                     : sym2tableName_(sym2tableName) {
-    if (pconn != NULL) {
+    if (pconn != nullptr) {
         create(*pconn);
     }
 }
@@ -17,8 +32,8 @@ StreamDeserializer::StreamDeserializer(const std::unordered_map<std::string, Dic
 }
 
 StreamDeserializer::StreamDeserializer(const std::unordered_map<std::string, std::vector<DATA_TYPE>> &symbol2col){
-    for(auto one : symbol2col){
-        symbol2tableInfo_[one.first] = new TableInfo(one.second);
+    for(const auto &one : symbol2col){
+        symbol2tableInfo_[one.first] = std::make_shared<TableInfo>(one.second);
     }
 }
 
@@ -27,7 +42,7 @@ void StreamDeserializer::returnMessage(Message *msg){
 }
 
 void StreamDeserializer::setTupleLimit(INDEX limit){
-    for(auto one : symbol2tableInfo_){
+    for(auto &one : symbol2tableInfo_){
         one.second->setLimit(limit);
     }
 }
@@ -35,7 +50,7 @@ void StreamDeserializer::setTupleLimit(INDEX limit){
 ConstantSP StreamDeserializer::TableInfo::newTuple(){
     {
         LockGuard<Mutex> locker(&mutex_);
-        if(queue_.size()>0){
+        if(!queue_.empty()){
             auto res=queue_.back();
             queue_.pop_back();
             return res;
@@ -45,41 +60,40 @@ ConstantSP StreamDeserializer::TableInfo::newTuple(){
     for (auto i = 0; i < (int)cols_.size(); i++) {
         auto &colOne = cols_[i];
         auto &scale = scales_[i];
+        ConstantSP value{nullptr};
         if (colOne < ARRAY_TYPE_BASE) {
-            auto value = Util::createConstant(colOne, scale);
-            rowVec->set(i, value);
+            value = Util::createConstant(colOne, scale);
+        } else {
+            value = Util::createArrayVector(colOne, 1, 1, true, scale);
         }
-        else {
-            auto value = Util::createArrayVector(colOne, 1, 1, true, scale);
-            rowVec->set(i, value);
-        }
+        rowVec->set(i, value);
     }
     return rowVec;
 }
 
 void StreamDeserializer::create(DBConnection &conn) {
-    if (symbol2tableInfo_.size() > 0 || sym2tableName_.empty())
+    if (!symbol2tableInfo_.empty() || sym2tableName_.empty())
         return;
     std::unordered_map<std::string, DictionarySP> sym2schema;
     DictionarySP schema;
     for (auto &one : sym2tableName_) {
         if (one.second.first.empty()) {
-            schema = conn.run("schema(" + one.second.second + ")");
+            schema = (DictionarySP)conn.run("schema(" + one.second.second + ")");
         }
         else {
-            schema = conn.run(std::string("schema(loadTable(\"") + one.second.first + "\",\"" + one.second.second + "\"))");
+            schema = (DictionarySP)conn.run(std::string("schema(loadTable(\"") + one.second.first + "\",\"" + one.second.second + "\"))");
         }
         sym2schema[one.first] = schema;
     }
     parseSchema(sym2schema);
 }
 bool StreamDeserializer::parseBlob(const ConstantSP &src, std::vector<VectorSP> &rows, std::vector<std::string> &symbols, ErrorCodeInfo &errorInfo) {
-    const VectorSP &symbolVec = src->get(1);
-    const VectorSP &blobVec = src->get(2);
+    const auto symbolVec = src->get(1);
+    const auto blobVec = src->get(2);
     INDEX rowSize = symbolVec->rows();
     rows.resize(rowSize);
     symbols.resize(rowSize);
-    std::unordered_map<std::string, SmartPointer<TableInfo>>::iterator colTableIter;
+    std::unordered_map<std::string, std::shared_ptr<TableInfo>>::iterator colTableIter;
     std::unordered_map<std::string, std::vector<int>>::iterator colScaleIter;
     for (INDEX rowIndex = 0; rowIndex < rowSize; rowIndex++) {
         std::string symbol = symbolVec->getString(rowIndex);
@@ -97,7 +111,7 @@ bool StreamDeserializer::parseBlob(const ConstantSP &src, std::vector<VectorSP> 
         DataInputStreamSP dis = new DataInputStream(blob.data(), blob.size(), false);
         INDEX num;
         IO_ERR ioError;
-        VectorSP rowVec = colTableIter->second->newTuple();
+        auto rowVec = (VectorSP)colTableIter->second->newTuple();
         for (auto i = 0; i < (int)rowVec->size(); i++) {
             ioError = rowVec->get(i)->deserialize(dis.get(), 0, 1, num);
             if (ioError != OK) {
@@ -113,9 +127,9 @@ void StreamDeserializer::parseSchema(const std::unordered_map<std::string, Dicti
 
     LockGuard<Mutex> lock(&mutex_);
 
-    for (auto &one : sym2schema) {
+    for (const auto &one : sym2schema) {
         const DictionarySP &schema = one.second;
-        TableSP colDefs = schema->getMember("colDefs");
+        auto colDefs = (TableSP)schema->getMember("colDefs");
         size_t columnSize = colDefs->size();
 
         // types
@@ -132,8 +146,8 @@ void StreamDeserializer::parseSchema(const std::unordered_map<std::string, Dicti
                 colScales[i] = colDefsScales->getInt(i);
             }
         }
-        symbol2tableInfo_[one.first] = new TableInfo(colTypes, colScales);
+        symbol2tableInfo_[one.first] = std::make_shared<TableInfo>(colTypes, colScales);
     }
 }
 
-}
+} // namespace dolphindb

@@ -1,6 +1,6 @@
 #include "Types.h"
-#include <string>
 #include <map>
+#include <string>
 
 namespace dolphindb {
 
@@ -51,11 +51,10 @@ std::string getDataTypeName(DATA_TYPE type)
     };
     if(type >= 0 && type < TYPE_COUNT)
         return arrTypeStr[type];
-    else if(type >= ARRAY_TYPE_BASE) {
+    if(type >= ARRAY_TYPE_BASE) {
         return getDataTypeName((DATA_TYPE)(type-ARRAY_TYPE_BASE))+"[]";
-    }else{
-        return "Uknown data type " + std::to_string(type);
     }
+    return "Uknown data type " + std::to_string(type);
 }
 
-}
+} // namespace dolphindb

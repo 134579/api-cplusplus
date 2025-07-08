@@ -1,11 +1,21 @@
 #include "DFSChunkMeta.h"
+#include "Constant.h"
+#include "ConstantImp.h"
+#include "Exceptions.h"
+#include "Guid.h"
 #include "ScalarImp.h"
 #include "SysIO.h"
-#include "ConstantImp.h"
+#include "Types.h"
+#include "Util.h"
+
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace dolphindb {
 
-DFSChunkMeta::DFSChunkMeta(const std::string& path, const Guid& id, int version, int sz, CHUNK_TYPE chunkType, const std::vector<std::string>& sites, long long cid)
-    : Constant(2051), type_(static_cast<char>(chunkType)), replicaCount_(static_cast<char>(sites.size())), version_(version), size_(sz), sites_(0), path_(path), cid_(cid), id_(id) {
+DFSChunkMeta::DFSChunkMeta(std::string path, const Guid& id, int version, int sz, CHUNK_TYPE chunkType, const std::vector<std::string>& sites, long long cid)
+    : Constant(2051), type_(static_cast<char>(chunkType)), replicaCount_(static_cast<char>(sites.size())), version_(version), size_(sz), sites_(nullptr), path_(std::move(path)), cid_(cid), id_(id) {
     if (replicaCount_ == 0)
         return;
     sites_ = new std::string[replicaCount_];
@@ -13,8 +23,8 @@ DFSChunkMeta::DFSChunkMeta(const std::string& path, const Guid& id, int version,
         sites_[i] = sites[i];
 }
 
-DFSChunkMeta::DFSChunkMeta(const std::string& path, const Guid& id, int version, int sz, CHUNK_TYPE chunkType, const std::string* sites, int siteCount, long long cid)
-    : Constant(2051), type_(static_cast<char>(chunkType)), replicaCount_(static_cast<char>(siteCount)), version_(version), size_(sz), sites_(0), path_(path), cid_(cid), id_(id) {
+DFSChunkMeta::DFSChunkMeta(std::string path, const Guid& id, int version, int sz, CHUNK_TYPE chunkType, const std::string* sites, int siteCount, long long cid)
+    : Constant(2051), type_(static_cast<char>(chunkType)), replicaCount_(static_cast<char>(siteCount)), version_(version), size_(sz), sites_(nullptr), path_(std::move(path)), cid_(cid), id_(id) {
     if (replicaCount_ == 0)
         return;
     sites_ = new std::string[replicaCount_];
@@ -22,7 +32,7 @@ DFSChunkMeta::DFSChunkMeta(const std::string& path, const Guid& id, int version,
         sites_[i] = sites[i];
 }
 
-DFSChunkMeta::DFSChunkMeta(const DataInputStreamSP& in) : Constant(2051), sites_(0), id_(false) {
+DFSChunkMeta::DFSChunkMeta(const DataInputStreamSP& in) : Constant(2051), sites_(nullptr), id_(false) {
     IO_ERR ret = in->readString(path_);
     if (ret != OK)
         throw RuntimeException("Failed to deserialize DFSChunkMeta object.");
@@ -49,7 +59,7 @@ DFSChunkMeta::DFSChunkMeta(const DataInputStreamSP& in) : Constant(2051), sites_
 }
 
 DFSChunkMeta::~DFSChunkMeta() {
-    if (sites_)
+    if (sites_ != nullptr)
         delete[] sites_;
 }
 
@@ -78,7 +88,7 @@ std::string DFSChunkMeta::getString() const {
 }
 
 long long DFSChunkMeta::getAllocatedMemory() const {
-    long long length = 33 + sizeof(sites_) + (1 + replicaCount_) * (1 + sizeof(std::string)) + path_.size();
+    long long length = 33 + sites_->size() + ((1 + replicaCount_) * (1 + sizeof(std::string))) + path_.size();
     for (int i = 0; i < replicaCount_; ++i)
         length += sites_[i].size();
     return length;
@@ -89,14 +99,12 @@ ConstantSP DFSChunkMeta::getMember(const ConstantSP& key) const {
         throw RuntimeException("DFSChunkMeta attribute must be string type scalar or vector.");
     if (key->isScalar())
         return getAttribute(key->getString());
-    else {
-        int keySize = key->size();
-        ConstantSP result = Util::createVector(DT_ANY, keySize);
-        for (int i = 0; i < keySize; ++i) {
-            result->set(i, getAttribute(key->getString(i)));
-        }
-        return result;
+    int keySize = key->size();
+    ConstantSP result = Util::createVector(DT_ANY, keySize);
+    for (int i = 0; i < keySize; ++i) {
+        result->set(i, getAttribute(key->getString(i)));
     }
+    return result;
 }
 
 ConstantSP DFSChunkMeta::getSiteVector() const {
@@ -109,24 +117,24 @@ ConstantSP DFSChunkMeta::getSiteVector() const {
 ConstantSP DFSChunkMeta::getAttribute(const std::string& attr) const {
     if (attr == "path")
         return new String(path_);
-    else if (attr == "id")
+    if (attr == "id")
         return new String(id_.getString());
-    else if (attr == "cid")
+    if (attr == "cid")
         return new Long(cid_);
-    else if (attr == "version")
+    if (attr == "version")
         return new Int(version_);
-    else if (attr == "sites")
+    if (attr == "sites")
         return getSiteVector();
-    else if (attr == "size") {
+    if (attr == "size") {
         ConstantSP obj = Util::createConstant(DT_INDEX);
         obj->setIndex(size_);
         return obj;
-    } else if (attr == "isTablet")
+    }
+    if (attr == "isTablet")
         return new Bool(isTablet());
-    else if (attr == "splittable")
+    if (attr == "splittable")
         return new Bool(isSplittable());
-    else
-        return Constant::void_;
+    return Constant::void_;
 }
 
 ConstantSP DFSChunkMeta::keys() const {
@@ -149,4 +157,4 @@ ConstantSP DFSChunkMeta::values() const {
     return result;
 }
 
-}
+} // namespace dolphindb

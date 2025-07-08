@@ -1,7 +1,11 @@
 #include "SymbolBase.h"
-#include "SysIO.h"
 #include "Exceptions.h"
-#include <string.h>
+#include "SysIO.h"
+#include "Types.h"
+
+#include <algorithm>
+#include <cstring>
+#include <string>
 
 #define SYMBOLBASE_MAX_SIZE 1<<21
 
@@ -48,9 +52,9 @@ int SymbolBase::serialize(char* buf, int bufSize, INDEX indexStart, int offset, 
 
 int SymbolBase::find(const std::string& symbol){
     if(symMap_.empty()){
-        if(syms_.size() > 0 && syms_[0] != "")
+        if(!syms_.empty() && !syms_[0].empty())
             throw RuntimeException("A symbol base's first key must be empty string.");
-        if(syms_.size() == 0){
+        if(syms_.empty()){
             symMap_[""] = 0;
             syms_.emplace_back("");
         }    
@@ -71,9 +75,9 @@ int SymbolBase::findAndInsert(const std::string& symbol){
         throw RuntimeException("A String cannot contain the character '\\0'");
     }
     if(symMap_.empty()){
-        if(syms_.size() > 0 && syms_[0] != "")
+        if(!syms_.empty() && !syms_[0].empty())
             throw RuntimeException("A symbol base's first key must be empty string.");
-        if(syms_.size() == 0){
+        if(syms_.empty()){
             symMap_[""] = 0;
             syms_.emplace_back("");
         }    
@@ -99,4 +103,4 @@ int SymbolBase::findAndInsert(const std::string& symbol){
     return index;
 }
 
-}
+} // namespace dolphindb

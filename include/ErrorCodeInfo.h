@@ -25,8 +25,7 @@ public:
         EC_DestroyedObject=7,
         EC_Other=8,
     };
-    ErrorCodeInfo() {
-    }
+    ErrorCodeInfo() = default;
     void clearError(){
         errorCode.clear();
     }
@@ -39,8 +38,7 @@ public:
     static std::string formatApiCode(int code){
         if(code != EC_None)
             return "A" + std::to_string(code);
-        else
-            return "";
+        return "";
     }
     void set(int apiCode, const std::string &info);
     void set(const std::string &code, const std::string &info);
@@ -49,7 +47,7 @@ public:
     std::string errorInfo;
 };
 
-}
+} // namespace dolphindb
 
 #ifdef _MSC_VER
 #pragma warning( pop )
