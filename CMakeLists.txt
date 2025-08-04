@@ -5,15 +5,15 @@ project(DolphinDBAPI)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(USE_OPENSSL "Use OpenSSL for encrypted communication." ON)
-option(USE_AERON "Use Aeron for UDP connections. ${CMAKE_PROJECT_NAME} will search for Aeron in $\{CMAKE_INSTALL_PREFIX\} by default, you can specify a different location with AERON_INSTALL_DIR" ON)
-option(BUILD_SHARED_LIBS "Build shared library" ON)
-option(LINK_SHARED_LIBS "Link shared libraries" ON)
+option(USE_OPENSSL "Use OpenSSL for encrypted communication." OFF)
+option(USE_AERON "Use Aeron for UDP connections. ${PROJECT_NAME} will search for Aeron in $\{CMAKE_INSTALL_PREFIX\} by default, you can specify a different location with AERON_INSTALL_DIR" OFF)
+option(BUILD_SHARED_LIBS "Build shared library" OFF)
+option(LINK_SHARED_LIBS "Link shared libraries" OFF)
 option(WITH_UNITTEST "Compile testcases." OFF)
 
-add_library(${CMAKE_PROJECT_NAME})
-target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_11)
-target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE c_std_99)
+add_library(${PROJECT_NAME})
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_11)
+target_compile_features(${PROJECT_NAME} PRIVATE c_std_99)
 
 if (API_TEST)
     add_subdirectory(test)
@@ -26,11 +26,11 @@ if (USE_OPENSSL)
     # FindOpenSSL from cmake
     find_package(OpenSSL)
     if (OPENSSL_FOUND)
-        target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-        target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_OPENSSL)
+        target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE USE_OPENSSL)
     else()
         message(WARNING
-        "Failed to compile ${CMAKE_PROJECT_NAME} with OpenSSL. Encrypted communication features are unavailable.\n"
+        "Failed to compile ${PROJECT_NAME} with OpenSSL. Encrypted communication features are unavailable.\n"
         "To suppress this warning, set -DUSE_OPENSSL=OFF in cmake command.")
     endif()
 endif()
@@ -78,58 +78,58 @@ if (USE_AERON)
     unset(CMAKE_REQUIRED_LIBRARIES)
     unset(CMAKE_REQUIRED_LINK_DIRECTORIES)
     if (HAS_AERON)
-        target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_AERON)
-        target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${AERON_INCLUDE_DIR})
-        target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE ${AERON_LIBRARY_DIR})
-        target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${AERON_LIBRARY})
+        target_compile_definitions(${PROJECT_NAME} PRIVATE USE_AERON)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${AERON_INCLUDE_DIR})
+        target_link_directories(${PROJECT_NAME} PRIVATE ${AERON_LIBRARY_DIR})
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${AERON_LIBRARY})
     else()
         message(WARNING
-        "Failed to compile ${CMAKE_PROJECT_NAME} with Aeron. UDP features are unavailable.\n"
+        "Failed to compile ${PROJECT_NAME} with Aeron. UDP features are unavailable.\n"
         "To suppress this warning, set -DUSE_AERON=OFF in cmake command.")
     endif()
 endif()
 
 if (WIN32)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE _DDBAPIDLL)
-    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ws2_32 crypt32)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE _DDBAPIDLL)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 crypt32)
     if (MINGW)
-        target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE _WIN32_WINNT=0x0600)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE _WIN32_WINNT=0x0600)
     endif()
 else()
     check_include_file_cxx("uuid/uuid.h" HAS_UUID)
     if (NOT HAS_UUID)
         message(FATAL_ERROR "Failed to find uuid.")
     endif()
-    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE pthread rt uuid)
+    target_link_libraries(${PROJECT_NAME} PRIVATE pthread rt uuid)
 endif()
 
 if (MSVC)
-    target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE /W4 /MP /Zc:__cplusplus /utf-8)
+    target_compile_options(${PROJECT_NAME} PRIVATE /W4 /MP /Zc:__cplusplus /utf-8)
     if (${CMAKE_BUILD_TYPE} MATCHES "Dev")
-        target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE /WX)
+        target_compile_options(${PROJECT_NAME} PRIVATE /WX)
     endif()
 else()
-    target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
     set(CMAKE_CXX_FLAGS_DEV "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -Werror")
 endif()
 
 if (WITH_UNITTEST)
     find_package(GTest REQUIRED)
-    set(UNITTEST ${CMAKE_PROJECT_NAME}_unittest)
+    set(UNITTEST ${PROJECT_NAME}_unittest)
     add_executable(${UNITTEST})
     add_subdirectory(unittest)
 
     target_link_libraries(${UNITTEST}
-        ${CMAKE_PROJECT_NAME}
+        ${PROJECT_NAME}
         GTest::gtest_main
     )
 endif()
 
 if (UNIX)
     file(GLOB HEADER_FILES "include/*.h")
-    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${HEADER_FILES}")
+    set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${HEADER_FILES}")
     include(GNUInstallDirs)
-    install(TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_LIBDIR}
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolphindb
     )
 endif()
