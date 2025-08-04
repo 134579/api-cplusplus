@@ -1,18 +1,18 @@
 if (UNIX)
-    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    target_sources(${PROJECT_NAME} PRIVATE
         platform/Linux.cpp
     )
 elseif (WIN32)
-    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    target_sources(${PROJECT_NAME} PRIVATE
         platform/Windows.cpp
     )
 elseif (APPLE)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE MAC)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MAC)
 endif()
 
-target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+target_sources(${PROJECT_NAME} PRIVATE
     AsynWorker.cpp
     BatchTableWriter.cpp
     Compress.cpp
@@ -46,7 +46,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 if (USE_OPENSSL AND OPENSSL_FOUND)
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE Crypto.cpp)
+target_sources(${PROJECT_NAME} PRIVATE Crypto.cpp)
 endif()
 
 add_subdirectory(lz4)
